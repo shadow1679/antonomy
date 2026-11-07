@@ -1,0 +1,307 @@
+// Antonomy simulation, JS port of sim/python/antosim.py (spec v0).
+// Must match the Python reference bit for bit. Integer arithmetic only.
+// Runs unchanged in Node and in the browser: SHA-256 is implemented below,
+// the tables come in as a JSON module, and bytes are plain Uint8Arrays.
+import T from "../tables.json" with { type: "json" };
+
+export const W = 72, H = 48;
+export const NEST_X = 36, NEST_Y = 24;
+export const N_ANTS = 150;
+export const TICKS = 800;
+export const CAP = 20 * 256;
+const DECAY_Q16 = 65536 - 524;
+const SENSE_DIST = 3;
+const WANDER = 64;
+const DEPOSIT_BASE = 512;
+export const FOOD_RADIUS_SQ = 4;
+const NEST_RADIUS_SQ = 4;
+export const SCORE_RADIUS_SQ = 36;
+const RICH_MIN = 179, RICH_SPAN = 155;
+const DIST_MIN = 9, DIST_SPAN = 13;
+const MARGIN = 4;
+
+const enc = new TextEncoder();
+const VERSION = enc.encode("ANTO-SIM-v0");
+
+const COS64 = T.cos64, SIN64 = T.sin64;
+export const DX = Array.from({ length: 16 }, (_, k) => COS64[k * 4]);
+export const DY = Array.from({ length: 16 }, (_, k) => SIN64[k * 4]);
+
+const DECAY_T = [65536];
+for (let n = 0; n <= TICKS; n++) DECAY_T.push(Math.floor((DECAY_T[n] * DECAY_Q16) / 65536));
+
+// ---- Bytes and SHA-256 (FIPS 180-4) ----
+
+function concat(parts) {
+  let len = 0;
+  for (const p of parts) len += p.length;
+  const out = new Uint8Array(len);
+  let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; }
+  return out;
+}
+
+export const toHex = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+
+const K256 = new Uint32Array([
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+]);
+const ror = (x, n) => (x >>> n) | (x << (32 - n));
+
+export function sha256(msg) {
+  const len = msg.length;
+  const padded = new Uint8Array(((len + 9 + 63) >> 6) << 6);
+  padded.set(msg);
+  padded[len] = 0x80;
+  const dv = new DataView(padded.buffer);
+  dv.setUint32(padded.length - 8, Math.floor(len / 0x20000000));
+  dv.setUint32(padded.length - 4, (len << 3) >>> 0);
+  const hs = new Uint32Array([
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+  ]);
+  const w = new Uint32Array(64);
+  for (let off = 0; off < padded.length; off += 64) {
+    for (let i = 0; i < 16; i++) w[i] = dv.getUint32(off + i * 4);
+    for (let i = 16; i < 64; i++) {
+      const x = w[i - 15], y = w[i - 2];
+      const s0 = ror(x, 7) ^ ror(x, 18) ^ (x >>> 3);
+      const s1 = ror(y, 17) ^ ror(y, 19) ^ (y >>> 10);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+    }
+    let a = hs[0], b = hs[1], c = hs[2], d = hs[3], e = hs[4], f = hs[5], g = hs[6], h = hs[7];
+    for (let i = 0; i < 64; i++) {
+      const t1 = (h + (ror(e, 6) ^ ror(e, 11) ^ ror(e, 25)) + ((e & f) ^ (~e & g)) + K256[i] + w[i]) | 0;
+      const t2 = ((ror(a, 2) ^ ror(a, 13) ^ ror(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+      h = g; g = f; f = e; e = (d + t1) | 0;
+      d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    hs[0] += a; hs[1] += b; hs[2] += c; hs[3] += d;
+    hs[4] += e; hs[5] += f; hs[6] += g; hs[7] += h;
+  }
+  const out = new Uint8Array(32);
+  const ov = new DataView(out.buffer);
+  for (let i = 0; i < 8; i++) ov.setUint32(i * 4, hs[i]);
+  return out;
+}
+
+const i32be = (b, o) => (b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3];
+
+class Rng {
+  constructor(seed) {
+    const h = sha256(concat([enc.encode("ANTO-RNG-v0"), seed]));
+    this.s0 = i32be(h, 0);
+    this.s1 = i32be(h, 4);
+    this.s2 = i32be(h, 8);
+    this.s3 = i32be(h, 12);
+    if ((this.s0 | this.s1 | this.s2 | this.s3) === 0) this.s0 = 1;
+  }
+  next() {
+    let { s0, s1, s2, s3 } = this;
+    let x = Math.imul(s1, 5);
+    x = (x << 7) | (x >>> 25);
+    const result = Math.imul(x, 9) >>> 0;
+    const t = s1 << 9;
+    s2 ^= s0;
+    s3 ^= s1;
+    s1 ^= s2;
+    s0 ^= s3;
+    s2 ^= t;
+    s3 = (s3 << 11) | (s3 >>> 21);
+    this.s0 = s0; this.s1 = s1; this.s2 = s2; this.s3 = s3;
+    return result;
+  }
+}
+
+// One colony, advanced one tick at a time. run() below is the whole sim;
+// the replay page uses the same class to draw every tick. All state fields
+// are public and read-only for callers.
+export class Colony {
+  constructor(seed, n = 5, richness = null, ants = N_ANTS, ticks = TICKS) {
+    if (seed.length !== 32 || n < 2 || n > 5) throw new Error("bad args");
+    const rng = new Rng(seed);
+    this.rng = rng;
+    this.seed = seed;
+    this.n = n;
+    this.ants = ants;
+    this.ticks = ticks;
+    this.t = 0;
+
+    const sx = [], sy = [];
+    for (let i = 0; i < n; i++) {
+      const idx = (Math.floor((i * 64) / n) + (rng.next() % 8) - 4) & 63;
+      const dist = DIST_MIN + (rng.next() % DIST_SPAN);
+      const fx = NEST_X + ((COS64[idx] * dist) >> 8);
+      const fy = NEST_Y + ((SIN64[idx] * dist) >> 8);
+      sx.push(Math.min(Math.max(fx, MARGIN), W - 1 - MARGIN));
+      sy.push(Math.min(Math.max(fy, MARGIN), H - 1 - MARGIN));
+    }
+    const rich = [];
+    for (let i = 0; i < n; i++) {
+      const drawn = RICH_MIN + (rng.next() % RICH_SPAN);
+      rich.push(richness === null ? drawn : richness[i]);
+    }
+
+    // perm[option] = source index holding that option
+    const perm = Array.from({ length: n }, (_, i) => i);
+    for (let i = n - 1; i > 0; i--) {
+      const j = rng.next() % (i + 1);
+      const tmp = perm[i]; perm[i] = perm[j]; perm[j] = tmp;
+    }
+    this.sx = sx; this.sy = sy; this.rich = rich; this.perm = perm;
+
+    this.val = new Uint32Array(W * H);
+    this.last = new Uint16Array(W * H);
+    this.ax = new Int32Array(ants).fill(NEST_X * 256 + 128);
+    this.ay = new Int32Array(ants).fill(NEST_Y * 256 + 128);
+    this.ah = new Int32Array(ants);
+    for (let a = 0; a < ants; a++) this.ah[a] = rng.next() & 15;
+    this.returning = new Uint8Array(ants);
+    this.strength = new Int32Array(ants);
+  }
+
+  // Advance one tick. Returns false once the final tick has run.
+  step() {
+    if (this.t >= this.ticks) return false;
+    const t = ++this.t;
+    const { rng, n, ants, sx, sy, rich, val, last, ax, ay, ah, returning, strength } = this;
+    const nestTx = NEST_X * 256 + 128, nestTy = NEST_Y * 256 + 128;
+
+    for (let a = 0; a < ants; a++) {
+      const r = rng.next();
+      const wander = (r & 255) < WANDER;
+      const turn = ((r >>> 8) & 255) % 3 - 1;
+      let h = ah[a], x = ax[a], y = ay[a];
+
+      if (!returning[a]) {
+        let best = -1, bh = h;
+        for (const d of [0, -1, 1]) {
+          const hh = (h + d) & 15;
+          const cx = (x + DX[hh] * SENSE_DIST) >> 8;
+          const cy = (y + DY[hh] * SENSE_DIST) >> 8;
+          let v = 0;
+          if (cx >= 0 && cx < W && cy >= 0 && cy < H) {
+            const i = cy * W + cx;
+            v = Math.floor((val[i] * DECAY_T[t - last[i]]) / 65536);
+          }
+          if (v > best) { best = v; bh = hh; }
+        }
+        h = bh;
+      } else {
+        const dx = nestTx - x, dy = nestTy - y;
+        let best = null, bk = 0;
+        for (let k = 0; k < 16; k++) {
+          const dot = DX[k] * dx + DY[k] * dy;
+          if (best === null || dot > best) { best = dot; bk = k; }
+        }
+        h = bk;
+      }
+
+      if (wander) h = (h + turn) & 15;
+
+      const nx = x + DX[h], ny = y + DY[h];
+      const cx = nx >> 8, cy = ny >> 8;
+      if (cx < 0 || cx >= W || cy < 0 || cy >= H) {
+        h = (h + 8) & 15;
+      } else {
+        x = nx; y = ny;
+        if (!returning[a]) {
+          for (let s = 0; s < n; s++) {
+            const ddx = cx - sx[s], ddy = cy - sy[s];
+            if (ddx * ddx + ddy * ddy <= FOOD_RADIUS_SQ) {
+              returning[a] = 1;
+              strength[a] = (DEPOSIT_BASE * rich[s]) >> 8;
+              h = (h + 8) & 15;
+              break;
+            }
+          }
+        } else {
+          const i = cy * W + cx;
+          const v = Math.floor((val[i] * DECAY_T[t - last[i]]) / 65536) + strength[a];
+          val[i] = v > CAP ? CAP : v;
+          last[i] = t;
+          strength[a] -= strength[a] >> 5;
+          const ddx = cx - NEST_X, ddy = cy - NEST_Y;
+          if (ddx * ddx + ddy * ddy <= NEST_RADIUS_SQ) {
+            returning[a] = 0;
+            strength[a] = 0;
+            h = (h + 8) & 15;
+          }
+        }
+      }
+      ah[a] = h; ax[a] = x; ay[a] = y;
+    }
+    return true;
+  }
+
+  // Pheromone in cell i at the current tick (lazy evaporation).
+  cell(i) {
+    return Math.floor((this.val[i] * DECAY_T[this.t - this.last[i]]) / 65536);
+  }
+
+  // Pheromone within the score radius of each source, at the current tick.
+  scores() {
+    const { n, sx, sy } = this;
+    const out = [];
+    for (let s = 0; s < n; s++) {
+      let total = 0;
+      for (let yy = sy[s] - 6; yy <= sy[s] + 6; yy++) {
+        for (let xx = sx[s] - 6; xx <= sx[s] + 6; xx++) {
+          const ddx = xx - sx[s], ddy = yy - sy[s];
+          if (ddx * ddx + ddy * ddy <= SCORE_RADIUS_SQ && xx >= 0 && xx < W && yy >= 0 && yy < H) {
+            total += this.cell(yy * W + xx);
+          }
+        }
+      }
+      out.push(total);
+    }
+    return out;
+  }
+
+  // Final result and hash. Only valid after the last tick.
+  result() {
+    if (this.t !== this.ticks) throw new Error("colony not finished");
+    const { n, sx, sy, rich, perm } = this;
+    const scores = this.scores();
+
+    let winSrc = 0;
+    for (let s = 1; s < n; s++) if (scores[s] > scores[winSrc]) winSrc = s;
+    const winOpt = perm.indexOf(winSrc);
+
+    const parts = [VERSION, this.seed, Uint8Array.of(n)];
+    for (let s = 0; s < n; s++) {
+      if (!(rich[s] >= 0 && rich[s] <= 0xffff)) throw new RangeError("richness out of u16 range");
+      parts.push(Uint8Array.of(sx[s], sy[s], rich[s] >> 8, rich[s] & 255));
+    }
+    for (let s = 0; s < n; s++) {
+      const v = scores[s];
+      if (!(v >= 0 && v <= 0xffffffff)) throw new RangeError("score out of u32 range");
+      parts.push(Uint8Array.of(v >>> 24, (v >>> 16) & 255, (v >>> 8) & 255, v & 255));
+    }
+    parts.push(Uint8Array.of(winSrc), Uint8Array.from(perm));
+    return {
+      winner_source: winSrc,
+      winner_option: winOpt,
+      scores,
+      perm,
+      sources: sx.map((_, s) => [sx[s], sy[s], rich[s]]),
+      hash: toHex(sha256(concat(parts))),
+    };
+  }
+}
+
+export function run(seed, n = 5, richness = null, ants = N_ANTS, ticks = TICKS) {
+  const c = new Colony(seed, n, richness, ants, ticks);
+  while (c.step());
+  return c.result();
+}
+
+export function seedFromInt(i) {
+  return sha256(enc.encode(`seed-${i}`));
+}
