@@ -1,0 +1,140 @@
+/* Antonomy design tokens. Theme: Underground nest. Dark only.
+   Contrast figures are WCAG ratios, checked against --surface-raised (the
+   lightest surface) unless noted. See docs/DESIGN_SYSTEM.md. */
+
+:root {
+  color-scheme: dark;
+
+  /* ---- Soil: neutrals, darkest to lightest ---- */
+  --soil-950: #0d0a07;   /* sim canvas */
+  --soil-900: #14100c;   /* page */
+  --soil-800: #1d1812;   /* chamber (card) */
+  --soil-700: #28211a;   /* raised, hover */
+  --soil-600: #3a3026;   /* hairline border */
+  --soil-500: #7a6852;   /* strong border, 3.3:1 on chamber */
+
+  /* ---- Scenery: sim canvas only. Dark and low-chroma on purpose, so no
+     plant or leaf can be mistaken for an option colour ---- */
+  --scene-grass: #3c4228;
+  --scene-leaf:  #4a3526;
+
+  --bone-100: #efe6d8;   /* text, 12.8:1 */
+  --bone-300: #b8aa95;   /* muted text, 7.0:1 */
+  --bone-500: #9a8b76;   /* faint text, 4.8:1 */
+
+  /* ---- Pheromone: brand and primary action. Reserved, see docs ---- */
+  --amber-300: #ffc070;
+  --amber-400: #f2a541;  /* 7.7:1 */
+  --amber-600: #b8741f;
+  --amber-ink: #1a1006;  /* text on amber, 9.1:1 */
+
+  /* ---- Status. Always paired with a glyph and a word ---- */
+  --lichen-400: #93cf6e; /* match / success */
+  --ember-400:  #ff7a66; /* mismatch / danger */
+  --pollen-400: #e9cd5b; /* warning */
+  --water-400:  #86b7dc; /* info */
+
+  /* ---- Option palette: food sources 0..4. Earth tones tuned so every pair
+     stays apart under deutan/protan/tritan simulation (min OKLab dE 0.09).
+     Always shown with the matching glyph. ---- */
+  --opt-0: #9bb860;  --opt-0-glyph: "▲";  /* moss */
+  --opt-1: #cf6e4e;  --opt-1-glyph: "■";  /* clay */
+  --opt-2: #5d8dc8;  --opt-2-glyph: "◆";  /* slate */
+  --opt-3: #e0a9c4;  --opt-3-glyph: "●";  /* heather */
+  --opt-4: #efe2b6;  --opt-4-glyph: "★";  /* sand */
+
+  /* ---- Semantic aliases: components use these, not the raw scales ---- */
+  --bg:             var(--soil-900);
+  --bg-canvas:      var(--soil-950);
+  --surface:        var(--soil-800);
+  --surface-raised: var(--soil-700);
+  --border:         var(--soil-600);
+  --border-strong:  var(--soil-500);
+  --text:           var(--bone-100);
+  --text-muted:     var(--bone-300);
+  --text-faint:     var(--bone-500);
+  --accent:         var(--amber-400);
+  --accent-hover:   var(--amber-300);
+  --accent-press:   var(--amber-600);
+  --on-accent:      var(--amber-ink);
+  --success:        var(--lichen-400);
+  --danger:         var(--ember-400);
+  --warning:        var(--pollen-400);
+  --info:           var(--water-400);
+  --focus-ring:     var(--amber-300);
+
+  /* Translucent tints for status and accent backgrounds */
+  --accent-tint:  rgb(242 165 65 / 0.12);
+  --success-tint: rgb(147 207 110 / 0.12);
+  --danger-tint:  rgb(255 122 102 / 0.12);
+  --warning-tint: rgb(233 205 91 / 0.12);
+  --info-tint:    rgb(134 183 220 / 0.12);
+
+  /* ---- Type: Fraunces for display and prose, IBM Plex Mono for UI and data ---- */
+  --font-display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --text-xs:   0.75rem;   /* 12 */
+  --text-sm:   0.8125rem; /* 13 */
+  --text-base: 0.9375rem; /* 15, mono UI */
+  --text-prose: 1.0625rem;/* 17, serif prose */
+  --text-lg:   1.25rem;   /* 20 */
+  --text-xl:   1.625rem;  /* 26 */
+  --text-2xl:  2.25rem;   /* 36 */
+  --text-3xl:  3.25rem;   /* 52 */
+
+  --leading-tight: 1.15;
+  --leading-snug:  1.35;
+  --leading-body:  1.6;
+  --tracking-caps: 0.08em;
+
+  /* ---- Space: 4px base ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* ---- Shape: organic-soft ---- */
+  --radius-sm:   6px;   /* chips, small controls */
+  --radius-md:   10px;  /* buttons, inputs */
+  --radius-lg:   16px;  /* chambers */
+  --radius-pill: 999px;
+
+  /* ---- Depth: dark UI uses borders, inner light and glow, not big shadows ---- */
+  --shadow-chamber: inset 0 1px 0 rgb(255 235 200 / 0.04), 0 10px 30px rgb(0 0 0 / 0.45);
+  --shadow-pop:     inset 0 1px 0 rgb(255 235 200 / 0.06), 0 16px 40px rgb(0 0 0 / 0.6);
+  --glow-accent:    0 0 0 1px rgb(242 165 65 / 0.45), 0 0 24px rgb(242 165 65 / 0.18);
+  --glow-success:   0 0 0 1px rgb(147 207 110 / 0.45), 0 0 20px rgb(147 207 110 / 0.15);
+  --glow-danger:    0 0 0 1px rgb(255 122 102 / 0.5), 0 0 20px rgb(255 122 102 / 0.15);
+
+  /* ---- Motion: subtle ---- */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 360ms;
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.45, 0, 0.25, 1);
+
+  /* ---- Layout ---- */
+  --content-max: 1120px;
+  --prose-max: 68ch;
+  --sim-aspect: 72 / 48; /* matches the sim grid */
+
+  /* ---- Wallet ant tint: hue comes from the wallet, lightness and chroma are
+     fixed so staker ants never outshine pheromone or food sources.
+     Formula oklch(L C hue). The .wallet class in components.css applies it;
+     canvas code uses the same numbers. ---- */
+  --wallet-l: 0.72;
+  --wallet-c: 0.07;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+    --dur-slow: 0ms;
+  }
+}
