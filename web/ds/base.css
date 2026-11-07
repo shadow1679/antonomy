@@ -1,4 +1,7 @@
-/* Antonomy base: reset, page, typography. Depends on tokens.css. */
+/* Antonomy base (v1): reset, page, typography. Depends on tokens.css.
+   Outside the stage everything is a ledger: Plex Sans for UI and prose,
+   tabular Plex Mono for every number, hash, id and clock, Fraunces only for
+   the page and market title (h1, .display). */
 
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -8,9 +11,9 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--text-base);
-  line-height: var(--leading-body);
+  line-height: var(--lh-base);
   -webkit-font-smoothing: antialiased;
   font-variant-numeric: tabular-nums;
 }
@@ -21,59 +24,75 @@ body {
 img, svg, canvas { display: block; max-width: 100%; }
 button, input, select, textarea { font: inherit; color: inherit; }
 
+/* Focus: bone ring with a 2px gap, on every control. Never amber. */
 :focus-visible {
-  outline: 2px solid var(--focus-ring);
+  outline: 2px solid var(--focus-color);
   outline-offset: 2px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-data);
 }
 
-::selection { background: var(--accent); color: var(--on-accent); }
+::selection { background: var(--bone-100); color: var(--soil-900); }
 
-/* ---- Headings: Fraunces. opsz follows size so it stays crisp small and soft large ---- */
-h1, h2, h3, h4, .display {
-  font-family: var(--font-display);
-  font-weight: 600;
-  line-height: var(--leading-tight);
-  letter-spacing: -0.01em;
+/* ---- Headings. h1 is the page (or market) title, in Fraunces: the one
+   place type is allowed character. h2 to h4 are ledger section titles. ---- */
+h1, h2, h3, h4 {
   margin: 0 0 var(--space-3);
+  color: var(--text);
   text-wrap: balance;
 }
-h1 { font-size: var(--text-3xl); font-variation-settings: "opsz" 144, "SOFT" 50; }
-h2 { font-size: var(--text-2xl); font-variation-settings: "opsz" 72, "SOFT" 50; }
-h3 { font-size: var(--text-xl); font-variation-settings: "opsz" 36; }
-h4 { font-size: var(--text-lg); font-variation-settings: "opsz" 24; }
-
-/* ---- Prose: serif for explanations and README-style copy ---- */
-.prose {
+h1, .display {
   font-family: var(--font-display);
-  font-size: var(--text-prose);
-  font-variation-settings: "opsz" 14;
-  line-height: var(--leading-body);
+  font-size: var(--text-2xl);
+  line-height: var(--lh-2xl);
+  font-weight: 600;
+  font-variation-settings: "opsz" 72, "SOFT" 50;
+  letter-spacing: -0.01em;
+}
+h2 { font-family: var(--font-ui); font-size: var(--text-xl); line-height: var(--lh-xl); font-weight: 600; letter-spacing: -0.005em; }
+h3 { font-family: var(--font-ui); font-size: var(--text-lg); line-height: var(--lh-lg); font-weight: 600; }
+h4 { font-family: var(--font-ui); font-size: var(--text-base); line-height: var(--lh-base); font-weight: 600; }
+.display--hero { font-size: var(--text-3xl); line-height: var(--lh-3xl); font-variation-settings: "opsz" 144, "SOFT" 50; }
+
+/* ---- Prose: explanations and README-style copy, in the UI face ---- */
+.prose {
+  font-size: var(--text-base);
+  line-height: var(--lh-base);
   max-width: var(--prose-max);
   color: var(--text);
 }
 .prose p { margin: 0 0 var(--space-4); }
-.prose code, .prose .mono { font-family: var(--font-mono); font-size: 0.88em; }
+.lede { font-size: var(--text-md); line-height: var(--lh-md); color: var(--text-muted); max-width: 58ch; margin: 0; text-wrap: pretty; }
 
 p { margin: 0 0 var(--space-3); }
-a { color: var(--accent); text-underline-offset: 3px; }
-a:hover { color: var(--accent-hover); }
+a { color: var(--text); text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
+a:hover { color: var(--text); text-decoration-color: var(--text-muted); }
 
-code, kbd, samp, pre { font-family: var(--font-mono); }
+/* ---- Mono: hashes, seeds, ids, numbers, ticks, clocks, status glyphs.
+   Tabular, slashed zero, no ligatures, so values line up and compare. ---- */
+code, kbd, samp, pre, .num, .mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums slashed-zero;
+  font-variant-ligatures: none;
+}
+code { font-size: 0.9em; }
+/* A status glyph (✓ ✗ ‖ ↷ ◌ ○ ≠) in mono, with a symbol font where Plex
+   has no glyph. */
+.g { font-family: "IBM Plex Mono", var(--font-symbol); font-style: normal; font-variant-ligatures: none; }
 
 /* ---- Text utilities ---- */
 .eyebrow {
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-size: var(--text-2xs);
+  line-height: var(--lh-2xs);
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
   color: var(--text-muted);
 }
 .text-muted { color: var(--text-muted); }
 .text-faint { color: var(--text-faint); }
-.text-sm { font-size: var(--text-sm); }
-.text-xs { font-size: var(--text-xs); }
-.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.text-sm { font-size: var(--text-sm); line-height: var(--lh-sm); }
+.text-xs { font-size: var(--text-xs); line-height: var(--lh-xs); }
+.num-lg { font-family: var(--font-mono); font-size: var(--num-lg); line-height: var(--lh-num-lg); font-weight: 500; letter-spacing: -0.02em; font-variant-numeric: tabular-nums slashed-zero; }
 
 .visually-hidden {
   position: absolute !important;
@@ -83,10 +102,11 @@ code, kbd, samp, pre { font-family: var(--font-mono); }
   white-space: nowrap;
 }
 
-/* ---- Layout helpers ---- */
-.container { max-width: var(--content-max); margin-inline: auto; padding-inline: var(--space-5); }
+/* ---- Layout helpers. The grid is 12 columns, content max 1240px. ---- */
+.container { max-width: var(--content-max); margin-inline: auto; padding-inline: var(--gutter); }
 .stack > * + * { margin-top: var(--stack-gap, var(--space-4)); }
 .cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cluster-gap, var(--space-3)); }
+.grid-12 { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--gutter); }
 .grid-auto {
   display: grid;
   gap: var(--space-4);

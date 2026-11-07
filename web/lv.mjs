@@ -23,7 +23,12 @@ export const gl = (s) => String(s).replace(/^([◌✓✗○]) /, '<span class="l
 // Links keep a ?contract= override.
 const carry = () => { const c = new URLSearchParams(location.search).get("contract"); return c ? `&contract=${encodeURIComponent(c)}` : ""; };
 export const marketHref = (key) => `market.html?m=${encodeURIComponent(key)}${carry()}`;
+// A requested forecast's details, on the market page.
+export const requestHref = (id) => `market.html?r=${id}${carry()}`;
 export const liveHref = (hash = "") => { const c = carry(); return `live.html${c ? `?${c.slice(1)}` : ""}${hash}`; };
+export const recruitHref = (hash = "") => { const c = carry(); return `recruit.html${c ? `?${c.slice(1)}` : ""}${hash}`; };
+// History (replay.html): `query` like "round=4", `hash` like "#check".
+export const historyHref = (query = "", hash = "") => { const qs = `${query}${carry()}`.replace(/^&/, ""); return `replay.html${qs ? `?${qs}` : ""}${hash}`; };
 
 // One stacked bar: segments in the option colours, the glyph on any wide one.
 export function stackHTML(shares) {
@@ -36,7 +41,7 @@ export function stackHTML(shares) {
 // The previous round (last_round) carries no phase or times: it is finished.
 export const finished = (rd) => (rd && !rd.phase ? { ...rd, phase: "done" } : rd);
 
-export const STEPS = [["posting", "Staking"], ["agents", "Agents post"], ["ready", "Crank"], ["running", "Colonies run"], ["done", "Result"]];
+export const STEPS = [["posting", "Staking"], ["agents", "Agents post"], ["ready", "Seed"], ["running", "Colonies run"], ["done", "Result"]];
 
 export function stepsHTML(round) {
   const p = round.phase, skipped = p === "skipped";

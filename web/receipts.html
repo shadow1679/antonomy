@@ -3,201 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Antonomy · check the receipts</title>
+<title>Antonomy · receipts moved to History</title>
+<link rel="icon" href="brand/favicon.ico" sizes="32x32">
+<meta name="theme-color" content="#14100c">
 <link rel="stylesheet" href="app.css">
+<script>
+  // Receipts is part of History now: the whole-round check sits under each round there.
+  (() => {
+    const q = new URLSearchParams(location.search);
+    const p = new URLSearchParams();
+    if (q.has("round")) p.set("round", q.get("round"));
+    if (q.has("contract")) p.set("contract", q.get("contract"));
+    location.replace(`replay.html${p.size ? `?${p}` : ""}#check`);
+  })();
+</script>
 </head>
 <body>
-<div id="topbar"></div>
-
-<main>
-  <div class="page-head container">
-    <div class="page-head__split">
-      <div class="page-head__title">
-        <p class="eyebrow">Check the receipts</p>
-        <h1>Re-run the round. Compare every hash.</h1>
-      </div>
-      <p class="lede">One click rebuilds each colony from the on-chain seed and inputs, re-runs it here and compares hashes. Change one character to watch it fail. <a class="what" href="docs.html#verify">How checking works</a></p>
-    </div>
-  </div>
-
-  <section class="page-section">
-    <div class="container">
-      <div class="workbench workbench--controls-first">
-        <div class="workbench__col">
-          <div class="chamber verify-panel">
-            <div class="chamber__header" style="margin: 0">
-              <h3 class="chamber__title">Receipt</h3>
-              <span class="eyebrow" id="r-round"></span>
-            </div>
-            <div class="cluster">
-              <label class="field__label" for="round-in">Round</label>
-              <input class="input num" id="round-in" type="number" min="0" step="1" style="width: 11rem">
-              <button class="btn btn--sm" type="button" id="issue">Fill in the chain's receipt</button>
-            </div>
-            <div class="field">
-              <label class="field__label" for="receipt">Receipt (JSON)</label>
-              <textarea class="input" id="receipt" rows="12" spellcheck="false" autocomplete="off" aria-describedby="receipt-hint" style="font-family: var(--font-mono, monospace); font-size: var(--text-xs)"></textarea>
-              <span class="field__hint" id="receipt-hint">The receipt is read from the contract (round seed, each cranked colony's result hash, each finished market's hash): edit a hash before you check, or paste someone else's. <a class="what" href="docs.html#receipts">More</a></span>
-            </div>
-            <div class="cluster">
-              <label class="btn btn--sm" for="file-in">Load a file</label>
-              <input type="file" id="file-in" accept="application/json,.json" hidden>
-            </div>
-            <div class="verify-panel__result">
-              <span class="verify-badge" data-state="idle" id="badge" role="status" aria-live="polite">Not checked</span>
-              <button class="btn btn--primary" type="button" id="check">Check the receipts</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="chamber">
-          <div class="chamber__header">
-            <h3 class="chamber__title">Results</h3>
-            <span class="eyebrow" id="summary">nothing checked yet</span>
-          </div>
-          <dl class="stats">
-            <div><dt>✓ Match</dt><dd class="num" id="n-match">–</dd></div>
-            <div><dt>✗ Mismatch</dt><dd class="num" id="n-bad">–</dd></div>
-            <div><dt>Time</dt><dd class="num" id="n-ms">–</dd></div>
-          </dl>
-          <div class="table-wrap">
-            <table class="table">
-              <caption class="text-xs text-faint">One row per hash, as replayed in your browser.</caption>
-              <thead><tr><th scope="col">Hash</th><th scope="col">Status</th></tr></thead>
-              <tbody id="rows"><tr><td colspan="2" class="text-faint">Press the button to re-run the round.</td></tr></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
+<main class="container page-section">
+  <p>Receipts moved to <a href="replay.html#check">History</a>: open a round there and check every hash under it.</p>
 </main>
-
-<div id="footer"></div>
-
-<script type="module">
-import { loadRound } from "./roundchain.mjs";
-import { issueReceipt, checkReceipt, parseReceipt, roundFromChain } from "./receipts.mjs";
-import { contractId } from "./chain.mjs";
-import { $, esc, hashHTML, installCopy, topbar, footer } from "./ui.mjs";
-
-$("topbar").outerHTML = topbar("receipts");
-$("footer").outerHTML = footer();
-installCopy();
-
-const nextFrame = () => new Promise((r) => setTimeout(r, 0));
-const STATE_TEXT = { match: "✓ match", mismatch: "✗ mismatch", missing: "○ not in receipt", extra: "✗ not in this round" };
-const KIND_TEXT = { seed: "seed", colony: "colony", market: "market" };
-const q = new URLSearchParams(location.search);
-
-function setBadge(state, text) { $("badge").dataset.state = state; $("badge").textContent = text; }
-function setBusy(on) { for (const id of ["check", "issue"]) { $(id).disabled = on; } $("check").classList.toggle("is-loading", on); }
-const roundIn = () => Math.max(0, Math.floor(+$("round-in").value || 0));
-
-function setRound(id) {
-  $("round-in").value = id;
-  $("r-round").textContent = `round ${id}`;
-  history.replaceState(null, "", `?round=${id}`);
-}
-
-function setStats(match, bad, ms) {
-  $("n-match").textContent = match;
-  $("n-bad").textContent = bad;
-  $("n-ms").textContent = ms;
-}
-
-function resetResults() {
-  setBadge("idle", "Not checked");
-  setStats("–", "–", "–");
-  $("summary").textContent = "nothing checked yet";
-  $("rows").innerHTML = `<tr><td colspan="2" class="text-faint">Press the button to re-run the round.</td></tr>`;
-}
-
-function showRows(res) {
-  $("rows").innerHTML = res.rows.map((r) => {
-    const detail = r.state === "match" ? hashHTML(r.actual, r.name)
-      : r.state === "extra" ? `<span class="text-faint">receipt lists ${r.expected ? hashHTML(r.expected, "listed hash") : "no valid hash"}</span>`
-      : `<div>replayed ${r.actual ? hashHTML(r.actual, "replayed hash") : "—"}</div><div class="text-faint">receipt ${r.expected ? hashHTML(r.expected, "receipt hash") : "has none"}</div>`;
-    return `<tr><th scope="row"><span class="text-xs text-faint">${KIND_TEXT[r.kind]}</span><div>${esc(r.name)}</div>${detail}</th>` +
-      `<td class="num"><span class="chip" data-state="${r.state}">${STATE_TEXT[r.state]}</span></td></tr>`;
-  }).join("");
-}
-
-// What the contract holds right now; reloaded on every click.
-let loaded = null;
-async function chainRound() {
-  loaded = await loadRound();
-  return loaded;
-}
-function chainError(err) {
-  setBadge("mismatch", err.message);
-  $("summary").textContent = "could not read the chain";
-  $("rows").innerHTML = `<tr><td colspan="2" class="text-faint">${esc(err.message)}</td></tr>`;
-}
-
-$("round-in").addEventListener("change", () => { setRound(roundIn()); resetResults(); });
-
-$("issue").addEventListener("click", async () => {
-  setBusy(true);
-  setBadge("pending", "Reading the contract");
-  try {
-    const l = await chainRound();
-    const id = roundIn();
-    // An id the chain no longer holds (or none run yet) falls back to the newest round with a result.
-    const want = roundFromChain(l, id) ? id : undefined;
-    const receipt = issueReceipt(l, want, contractId());
-    setRound(receipt.round);
-    $("receipt").value = JSON.stringify(receipt, null, 2);
-    setBadge("idle", `Chain's receipt for round ${receipt.round} · not checked`);
-  } catch (err) { chainError(err); }
-  finally { setBusy(false); }
-});
-
-$("file-in").addEventListener("change", async (e) => {
-  const f = e.target.files[0];
-  if (!f) return;
-  $("receipt").value = await f.text();
-  e.target.value = "";
-  resetResults();
-});
-
-$("receipt").addEventListener("input", resetResults);
-
-$("check").addEventListener("click", async () => {
-  let receipt;
-  try { receipt = parseReceipt($("receipt").value); }
-  catch (err) {
-    setBadge("mismatch", err.message);
-    $("summary").textContent = "receipt rejected";
-    $("rows").innerHTML = `<tr><td colspan="2" class="text-faint">Fix the receipt and check again.</td></tr>`;
-    return;
-  }
-  setRound(receipt.round);
-  setBusy(true);
-  const t0 = performance.now();
-  try {
-    setBadge("pending", "Reading the contract");
-    const round = roundFromChain(await chainRound(), receipt.round);
-    if (!round?.seed) throw new RangeError(`The contract has no result for round ${receipt.round}: it keeps the current round once it runs and the previous finished round.`);
-    const res = await checkReceipt(receipt, round, {
-      yieldTo: nextFrame,
-      onColony: (spec, i, n) => setBadge("pending", `Replaying ${i + 1} of ${n}`),
-    });
-    const ms = Math.round(performance.now() - t0);
-    showRows(res);
-    const bad = res.rows.filter((r) => r.state !== "match").length;
-    $("summary").textContent = `${res.rows.length - bad} of ${res.rows.length} match`;
-    setStats(res.rows.length - bad, bad, `${ms} ms`);
-    setBadge(res.ok ? "match" : "mismatch", res.ok ? `All ${res.rows.length} hashes match · ${ms} ms` : `${bad} of ${res.rows.length} do not match`);
-  } catch (err) { chainError(err); }
-  finally { setBusy(false); }
-});
-
-// Start on the round asked for, else the newest the contract has a result for.
-(async () => {
-  if (q.has("round")) { setRound(Math.max(0, Math.floor(+q.get("round") || 0))); return; }
-  try { setRound((await chainRound()).shown.id); } catch { setRound(0); }
-})();
-</script>
 </body>
 </html>

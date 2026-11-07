@@ -3,38 +3,103 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Antonomy · replay and verify</title>
+<title>Antonomy · history</title>
+<link rel="icon" href="brand/favicon.ico" sizes="32x32">
+<link rel="icon" href="brand/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
+<meta name="theme-color" content="#14100c">
 <link rel="stylesheet" href="app.css">
 </head>
-<body>
+<body class="page-history">
 <div id="topbar"></div>
 
 <main>
   <div class="page-head container">
     <div class="page-head__split">
       <div class="page-head__title">
-        <p class="eyebrow">Replay &amp; verify</p>
-        <h1>Re-run any colony from its seed.</h1>
+        <p class="eyebrow">History</p>
+        <h1>Every run, from its seed.</h1>
       </div>
-      <p class="lede">The contract's integer code, fed the chain's seed, odds and stakes. Scrub the run, follow any ant, and compare the hash with the one the contract stored. <a class="what" href="docs.html#playback">Reading a replay</a></p>
+      <p class="lede">Every round and every daily pot the contract has run, read from its own state at past blocks. Open one to replay any colony tick by tick, follow an ant, and re-run the whole round to compare every hash. <a class="what" href="docs.html#history">How History reads the past</a></p>
     </div>
-    <div class="notice notice--info" id="replay-empty" hidden><p></p></div>
+    <nav class="rc-tabs" id="hx-tabs" role="tablist" aria-label="History">
+      <a role="tab" href="#rounds" id="tab-rounds" aria-controls="tab-rounds-panel" aria-selected="true">Rounds</a>
+      <a role="tab" href="#pots" id="tab-pots" aria-controls="tab-pots-panel" aria-selected="false" tabindex="-1">Pots</a>
+    </nav>
   </div>
 
-  <section class="page-section">
+  <section class="page-section hx-list" id="tab-rounds-panel" role="tabpanel" aria-labelledby="tab-rounds">
     <div class="container">
-      <form class="toolbar" id="pick">
-        <div class="field">
-          <label class="field__label" for="round-in" id="round-label">Round</label>
-          <input class="input num" id="round-in" type="number" min="0" step="1" style="width: 11rem">
-        </div>
-        <div class="field toolbar__grow">
+      <div class="section-head">
+        <h2>Rounds</h2>
+        <span class="chip" id="rounds-chip">reading the contract…</span>
+        <button class="btn btn--sm btn--ghost spacer" type="button" id="rounds-fold">Unfold all</button>
+      </div>
+      <p class="hx-tagline"><span class="tag-forecast">Forecast · not advice</span> <span class="text-xs text-faint">Swarm belief is the colonies' trail share, in points; it is not a probability.</span></p>
+      <div class="table-wrap">
+        <table class="table hx-table hx-rounds">
+          <caption class="text-xs text-faint">Newest first, by UTC day, eight rounds a page; unfold a round to see its markets. Each round is read from the contract at a block just before the next one started; requested forecasts sit under the round that was open when they were asked. Results are the chain's swarm belief, set once a market's three colonies ran; open a round to re-run them.</caption>
+          <thead><tr>
+            <th scope="col">Market</th><th scope="col">Swarm belief leads</th>
+            <th scope="col" class="num">Market</th><th scope="col" class="num">Gap</th>
+          </tr></thead>
+          <tbody id="round-rows"><tr><td colspan="4" class="text-sm text-muted">Reading the contract…</td></tr></tbody>
+        </table>
+      </div>
+      <nav class="hx-pager" id="rounds-pager" aria-label="Pages of rounds" hidden>
+        <button class="btn btn--sm btn--ghost" type="button" data-step="-1">‹ Newer</button>
+        <span class="text-sm text-muted num" aria-live="polite"></span>
+        <button class="btn btn--sm btn--ghost" type="button" data-step="1">Older ›</button>
+      </nav>
+    </div>
+  </section>
+
+  <section class="page-section hx-list" id="tab-pots-panel" role="tabpanel" aria-labelledby="tab-pots" hidden>
+    <div class="container">
+      <div class="section-head">
+        <h2>Pots</h2>
+        <span class="chip" id="pots-chip">…</span>
+      </div>
+      <div class="table-wrap">
+        <table class="table hx-table">
+          <caption class="text-xs text-faint">Newest first, a week a page. Each day's stakes and treasury are read at 23:55 UTC, before its pot is paid, and its finished run at 11:30 the next day. Burned and shared are the menu's amounts at that treasury (the payout uses the treasury of the moment it runs, a few tokens apart). Days before day 20,755 burned the whole pot. $ANTO, whole tokens.</caption>
+          <thead><tr>
+            <th scope="col">Day</th><th scope="col">Picked</th>
+            <th scope="col" class="num">Burned</th><th scope="col" class="num">Shared</th>
+            <th scope="col">Seed</th><th scope="col">Result hash</th><th scope="col"><span class="visually-hidden">Open</span></th>
+          </tr></thead>
+          <tbody id="pot-rows"><tr><td colspan="7" class="text-sm text-muted">Reading the contract…</td></tr></tbody>
+        </table>
+      </div>
+      <nav class="hx-pager" id="pots-pager" aria-label="Pages of days" hidden>
+        <button class="btn btn--sm btn--ghost" type="button" data-step="-1">‹ Newer</button>
+        <span class="text-sm text-muted num" aria-live="polite"></span>
+        <button class="btn btn--sm btn--ghost" type="button" data-step="1">Older ›</button>
+      </nav>
+    </div>
+  </section>
+
+  <section class="page-section hx-open" id="open" hidden aria-labelledby="open-title">
+    <div class="container">
+      <div class="section-head">
+        <h2 id="open-title">Round</h2>
+        <span class="text-sm text-muted" id="open-meta"></span>
+        <a class="what spacer" href="#check" id="to-check" hidden>Check the whole round</a>
+      </div>
+
+      <div class="hx-results" id="hx-results" hidden>
+        <p class="hx-tagline"><span class="tag-forecast">Forecast · not advice</span> <span class="text-xs text-faint" id="results-note"></span></p>
+        <div class="hx-results__grid" id="results"></div>
+      </div>
+
+      <div class="section-head hx-bench-head" id="bench-head">
+        <h3 id="bench-title">Replay a colony</h3>
+        <div class="field hx-pick spacer">
           <label class="field__label" for="colony-in">Colony</label>
           <select class="input" id="colony-in"></select>
         </div>
-        <button class="btn" type="submit">Load</button>
-        <a class="btn btn--ghost" href="live.html">← Live colonies</a>
-      </form>
+      </div>
+      <div class="notice notice--info" id="replay-empty" hidden><p></p></div>
 
       <div class="workbench" id="replay-bench">
         <div class="workbench__col">
@@ -110,6 +175,44 @@
           </div>
         </div>
       </div>
+
+      <div class="chamber hx-check" id="check" hidden>
+        <div class="chamber__header">
+          <h3 class="chamber__title">Check the whole round</h3>
+          <span class="verify-badge" data-state="idle" id="r-badge" role="status" aria-live="polite">Not checked</span>
+        </div>
+        <p class="text-sm text-muted" style="margin: 0 0 var(--space-4)">Re-runs every colony of the round here, the requests' included, and compares each hash with the chain's receipt. <a class="what" href="docs.html#receipts">Receipts</a></p>
+        <div class="cluster">
+          <button class="btn" type="button" id="r-check">Check every hash</button>
+          <span class="text-sm text-faint" id="r-summary">nothing checked yet</span>
+        </div>
+        <dl class="stats" style="margin-top: var(--space-4)">
+          <div><dt>✓ Match</dt><dd class="num" id="n-match">–</dd></div>
+          <div><dt>✗ Mismatch</dt><dd class="num" id="n-bad">–</dd></div>
+          <div><dt>Time</dt><dd class="num" id="n-ms">–</dd></div>
+        </dl>
+        <div class="table-wrap" id="r-table" hidden>
+          <table class="table">
+            <caption class="text-xs text-faint">One row per hash, as replayed in your browser.</caption>
+            <thead><tr><th scope="col">Hash</th><th scope="col">Status</th></tr></thead>
+            <tbody id="r-rows"></tbody>
+          </table>
+        </div>
+        <details class="hx-paste" id="hx-paste">
+          <summary class="text-sm">Check someone else's receipt</summary>
+          <div class="field">
+            <label class="field__label" for="receipt">Receipt (JSON)</label>
+            <textarea class="input" id="receipt" rows="12" spellcheck="false" autocomplete="off" aria-describedby="receipt-hint" style="font-family: var(--font-mono, monospace); font-size: var(--text-xs)"></textarea>
+            <span class="field__hint" id="receipt-hint">Starts as the chain's receipt for this round: edit a hash and check it to watch it fail, or paste or load someone else's. A receipt for another round opens that round. From the command line: <code>node web/receipts.mjs issue</code>.</span>
+          </div>
+          <div class="cluster">
+            <label class="btn btn--sm" for="file-in">Load a file</label>
+            <input type="file" id="file-in" accept="application/json,.json" hidden>
+            <button class="btn btn--sm btn--ghost" type="button" id="r-reset">Back to the chain's receipt</button>
+            <button class="btn btn--sm" type="button" id="r-paste">Check this receipt</button>
+          </div>
+        </details>
+      </div>
     </div>
   </section>
 </main>
@@ -117,69 +220,401 @@
 <div id="footer"></div>
 
 <script type="module">
-import { toHex, W, CAP } from "../sim/js/antosim.mjs";
-import { BURN_MENU } from "./round.mjs";
-import { loadRound, walletsFor, slugTitle } from "./roundchain.mjs";
-import { recentRequests, forecastersOf, cranked } from "./recruit.mjs";
+import { toHex, W, CAP, colonySeed, BURN_COLONY, N_ANTS, BURN_TICKS } from "../sim/js/antosim.mjs";
+import { BURN_MENU, burnDay, knownBurnDay, rememberBurnDay } from "./round.mjs";
+import { buildRound, loadRound, walletsFor, slugTitle } from "./roundchain.mjs";
+import { forecastersOf, cranked } from "./recruit.mjs";
 import { loadBurnCard, burnColonyFor } from "./burncard.mjs";
+import { receiptOf, checkReceipt, parseReceipt } from "./receipts.mjs";
+import { RoundWalk, PotWalk, fileRequests, allRequests, byDay, readAt, beliefOf, requestMarket, pageOf } from "./histchain.mjs";
+import { sign, pts } from "./forecasts.mjs";
+import { requestHref } from "./lv.mjs";
+import { snapshotWallets, fmtTokens } from "./burn.mjs";
+import { sizeHTML } from "./pot.mjs";
 import { stakerAnts } from "./ds/staker-ants.mjs";
-import { hexToBytes, chain } from "./chain.mjs";
-import { colonySeed, BURN_COLONY, N_ANTS, BURN_TICKS } from "../sim/js/antosim.mjs";
+import { hexToBytes, chain, contractId } from "./chain.mjs";
 import { antLives, tripAt, deliveredBy, notableAnts } from "./autopsy.mjs";
 import { $, esc, hashHTML, installCopy, liveShares, shareBars, Player, topbar, footer, stakerRoster, pad4, postedHTML, BRIER_NOTE } from "./ui.mjs";
 
-$("topbar").outerHTML = topbar("replay");
+$("topbar").outerHTML = topbar("history");
 $("footer").outerHTML = footer();
 installCopy();
 
 const q = new URLSearchParams(location.search);
-// The Burn colony runs once per UTC day and is picked by day number; the
-// forecasters run per round, and a requested forecast's three colonies per
-// request. `unit` is "day", "round" or "request", `id` its number.
-// A day's seed is drawn at 12:00 UTC, so the newest day is drawnBurnDay().
-let unit, id, seed, markets, spec, bars, lives = [], picks = [];
-const unitOf = (key) => (key === "burn" ? "day" : /^r\d+-/.test(key) ? "request" : "round");
-// What the contract holds: the round (current once it runs, and the previous
-// finished one), today's burn run and the newest requests. Reloaded on every Load.
-let loaded = null, burn = null;
-const reqs = new Map(); // request id -> RequestView
-async function readChain() {
-  let recent;
-  [loaded, burn, recent] = await Promise.all([loadRound(), loadBurnCard().catch(() => null), recentRequests(8).catch(() => [])]);
-  for (const r of recent) reqs.set(r.id, r);
+const carry = () => (q.has("contract") ? `&contract=${encodeURIComponent(q.get("contract"))}` : "");
+const num = (n) => Number(n).toLocaleString("en");
+const hhmm = (ms) => new Date(ms).toISOString().slice(11, 16);
+const isoDay = (ms) => new Date(ms).toISOString().slice(0, 10);
+const dateLine = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+const plural = (n, one) => `${n} ${one}${n === 1 ? "" : "s"}`;
+const errText = (e) => String(e?.message ?? e).slice(0, 160);
+
+// ---- the lists ----
+
+const rounds = new RoundWalk();
+const pots = new PotWalk();
+let requests = [];          // every RequestView on the contract
+let opened = null;          // { kind: "round" | "day", id, row, round?, requests?, burn? }
+const busy = { rounds: false, pots: false };
+const errors = { rounds: null, pots: null };
+
+const ROUND_STATE = {
+  posting: ["running", "staking"], agents: ["running", "agents post"], ready: ["running", "waiting for the seed"],
+  running: ["running", "colonies running"], done: ["done", "done"], skipped: ["skipped", "skipped · no quorum"],
+  abandoned: ["stalled", "abandoned"],
+};
+const REQ_STATE = { odds: "keepers posting", forecasting: "agents posting", running: "running", done: "done", skipped: "refunded" };
+const PAGE = { rounds: 8, pots: 7 };     // rows a page: eight rounds (folded to a line each), a week of pots
+const page = { rounds: 0, pots: 0 };
+const isOpen = (kind, id) => opened?.kind === kind && opened.id === id;
+
+// The swarm belief as one stacked bar in the option colours.
+const stackHTML = (swarm) => `<span class="belief-stack" aria-hidden="true">${swarm.map((b, o) => (b > 0
+  ? `<i data-opt="${o}" style="--w: ${(b / 100).toFixed(2)}"${b >= 1500 ? ' class="is-wide"' : ""}></i>` : "")).join("")}</span>`;
+
+// Why a round's market has no result yet: [pill state, text].
+function noResult(r, m) {
+  if (!r.seed) return r.live ? ["pending", "runs after the seed"] : ["skipped", "never ran"];
+  if (r.live) return ["running", `${m.cranked} of 3 colonies ran`];
+  return ["stalled", `${m.cranked} of 3 colonies ran · no result`];
 }
-// A request outside the newest few, read on demand.
-async function ensureRequest(n) {
-  if (!reqs.has(n)) { const r = await chain.request(n).catch(() => null); if (r) reqs.set(n, r); }
-  return reqs.get(n) ?? null;
+const reqWhy = (x) => [x.phase === "skipped" ? "skipped" : "pending", REQ_STATE[x.phase] ?? x.phase];
+
+// The list's result cells for one market: the outcome the swarm belief leads
+// on and its bar, the keepers' odds for it, the gap; or why there's none.
+function resultCells(m, [state, why]) {
+  const b = beliefOf(m);
+  if (!b) return `<td colspan="3"><span class="pill" data-state="${state}">${esc(why)}</span></td>`;
+  const o = b.lead;
+  return `<td><div class="hx-lead"><span class="opt" data-opt="${o}">${esc(m.outcomes[o])}</span> <span class="num">${b.swarm[o]}</span></div>${stackHTML(m.swarm)}</td>` +
+    `<td class="num">${b.market[o]}</td><td class="num">${sign(b.gap)}</td>`;
 }
-const roundOf = (n) => (loaded.hasRun && loaded.id === n ? loaded : loaded.previous?.id === n ? loaded.previous : null);
-const burnRun = () => (burn?.run && burn.weights ? burn.run : null);
-const seededRequests = () => [...reqs.values()].filter((r) => r.seed).sort((a, b) => b.id - a.id);
-const currentId = (u) => (u === "day" ? burnRun()?.day ?? 0 : u === "request" ? seededRequests()[0]?.id ?? 0 : loaded.shown.id);
+
+// One round in the list: a head line (round, time, state, seed, Open) that
+// folds its rows: one per market with its result, then the requests made
+// while it was open. Rounds start folded, except the one opened below.
+const unfolded = new Set();
+function roundBlock(r) {
+  const on = isOpen("round", r.id) ? " is-open" : "";
+  const [pill, label] = ROUND_STATE[r.state] ?? ["pending", r.state];
+  const canOpen = !!(r.seed || r.requests.some((x) => x.seed));
+  const openHref = (key) => `replay.html?round=${r.id}${key ? `&colony=${key}` : ""}${carry()}`;
+  const n = r.markets.length + r.requests.length;
+  const open = n > 0 && unfolded.has(r.id);
+  const what = [r.markets.length && plural(r.markets.length, "market"), r.requests.length && plural(r.requests.length, "request")].filter(Boolean).join(" · ")
+    || (r.live ? `markets are fixed when staking closes at ${hhmm(r.status.close_at_ms)} UTC` : r.state === "skipped" ? "no market reached a quorum of keepers" : "no market");
+  const name = `Round ${num(r.id)}`;
+  const head = `<tr class="hx-rhead${on}"${n ? ` data-fold="${r.id}"` : ""}${on ? ' aria-current="true"' : ""}><th colspan="4" scope="rowgroup"><div class="hx-rhead__line">` +
+    (n ? `<button type="button" class="hx-fold" data-fold="${r.id}" aria-expanded="${open}"><span class="hx-fold__chev" aria-hidden="true">▸</span>${name}</button>` : `<b class="hx-fold">${name}</b>`) +
+    `<span class="num text-muted">${hhmm(r.startMs)}–${r.endMs ? hhmm(r.endMs) : "now"}</span>` +
+    (r.live || r.state !== "done" ? `<span class="pill" data-state="${pill}">${esc(r.live && r.state !== "done" ? `now · ${label}` : label)}</span>` : "") +
+    `<span class="text-xs text-faint">${esc(what)}</span>` +
+    (r.total ? `<span class="text-xs text-faint num">${r.cranked} / ${r.total} colonies</span>` : "") +
+    `<span class="hx-rhead__end">${r.seed ? `<span class="text-xs text-faint">seed</span> ${hashHTML(r.seed, `seed of round ${r.id}`)}` : ""}` +
+    (canOpen ? `<a class="btn btn--sm" href="${openHref()}" data-open-round="${r.id}" aria-label="Open round ${r.id}">Open</a>` : "") +
+    `</span></div></th></tr>`;
+  if (!open) return head;
+  const title = (text, key) => (canOpen && r.seed ? `<a href="${openHref(key)}" data-open-round="${r.id}" data-key="${key}">${esc(text)}</a>` : esc(text));
+  const markets = r.markets.map((m, i) =>
+    `<tr class="hx-mk${on}"><th scope="row">${title(slugTitle(m.marketId), `m${i}-momentum`)}</th>${resultCells(m, noResult(r, m))}</tr>`).join("");
+  const reqs = r.requests.map((x) => {
+    const name = esc(slugTitle(x.market_id));
+    const link = x.seed ? `<a href="replay.html?request=${x.id}${carry()}" data-open-round="${r.id}" data-key="r${x.id}-momentum">${name}</a>` : `<a href="${requestHref(x.id)}">${name}</a>`;
+    return `<tr class="hx-mk hx-req${on}"><th scope="row"><span class="hx-req__n">Request #${x.id}</span> ${link}</th>${resultCells(requestMarket(x), reqWhy(x))}</tr>`;
+  }).join("");
+  return head + markets + reqs;
+}
+// The round's toggle, or anywhere on its head line that isn't a control of its own
+// (Open, the seed's copy and expand); selecting text there doesn't fold it.
+$("round-rows").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-fold]") ?? (e.target.closest("a, button, input, select, label")
+    || String(getSelection()) ? null : e.target.closest("tr.hx-rhead[data-fold]"));
+  if (!b) return;
+  const id = +b.dataset.fold;
+  if (!unfolded.delete(id)) unfolded.add(id);
+  renderRounds();
+  $("round-rows").querySelector(`button[data-fold="${id}"]`)?.focus();
+});
+$("rounds-fold").addEventListener("click", () => {
+  const shown = rounds.rows.slice(pageOf(rounds.rows.length, page.rounds, PAGE.rounds, !rounds.done).from).slice(0, PAGE.rounds);
+  const all = shown.every((r) => unfolded.has(r.id) || !(r.markets.length + r.requests.length));
+  for (const r of shown) all ? unfolded.delete(r.id) : unfolded.add(r.id);
+  renderRounds();
+});
+
+// The pager under a list: newer and older pages, and which rows this one holds.
+function pagerUI(which, pg, list, label) {
+  const nav = $(`${which}-pager`);
+  const [newer, text, older] = nav.children;
+  nav.hidden = !pg.newer && !pg.older && !(pg.short && page[which] > 0);
+  newer.disabled = !pg.newer;
+  const retry = pg.short && !!errors[which] && !busy[which];
+  older.disabled = !(pg.older || retry);
+  older.textContent = retry ? "Try again" : "Older ›";
+  text.textContent = `Page ${pg.page + 1}${label ? ` · ${label}` : ""}${busy[which] && pg.short ? " · reading…" : ""}`;
+}
+
+function renderRounds() {
+  fileRequests(rounds.rows, requests);
+  const pg = pageOf(rounds.rows.length, page.rounds, PAGE.rounds, !rounds.done);
+  page.rounds = pg.page;
+  const rows = rounds.rows.slice(pg.from, pg.to);
+  let body = byDay(rows, (r) => r.startMs).map((g) => `<tr class="hx-day"><th colspan="4" scope="rowgroup">${esc(dateLine(g.date))}</th></tr>` + g.rows.map(roundBlock).join("")).join("");
+  if (!rows.length) body = `<tr><td colspan="4" class="text-sm text-muted">${errors.rounds ? `Could not read the contract: ${esc(errors.rounds)}` : "Reading the contract…"}</td></tr>`;
+  $("round-rows").innerHTML = body;
+  const last = rounds.rows.at(-1);
+  $("rounds-chip").textContent = busy.rounds ? `reading${last ? ` round ${num(Math.max(0, last.id - 1))}` : ""}…`
+    : errors.rounds ? `stopped: ${errors.rounds}`
+    : rounds.done ? `all ${plural(rounds.rows.length, "round")} · contract state` : `${plural(rounds.rows.length, "round")} so far · contract state`;
+  pagerUI("rounds", pg, rounds, rows.length ? `rounds ${num(rows[0].id)}${rows.length > 1 ? `–${num(rows.at(-1).id)}` : ""}` : "");
+  const foldable = rows.filter((r) => r.markets.length + r.requests.length);
+  $("rounds-fold").hidden = !foldable.length;
+  $("rounds-fold").textContent = foldable.every((r) => unfolded.has(r.id)) ? "Fold all" : "Unfold all";
+}
+
+function renderPots() {
+  const pg = pageOf(pots.rows.length, page.pots, PAGE.pots, !pots.done);
+  page.pots = pg.page;
+  const rows = pots.rows.slice(pg.from, pg.to);
+  let body = rows.map((x) => {
+    const on = isOpen("day", x.day);
+    const tr = `<tr class="hx-row${on ? " is-open" : ""}"${on ? ' aria-current="true"' : ""}>`;
+    const day = `<th scope="row" class="num">${num(x.day)}<span class="why">${esc(dateLine(isoDay(x.day * 86400000)))}</span></th>`;
+    const open = x.seed && (x.live || x.entries) ? `<a class="btn btn--sm btn--ghost" href="replay.html?day=${x.day}${carry()}" data-open-day="${x.day}" aria-label="Open day ${num(x.day)}">Open</a>` : "";
+    if (x.state === "lost") return `${tr}${day}<td colspan="5"><span class="pill" data-state="skipped">lost</span> <span class="text-muted">nobody cranked it; nothing burned or shared</span></td><td></td></tr>`;
+    if (x.state === "skipped") return `${tr}${day}<td colspan="3"><span class="pill" data-state="stalled">unfinished</span> <span class="text-muted">its run stopped at tick ${num(x.t ?? 0)}; nothing burned or shared</span></td><td>${hashHTML(x.seed, `seed of day ${x.day}`)}</td><td></td><td></td></tr>`;
+    if (x.state === "unread") return `${tr}${day}<td colspan="5" class="text-faint">the archive couldn't be read for this day</td><td></td></tr>`;
+    if (x.live) return `${tr}${day}<td colspan="3"><span class="pill" data-state="running">${x.state === "running" ? `now · tick ${num(x.t ?? 0)} of ${num(BURN_TICKS)}` : `finished · ${esc(BURN_MENU[x.index] ?? "")} · not paid yet`}</span></td>` +
+      `<td>${x.seed ? hashHTML(x.seed, `seed of day ${x.day}`) : "—"}</td><td>${x.hash ? hashHTML(x.hash, `result hash for day ${x.day}`) : `<span class="text-faint">at the last tick</span>`}</td><td>${open}</td></tr>`;
+    return `${tr}${day}<td>${sizeHTML(x.index)}</td>` +
+      `<td class="num">≈ ${fmtTokens(x.burned)}</td><td class="num">≈ ${fmtTokens(x.reward)}</td>` +
+      `<td>${hashHTML(x.seed, `seed of day ${x.day}`)}</td><td>${hashHTML(x.hash, `result hash for day ${x.day}`)}</td>` +
+      `<td>${open || `<span class="text-faint" title="The stake snapshot couldn't be read, so the colony can't be rebuilt here.">no stakes</span>`}</td></tr>`;
+  }).join("");
+  if (!rows.length) body = `<tr><td colspan="7" class="text-sm text-muted">${errors.pots ? `Could not read the contract: ${esc(errors.pots)}` : busy.pots || !pots.done ? "Reading the contract…" : "No daily pot has run yet."}</td></tr>`;
+  $("pot-rows").innerHTML = body;
+  $("pots-chip").textContent = busy.pots ? "reading…" : errors.pots ? `stopped: ${errors.pots}` : pots.done ? `all ${plural(pots.rows.length, "day")} · contract state` : `${plural(pots.rows.length, "day")} so far · contract state`;
+  pagerUI("pots", pg, pots, rows.length ? `days ${num(rows[0].day)}${rows.length > 1 ? `–${num(rows.at(-1).day)}` : ""}` : "");
+}
+
+// Read more rows of one list; `fn(render)` runs the walk. Rows already read stay on a failure.
+const pending = { rounds: Promise.resolve(), pots: Promise.resolve() };
+const LISTS = { rounds: () => rounds, pots: () => pots };
+const RENDER = { rounds: () => renderRounds(), pots: () => renderPots() };
+function walk(which, fn) {
+  const render = RENDER[which];
+  const p = pending[which].then(async () => {
+    busy[which] = true; errors[which] = null;
+    render();
+    try { return await fn(render); }
+    catch (e) { errors[which] = errText(e); return null; }
+    finally { busy[which] = false; render(); }
+  });
+  pending[which] = p.catch(() => {});
+  return p;
+}
+// Read until the page shown is full (or the walk ends). Queued fills that find it full read nothing.
+function fill(which) {
+  const list = LISTS[which]();
+  return walk(which, (render) => {
+    const need = (page[which] + 1) * PAGE[which] - list.rows.length;
+    return need > 0 ? list.more(need, render) : null;
+  });
+}
+// The page a listed row sits on.
+function pageTo(which, row) {
+  const i = LISTS[which]().rows.indexOf(row);
+  if (i >= 0) page[which] = Math.floor(i / PAGE[which]);
+}
+for (const which of ["rounds", "pots"]) $(`${which}-pager`).addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-step]");
+  if (!b || b.disabled) return;
+  const list = LISTS[which]();
+  const pg = pageOf(list.rows.length, page[which], PAGE[which], !list.done);
+  if (+b.dataset.step > 0 && pg.short) { fill(which); return; } // "Try again"
+  page[which] = Math.max(0, pg.page + +b.dataset.step);
+  RENDER[which]();
+  fill(which);
+  const top = $(`tab-${which}-panel`);
+  if (top.getBoundingClientRect().top < 0) top.scrollIntoView({ block: "start" });
+});
+
+// ---- tabs ----
+
+const TABS = ["rounds", "pots"];
+let potsStarted = false;
+function showTab(id) {
+  for (const t of TABS) {
+    const on = t === id, tab = $(`tab-${t}`);
+    $(`tab-${t}-panel`).hidden = !on;
+    tab.setAttribute("aria-selected", String(on));
+    tab.tabIndex = on ? 0 : -1;
+  }
+  if (id === "pots" && !potsStarted) { potsStarted = true; fill("pots"); }
+}
+$("hx-tabs").addEventListener("click", (e) => {
+  const tab = e.target.closest('[role="tab"]');
+  if (!tab || e.metaKey || e.ctrlKey || e.shiftKey) return;
+  e.preventDefault();
+  history.replaceState(null, "", `${location.search}${tab.hash}`);
+  showTab(tab.hash.slice(1));
+});
+$("hx-tabs").addEventListener("keydown", (e) => {
+  const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+  if (!step) return;
+  const i = TABS.findIndex((t) => !$(`tab-${t}-panel`).hidden);
+  const tab = $(`tab-${TABS[(i + step + TABS.length) % TABS.length]}`);
+  tab.focus();
+  tab.click();
+});
+
+// ---- opening a row ----
 
 // A requested forecast's three colonies, from what the contract stored.
 function requestSpecs(r) {
   const title = slugTitle(r.market_id);
-  return (forecastersOf(r) ?? []).map((f, k) => ({
-    ...f, market: title, chainHash: r.colony_hashes[k] ?? null, cranked: k < cranked(r),
-  }));
+  return (forecastersOf(r) ?? []).map((f, k) => ({ ...f, market: title, chainHash: r.colony_hashes[k] ?? null, cranked: k < cranked(r) }));
 }
-// Forecaster keys differ only in their m/p prefix between current and previous round.
+// Forecaster keys differ only in their m/p prefix between the current and the previous round.
 const sameKey = (a, b) => a.slice(1) === b.slice(1);
 
-// The Burn colony as the contract runs it, from the chain's day seed and the
-// day's stake snapshot.
-function burnSpec() {
-  const run = burn.run;
-  const wallets = walletsFor(burn.entries, BURN_COLONY, 5);
-  return {
-    key: "burn", seed: colonySeed(hexToBytes(run.seed), BURN_COLONY, 0), colony: BURN_COLONY, name: "Burn colony", labels: BURN_MENU,
-    ants: N_ANTS, ticks: BURN_TICKS, stakers: wallets.length ? stakerAnts(wallets, N_ANTS) : null,
-    chainHash: run.result_hash ?? null,
-    make: () => burnColonyFor(run, burn.weights),
-  };
+// The round a row stands for, as the pages draw it: the live one from
+// loadRound, a past one from its status at the block it was read, with that
+// block's stake snapshot for the staker ants.
+async function roundOfRow(row) {
+  if (row.live) {
+    const l = await loadRound();
+    return l.hasRun ? l : null;
+  }
+  const snap = row.status.run ? await readAt(row.height, "stake_snapshot").catch(() => null) : null;
+  return buildRound(row.status, null, { snap });
 }
+
+async function openRound(row, key = null, ant) {
+  opened = { kind: "round", id: row.id, row, round: null, requests: row.requests.filter((r) => r.seed) };
+  unfolded.add(row.id);
+  pageTo("rounds", row);
+  renderRounds();
+  showOpen(`Round ${num(row.id)}`, `${hhmm(row.startMs)}–${row.endMs ? hhmm(row.endMs) : "now"} UTC · ${esc(dateLine(isoDay(row.startMs)))}`);
+  $("bench-title").textContent = "Replay a colony";
+  $("check").hidden = true;
+  $("to-check").hidden = true;
+  renderResults();
+  showEmpty("Reading the round's inputs from the contract…");
+  try { opened.round = await roundOfRow(row); } catch (e) { showEmpty(`Could not read round ${row.id}: ${errText(e)}`); return; }
+  if (!isOpen("round", row.id)) return;
+  renderResults();
+  if (!opened.round?.seed && !opened.requests.length) {
+    showEmpty(`Round ${row.id} has no seed: ${row.state === "skipped" ? "no market reached a quorum of keepers, so nothing ran." : "its colonies get their seed at the first crank, after staking closes and the agents' window ends."}`);
+    return;
+  }
+  const all = opened.round?.all ?? [];
+  const s = key && /^r\d+-/.test(key) ? specByKey(key)
+    : all.find((x) => key && sameKey(x.key, key)) ?? all.find((x) => x.cranked) ?? all[0] ?? specByKey(`r${opened.requests[0].id}-momentum`);
+  load(s, ant);
+  resetCheck();
+}
+
+async function openDay(row, ant) {
+  opened = { kind: "day", id: row.day, row, burn: null };
+  pageTo("pots", row);
+  renderPots();
+  showOpen(`Day ${num(row.day)}`, `${esc(dateLine(isoDay(row.day * 86400000)))} · the daily pot's Burn colony`);
+  $("bench-title").textContent = "Replay the Burn colony";
+  $("check").hidden = true;
+  $("to-check").hidden = true;
+  $("hx-results").hidden = true;
+  if (row.live) {
+    showEmpty("Reading today's run from the contract…");
+    const card = await loadBurnCard().catch(() => null);
+    if (!isOpen("day", row.day)) return;
+    if (!card?.run || !card.weights) { showEmpty("The contract has no Burn run to replay yet: the day's seed is drawn at 12:00 UTC, when the first run call starts the colony."); return; }
+    const run = card.run, wallets = walletsFor(card.entries, BURN_COLONY, 5);
+    opened.burn = {
+      key: "burn", seed: colonySeed(hexToBytes(run.seed), BURN_COLONY, 0), colony: BURN_COLONY, name: "Burn colony", labels: BURN_MENU,
+      ants: N_ANTS, ticks: BURN_TICKS, stakers: wallets.length ? stakerAnts(wallets, N_ANTS) : null,
+      chainHash: run.result_hash ?? null, unitSeed: run.seed, make: () => burnColonyFor(run, card.weights),
+    };
+  } else {
+    if (row.entries) rememberBurnDay({ day: row.day, seed: row.seed, stakeHash: row.stakeHash, entries: row.entries, winner: row.index, hash: row.hash });
+    if (!knownBurnDay(row.day)?.entries) { showEmpty(`Day ${row.day}'s stake snapshot couldn't be read from the archive, so its colony can't be rebuilt here.`); return; }
+    const d = burnDay(row.day);
+    opened.burn = { ...d.burn, chainHash: row.hash, unitSeed: row.seed, stakers: snapshotWallets(row.entries).length ? d.burn.stakers : null };
+  }
+  load(opened.burn, ant);
+}
+
+// The opened round's markets first, each with its result: the keepers' odds
+// beside the chain's swarm belief for every outcome, and its three colonies
+// to replay below. Requests made while it was open follow. Results come from
+// the row at once; the colony buttons once the round's inputs are read.
+function resultCard({ n, title, sub = "", m, cols, why }) {
+  const b = beliefOf(m);
+  const rows = m.outcomes.map((label, o) => `<tr${b && o === b.lead ? ' class="is-lead"' : ""}>` +
+    `<th scope="row"><span class="opt" data-opt="${o}">${esc(label)}</span></th>` +
+    `<td class="num">${m.odds ? pts(m.odds[o]) : "—"}</td><td class="num">${b ? b.swarm[o] : "—"}</td>` +
+    `<td class="num">${b ? sign(b.swarm[o] - b.market[o]) : "—"}</td></tr>`).join("");
+  const state = (f) => (!f.cranked ? " <small>not cranked</small>" : f.counted === false ? " <small>sat out</small>" : "");
+  const buttons = cols?.length ? `<div class="hx-cols" role="group" aria-label="Replay one of its colonies"><span class="eyebrow">Replay</span>${cols.map((f) =>
+    `<button type="button" class="btn btn--sm btn--ghost" data-key="${esc(f.key)}" aria-pressed="${f.key === spec?.key}">${esc(f.name)}${state(f)}</button>`).join("")}</div>` : "";
+  return `<article class="chamber hx-result">` +
+    `<div class="chamber__header"><h3 class="chamber__title"><span class="num text-faint">${esc(n)}</span> ${esc(title)}</h3>` +
+    (b ? "" : `<span class="pill" data-state="${why[0]}">${esc(why[1])}</span>`) + `</div>` +
+    (sub ? `<p class="text-xs text-faint hx-result__sub">${sub}</p>` : "") +
+    (b ? stackHTML(m.swarm) : "") +
+    `<table class="table hx-otable"><thead><tr><th scope="col">Outcome</th><th scope="col" class="num">Market</th><th scope="col" class="num">Swarm belief</th><th scope="col" class="num">Gap</th></tr></thead><tbody>${rows}</tbody></table>` +
+    buttons + `</article>`;
+}
+function renderResults() {
+  if (opened?.kind !== "round") return;
+  const row = opened.row, rd = opened.round;
+  const colsOf = (m) => rd?.markets?.find((x) => x.colony === m.colony)?.forecasters ?? null;
+  const cards = row.markets.map((m, i) => resultCard({ n: String(i + 1), title: slugTitle(m.marketId), m, cols: colsOf(m), why: noResult(row, m) }))
+    .concat(row.requests.map((x) => resultCard({
+      n: `R${x.id}`, title: slugTitle(x.market_id), m: requestMarket(x), why: reqWhy(x), cols: x.seed ? requestSpecs(x) : null,
+      sub: `Request #${x.id}, asked at ${hhmm(x.created_at_ms)} UTC · <a href="${requestHref(x.id)}">its page</a>`,
+    })));
+  $("hx-results").hidden = !cards.length;
+  $("results").innerHTML = cards.join("");
+  $("results-note").textContent = "Market: the keepers' median odds when staking closed. Swarm belief: the chain's, the mean trail share of the colonies that counted. Gap: swarm − market. Whole points.";
+}
+$("results").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-key]");
+  if (!b) return;
+  load(specByKey(b.dataset.key));
+  syncUrl();
+  $("bench-head").scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+});
+
+function showOpen(title, meta) {
+  $("open").hidden = false;
+  $("open-title").textContent = title;
+  $("open-meta").innerHTML = meta;
+}
+function showEmpty(text) {
+  $("replay-empty").hidden = !text;
+  $("replay-empty").firstElementChild.textContent = text ?? "";
+  $("replay-bench").hidden = !!text;
+  $("colony-in").closest(".field").hidden = !!text;
+  $("bench-title").hidden = !!text;
+}
+
+function specByKey(key) {
+  if (key === "burn") return opened?.burn ?? null;
+  const rk = /^r(\d+)-(\w+)$/.exec(key ?? "");
+  if (rk) {
+    const r = opened?.requests?.find((x) => x.id === +rk[1]);
+    if (!r) return null;
+    const specs = requestSpecs(r);
+    const s = specs.find((x) => x.key.endsWith(`-${rk[2]}`)) ?? specs.find((x) => x.cranked) ?? specs[0];
+    return s ? { ...s, unitSeed: r.seed, request: r.id } : null;
+  }
+  return opened?.round?.all.find((s) => sameKey(s.key, key)) ?? null;
+}
+
+// ---- the workbench ----
+
+let spec, bars, lives = [], picks = [];
 
 const player = new Player($("player"), {
   onTick(col) {
@@ -198,7 +633,6 @@ const player = new Player($("player"), {
 
 const optHTML = (o) => `<span class="opt" data-opt="${o}">${esc(spec.labels[o])}</span>`;
 const roster = stakerRoster($("stakers"), (w) => player.spot(w));
-const plural = (n, one) => `${n} ${one}${n === 1 ? "" : "s"}`;
 const PICK_NAMES = { busiest: "Busiest", first: "First home", loyal: "Most loyal", wanderer: "Lost", late: "Late bloomer", staker: "Staker ant" };
 const isAgents = () => spec.stakers?.kind === "agent";
 const pickNote = (p) => p.key === "loyal" ? `only ${optHTML(p.opt)}`
@@ -279,62 +713,36 @@ function pickButtons() {
 }
 
 function syncUrl() {
-  history.replaceState(null, "", `?${unit}=${id}&colony=${spec.key}&ant=${player.view.selected}`);
+  if (!opened || !spec) return;
+  const unit = opened.kind === "day" ? `day=${opened.id}` : `round=${opened.id}&colony=${spec.key}`;
+  const hash = opened.kind === "day" ? "#pots" : location.hash === "#check" ? "#check" : "";
+  history.replaceState(null, "", `?${unit}&ant=${player.view.selected}${carry()}${hash}`);
+}
+
+// The colony picker lists the opened row's colonies only: for a round one
+// group per market, then one per request made while it was open; for a day
+// its Burn colony. Colonies not cranked yet have no hash to compare.
+function colonyOptions() {
+  const opt = (key, name) => `<option value="${key}"${key === spec.key ? " selected" : ""}>${esc(name)}</option>`;
+  const group = (label, fs) => `<optgroup label="${esc(label)}">${fs.map((f) => opt(f.key, `${f.name} forecaster${f.cranked ? "" : " (not cranked)"}`)).join("")}</optgroup>`;
+  if (opened.kind === "day") return opt("burn", `Burn colony · day ${num(opened.id)}`);
+  return (opened.round?.markets ?? []).filter((m) => m.forecasters).map((m) => group(m.title, m.forecasters)).join("") +
+    opened.requests.map((r) => group(`Request #${r.id} · ${slugTitle(r.market_id)}`, requestSpecs(r))).join("");
 }
 
 const cleanHex = (v) => v.trim().toLowerCase().replace(/^0x/, "");
 
-// Colony picker: today's Burn colony (when the chain has its run), then one
-// group per market of the round, then one per recent requested forecast with
-// a seed. Colonies not cranked yet have no seed to replay.
-function colonyOptions() {
-  const opt = (key, name) => `<option value="${key}"${key === spec.key ? " selected" : ""}>${esc(name)}</option>`;
-  const group = (label, fs) => `<optgroup label="${esc(label)}">${fs.map((f) => opt(f.key, `${f.name} forecaster${f.cranked ? "" : " (not cranked)"}`)).join("")}</optgroup>`;
-  return (burnRun() ? opt("burn", "Burn colony · today") : "") +
-    markets.map((m) => group(m.title, m.forecasters ?? [])).join("") +
-    seededRequests().map((r) => group(`Request #${r.id} · ${slugTitle(r.market_id)}`, requestSpecs(r))).join("");
-}
-
-function showEmpty(text) {
-  $("replay-empty").hidden = !text;
-  $("replay-empty").firstElementChild.textContent = text ?? "";
-  $("replay-bench").hidden = !!text;
-}
-
-function load(n, key, ant = player.view.selected) {
-  unit = unitOf(key);
-  if (unit === "day") {
-    if (!burnRun()) { showEmpty("The contract has no Burn run to replay yet: today's seed is drawn at 12:00 UTC, when the first run call starts the colony."); return; }
-    id = burn.run.day; // the chain holds one burn run at a time
-    seed = hexToBytes(burn.run.seed);
-    spec = burnSpec();
-    markets = loaded.shown.markets; // picker labels only
-  } else if (unit === "request") {
-    const r = reqs.get(n);
-    if (!r?.seed) { showEmpty(r ? `Request #${n} has no seed yet: its first crank draws it, once the agents' window has closed.` : `There is no request #${n} on the contract.`); return; }
-    id = n;
-    seed = hexToBytes(r.seed);
-    markets = loaded.shown.markets; // picker labels only
-    const specs = requestSpecs(r), kind = key.replace(/^r\d+-/, "");
-    spec = specs.find((s) => s.key.endsWith(`-${kind}`)) ?? specs.find((s) => s.cranked) ?? specs[0];
-  } else {
-    const round = roundOf(n) ?? (loaded.shown.seed ? loaded.shown : null);
-    if (!round?.seed) { showEmpty("No round has run on the contract yet. A round's colonies get their seed at the first crank, after staking closes and the agents' window ends; then they can be replayed here."); return; }
-    id = round.id;
-    seed = hexToBytes(round.seed);
-    markets = round.markets;
-    spec = round.all.find((s) => sameKey(s.key, key)) ?? round.all.find((s) => s.cranked) ?? round.all[0];
-    if (!spec) { showEmpty("The round's market has no colonies yet."); return; }
-  }
+function load(s, ant = player.view.selected) {
+  if (!s) { showEmpty("This colony has no seed yet."); return; }
+  spec = s;
   showEmpty(null);
-  $("round-in").value = id;
-  const UNIT = { day: "Day", round: "Round", request: "Request" }[unit];
-  $("round-label").textContent = UNIT;
+  const UNIT = opened.kind === "day" ? "Day" : s.request !== undefined ? "Request" : "Round";
+  const unitSeed = s.unitSeed ?? opened.round?.seed;
   $("v-seed-label").textContent = `${UNIT} seed`;
   $("colony-in").innerHTML = colonyOptions();
-  $("v-colony").textContent = `${spec.ants} ants · ${spec.ticks} ticks` +
-    (unit === "day" ? ` · day ${id}` : unit === "request" ? ` · request #${id}` : "");
-  $("v-round-seed").innerHTML = hashHTML(toHex(seed), `${unit} seed`);
+  $("results").querySelectorAll("button[data-key]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.key === spec.key)));
+  $("v-colony").textContent = `${spec.ants} ants · ${spec.ticks.toLocaleString("en")} ticks` + (s.request !== undefined ? ` · request #${s.request}` : "");
+  $("v-round-seed").innerHTML = unitSeed ? hashHTML(unitSeed, `${UNIT.toLowerCase()} seed`) : "—";
   $("v-colony-seed").innerHTML = hashHTML(toHex(spec.seed), "colony seed");
   $("expected").value = spec.chainHash ?? "";
   $("expected").setAttribute("aria-invalid", "false");
@@ -350,34 +758,18 @@ function load(n, key, ant = player.view.selected) {
   $("stakers-box").hidden = !spec.stakers?.total;
   $("stakers-title").textContent = isAgents() ? "Agent ants" : "Staker ants";
   $("stakers-note").innerHTML = isAgents()
-    ? `Each forecaster agent's ants hatch in its colour, an equal share each: the Agents colony follows the agents' median, where every post counts the same. Hover an agent to light up its ants. <a class="what" href="docs.html#agents-colony">Agents colony</a>`
+    ? `Each agent's ants hatch in its colour, an equal share each: the Agents colony follows the agents' median, where every post counts the same. Hover an agent to light up its ants. <a class="what" href="docs.html#agents-colony">Agents colony</a>`
     : `Hover a wallet to light up its ants, click to keep the light on. <a class="what" href="docs.html#staker-ants">Staker ants</a>`;
   if (spec.stakers?.total) {
     const ws = spec.stakers.rows.filter((r) => r.ants > 0);
     $("stakers-sum").textContent = `${ws.reduce((n, r) => n + r.ants, 0)} of ${spec.ants} ants · ${plural(ws.length, isAgents() ? "agent" : "wallet")}`;
   }
-  player.select(ant);
+  player.select(Math.min(spec.ants - 1, Math.max(0, ant ?? 0)));
 }
 
 function setBadge(state, text) { $("badge").dataset.state = state; $("badge").textContent = text; }
 
-$("pick").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  try { await readChain(); } catch (err) { showEmpty(`Could not read the contract: ${String(err.message || err).slice(0, 160)}`); return; }
-  let key = $("colony-in").value || (burnRun() ? "burn" : "");
-  // Switching between Burn, a round and a request switches what the number
-  // means, so start from the picked one rather than reading a day as a round.
-  const typed = Math.max(0, Math.floor(+$("round-in").value || 0));
-  let n = unitOf(key) === unit ? typed : currentId(unitOf(key));
-  // A request colony from the picker carries its own id.
-  const rk = /^r(\d+)-/.exec(key);
-  if (rk && (unit !== "request" || +rk[1] !== id)) n = +rk[1];
-  else if (rk) key = key.replace(/^r\d+-/, `r${n}-`);
-  if (unitOf(key) === "request") await ensureRequest(n);
-  load(n, key);
-});
-$("colony-in").addEventListener("change", () => $("pick").requestSubmit());
-
+$("colony-in").addEventListener("change", (e) => load(specByKey(e.target.value)));
 $("ant-prev").addEventListener("click", () => player.select((player.view.selected + spec.ants - 1) % spec.ants));
 $("ant-next").addEventListener("click", () => player.select((player.view.selected + 1) % spec.ants));
 $("ant-in").addEventListener("change", (e) => player.select(Math.floor(+e.target.value || 0)));
@@ -389,16 +781,14 @@ $("ant-picks").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-ant]");
   if (b) player.select(+b.dataset.ant);
 });
-
 $("expected").addEventListener("input", (e) => {
   const v = cleanHex(e.target.value);
   e.target.setAttribute("aria-invalid", v && !/^[0-9a-f]{64}$/.test(v) ? "true" : "false");
 });
-
 $("verify").addEventListener("click", (e) => {
   const btn = e.currentTarget;
   btn.classList.add("is-loading");
-  setBadge("pending", `Replaying ${spec.ticks} ticks`);
+  setBadge("pending", `Replaying ${spec.ticks.toLocaleString("en")} ticks`);
   // Let the pending state paint before the synchronous replay.
   setTimeout(() => {
     const t0 = performance.now();
@@ -415,16 +805,147 @@ $("verify").addEventListener("click", (e) => {
   }, 60);
 });
 
+// Rows open in place; a modified click keeps the link's own behaviour.
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("a[data-open-round], a[data-open-day]");
+  if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+  e.preventDefault();
+  if (a.dataset.openRound) openRound(rounds.rows.find((r) => r.id === +a.dataset.openRound), a.dataset.key ?? null);
+  else openDay(pots.rows.find((r) => r.day === +a.dataset.openDay));
+  history.replaceState(null, "", `${a.getAttribute("href")}${a.dataset.openDay ? "#pots" : ""}`);
+  $("open").scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+});
+
+// ---- check the whole round ----
+
+const nextFrame = () => new Promise((r) => setTimeout(r, 0));
+const STATE_TEXT = { match: "✓ match", mismatch: "✗ mismatch", missing: "○ not in receipt", extra: "✗ not in this round" };
+const KIND_TEXT = { seed: "seed", colony: "colony", market: "market", request: "request" };
+const chainReceipt = () => receiptOf(opened.round, contractId(), opened.requests);
+
+function setCheck(state, text) { $("r-badge").dataset.state = state; $("r-badge").textContent = text; }
+function resetCheck() {
+  const can = opened?.kind === "round" && !!opened.round?.seed;
+  $("check").hidden = !can;
+  $("to-check").hidden = !can;
+  if (!can) return;
+  setCheck("idle", "Not checked");
+  for (const id of ["n-match", "n-bad", "n-ms"]) $(id).textContent = "–";
+  $("r-summary").textContent = "nothing checked yet";
+  $("r-table").hidden = true;
+  $("receipt").value = JSON.stringify(chainReceipt(), null, 2);
+}
+
+function showRows(res) {
+  $("r-table").hidden = false;
+  $("r-rows").innerHTML = res.rows.map((r) => {
+    const detail = r.state === "match" ? hashHTML(r.actual, r.name)
+      : r.state === "extra" ? `<span class="text-faint">receipt lists ${r.expected ? hashHTML(r.expected, "listed hash") : "no valid hash"}</span>`
+      : `<div>replayed ${r.actual ? hashHTML(r.actual, "replayed hash") : "—"}</div><div class="text-faint">receipt ${r.expected ? hashHTML(r.expected, "receipt hash") : "has none"}</div>`;
+    return `<tr><th scope="row"><span class="text-xs text-faint">${KIND_TEXT[r.kind]}</span><div>${esc(r.name)}</div>${detail}</th>` +
+      `<td class="num"><span class="chip" data-state="${r.state}">${STATE_TEXT[r.state]}</span></td></tr>`;
+  }).join("");
+}
+
+async function runCheck(receipt) {
+  for (const id of ["r-check", "r-paste"]) $(id).disabled = true;
+  $("r-check").classList.add("is-loading");
+  const t0 = performance.now();
+  try {
+    const res = await checkReceipt(receipt, opened.round, {
+      requests: opened.requests, yieldTo: nextFrame,
+      onColony: (s, i, n) => setCheck("pending", `Replaying ${i + 1} of ${n}`),
+    });
+    const ms = Math.round(performance.now() - t0);
+    showRows(res);
+    const bad = res.rows.filter((r) => r.state !== "match").length;
+    $("r-summary").textContent = `${res.rows.length - bad} of ${res.rows.length} match`;
+    $("n-match").textContent = res.rows.length - bad;
+    $("n-bad").textContent = bad;
+    $("n-ms").textContent = `${num(ms)} ms`;
+    setCheck(res.ok ? "match" : "mismatch", res.ok ? `All ${res.rows.length} hashes match · ${num(ms)} ms` : `${bad} of ${res.rows.length} do not match`);
+  } catch (e) { setCheck("mismatch", errText(e)); }
+  finally {
+    for (const id of ["r-check", "r-paste"]) $(id).disabled = false;
+    $("r-check").classList.remove("is-loading");
+  }
+}
+
+$("r-check").addEventListener("click", () => runCheck(chainReceipt()));
+$("r-reset").addEventListener("click", () => resetCheck());
+$("r-paste").addEventListener("click", async () => {
+  let receipt;
+  try { receipt = parseReceipt($("receipt").value); } catch (e) { setCheck("mismatch", e.message); return; }
+  if (receipt.round !== opened.id) {
+    // A receipt for another round: open that round, then check this receipt against it.
+    setCheck("pending", `Finding round ${receipt.round}`);
+    const row = await walk("rounds", (render) => rounds.find(receipt.round, render));
+    if (!row?.seed) { setCheck("mismatch", `The contract's history has no result for round ${receipt.round}`); return; }
+    const text = $("receipt").value;
+    await openRound(row);
+    $("receipt").value = text;
+    $("hx-paste").open = true;
+  }
+  runCheck(receipt);
+});
+$("file-in").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  $("receipt").value = await f.text();
+  e.target.value = "";
+  setCheck("idle", "Not checked");
+});
+$("receipt").addEventListener("input", () => setCheck("idle", "Not checked"));
+
+// ---- start ----
+// ?round=N, ?day=D and ?request=ID open that row (a request opens the round
+// it was made in, with its colonies picked); old ?colony=burn links open the
+// newest day. #pots shows the pots, #check scrolls to the whole-round check.
+// With nothing asked for, the newest round with a seed opens.
+
 (async () => {
-  try { await readChain(); } catch (err) { showEmpty(`Could not read the contract: ${String(err.message || err).slice(0, 160)}`); return; }
-  let key = q.get("colony") ?? (q.has("request") ? `r${+q.get("request") || 0}-momentum`
-    : burnRun() ? "burn" : loaded.shown.all.find((s) => s.cranked)?.key ?? "m0-momentum");
-  const u = unitOf(key);
-  const n = q.has(u) ? Math.max(0, Math.floor(+q.get(u) || 0)) : u === "request" ? +/^r(\d+)-/.exec(key)[1] : currentId(u);
-  if (u === "request") { key = key.replace(/^r\d+-/, `r${n}-`); await ensureRequest(n); }
-  load(n, key, q.has("ant") ? Math.max(0, Math.floor(+q.get("ant") || 0)) : undefined);
-  // ?t= opens at that tick, as the follow cards on Live and Burn link here.
-  if (spec && q.has("t")) player.seek(Math.max(0, Math.floor(+q.get("t") || 0)));
+  const ant = q.has("ant") ? Math.max(0, Math.floor(+q.get("ant") || 0)) : undefined;
+  const int = (k) => Math.max(0, Math.floor(+q.get(k) || 0));
+  const wantPots = q.has("day") || q.get("colony") === "burn" || location.hash === "#pots";
+  potsStarted = wantPots;
+  showTab(wantPots ? "pots" : "rounds");
+  const reqs = allRequests().then((rs) => { requests = rs; renderRounds(); return rs; }).catch(() => []);
+
+  if (wantPots) {
+    const row = await walk("pots", (render) => (q.has("day") ? pots.find(int("day"), render) : pots.more(1, render)));
+    const target = q.has("day") ? row : pots.rows.find((r) => r.seed && (r.live || r.entries));
+    if (target) await openDay(target, ant);
+    else if (q.has("day")) { showOpen(`Day ${num(int("day"))}`, ""); showEmpty(`Day ${int("day")} isn't in this contract's history.`); }
+    if (q.has("t") && spec) player.seek(int("t"));
+    fill("pots");
+    fill("rounds");
+    return;
+  }
+
+  let row = null, key = q.get("colony");
+  if (q.has("request")) {
+    const id = int("request");
+    const r = await chain.request(id).catch(() => null);
+    if (r) {
+      row = await walk("rounds", (render) => rounds.findAt(r.created_at_ms, render));
+      key = /^r\d+-/.test(key ?? "") ? key.replace(/^r\d+-/, `r${id}-`) : `r${id}-momentum`;
+    } else { showOpen(`Request #${num(id)}`, ""); showEmpty(`There is no request #${id} on the contract.`); }
+    if (r && !row) { showOpen(`Request #${num(id)}`, ""); showEmpty(`Request #${id} was made before the oldest round this contract's history reaches.`); }
+  } else if (q.has("round")) {
+    row = await walk("rounds", (render) => rounds.find(int("round"), render));
+    if (!row) { showOpen(`Round ${num(int("round"))}`, ""); showEmpty(`Round ${int("round")} isn't in this contract's history: round ids restart when the contract is redeployed.`); }
+  } else {
+    await walk("rounds", (render) => rounds.more(3, render));
+    row = rounds.rows.find((r) => r.seed) ?? null;
+  }
+  if (row) {
+    requests = await reqs;
+    fileRequests(rounds.rows, requests);
+    await openRound(row, key, ant);
+    if (q.has("t") && spec) player.seek(int("t"));
+    if (location.hash === "#check" && !$("check").hidden) $("check").scrollIntoView({ block: "start" });
+  }
+  fill("rounds");
 })();
 </script>
 </body>

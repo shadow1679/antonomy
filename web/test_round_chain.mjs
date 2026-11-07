@@ -3,9 +3,9 @@
 // "chain" hashes are computed with the same sim code, so these tests cover the
 // adapter (shapes, phases, previous round, verification), not a live chain.
 import assert from "node:assert/strict";
-import { forecastMarket, sha256, toHex, marketColony } from "../sim/js/antosim.mjs";
+import { forecastMarket, sha256, toHex, marketColony, oddsSnapshotHash, FORECAST_ANTS, FORECAST_TICKS } from "../sim/js/antosim.mjs";
 import { agentSnapshot } from "./agents.mjs";
-import { slugTitle, buildRound, loadRound, verifyMarket, verifyRound, walletsFor } from "./roundchain.mjs";
+import { slugTitle, buildRound, buildMarket, loadRound, verifyMarket, verifyRound, walletsFor } from "./roundchain.mjs";
 
 const ONE = 10n ** 24n;
 const seedHex = toHex(sha256(new TextEncoder().encode("test-round-seed")));
@@ -224,3 +224,28 @@ console.log("round chain ok");
   assert.equal((await loadRound({ call, now: 0 })).proposed, false);
   console.log("round chain proposal ok");
 }
+
+// A market with the odds 1 hour and 24 hours ago and unequal colony weights
+// (docs/FORECAST_QUALITY.md §4, §5): the page replays it the way the chain ran it.
+{
+  const seed = sha256(new TextEncoder().encode("windows"));
+  const odds = [6200, 2800, 1000], odds6h = [5500, 3300, 1200];
+  const ext = [[6400, 2600, 1000], [4000, 4300, 1700]];
+  const cw = [400, 1700, 900];
+  const weights = [3000, 0, 12000], zero = new Uint8Array(32);
+  const native = forecastMarket(seed, 1, odds, odds6h, weights, zero, [0, 0, 0], zero, FORECAST_ANTS, FORECAST_TICKS, cw, ext);
+  const mv = { colony: 1, market_id: "w", outcomes: ["Cut", "Hold", "Hike"], odds, odds_6h: odds6h,
+    odds_1h: ext[0], odds_24h: ext[1], odds_hash: toHex(oddsSnapshotHash(odds, odds6h, ext)), raw_hashes: [] };
+  const m = buildMarket(mv, { seed: toHex(seed), stakeHash: toHex(zero), weights,
+    agents: { odds: [0, 0, 0], hash: toHex(zero), posts: [] },
+    colonyHashes: native.colonies.map((c) => c.hash), swarm: native.swarm, marketHash: native.hash, colonyWeights: cw });
+  assert.ok(m.oddsHashOk);
+  const v = await verifyMarket(m);
+  assert.ok(v.ok, "colonies, market hash and swarm belief replay");
+  // Without the windows or the weights the replay would not match.
+  const plain = buildMarket({ ...mv, odds_1h: undefined, odds_24h: undefined }, { seed: toHex(seed), stakeHash: toHex(zero), weights,
+    agents: { odds: [0, 0, 0], hash: toHex(zero), posts: [] }, colonyHashes: native.colonies.map((c) => c.hash),
+    swarm: native.swarm, marketHash: native.hash, colonyWeights: cw });
+  assert.equal((await verifyMarket(plain)).ok, false);
+}
+console.log("round chain windows and weights ok");

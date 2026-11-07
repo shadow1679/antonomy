@@ -22,21 +22,107 @@ export const hms = (ms) => {
 const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ESC[c]);
 
-// A copyable hash (design system rule 4).
-export const hashHTML = (hex, label) =>
-  `<span class="hash"><span class="hash__value" title="${hex}">${short(hex)}</span>` +
+// A hash in 4-character groups: the first 8 and last 8 by default, all 64
+// when `full`. Lowercase hex, so two hashes compare group by group.
+const groups = (hex) => hex.toLowerCase().match(/.{1,4}/g).map((g) => `<span class="hash__grp">${g}</span>`).join("");
+export const hashGroupsHTML = (hex, full = false) => full || hex.length <= 16 ? groups(hex)
+  : `${groups(hex.slice(0, 8))}<span class="hash__gap">…</span>${groups(hex.slice(-8))}`;
+
+// A copyable hash (design system §8.7): the value in groups with the full
+// hash as its title, Expand (two lines of 32), and Copy, which always copies
+// the full value. `name` adds a visible label ("Seed").
+export const hashHTML = (hex, label, { name = "" } = {}) =>
+  `<span class="hash">${name ? `<span class="hash__label">${esc(name)}</span>` : ""}` +
+  `<span class="hash__value" title="${hex}" data-hex="${hex}">${hashGroupsHTML(hex)}</span>` +
+  (hex.length > 16 ? `<button class="hash__expand" type="button" aria-expanded="false" aria-label="Show the full ${esc(label)}">Expand</button>` : "") +
   `<button class="hash__copy" type="button" aria-label="Copy ${esc(label)}" data-copy="${hex}"></button></span>`;
 
+// Chain and Your browser, stacked, every differing group underlined and
+// marked ≠, so a mismatch shows without colour.
+export function hashCompareHTML(chain, mine) {
+  const g = (a, b) => a.toLowerCase().match(/.{1,4}/g).map((x, i) =>
+    `<span class="hash__grp${b && b.toLowerCase().slice(i * 4, i * 4 + 4) !== x ? " is-diff" : ""}">${x}</span>`).join("");
+  return `<dl class="hash-compare"><dt>Chain</dt><dd>${g(chain, mine)}</dd><dt>Your browser</dt><dd>${g(mine, chain)}</dd></dl>`;
+}
+
+// Copy and Expand for every .hash on the page. "Copied" shows for 1.5 s and
+// is announced; if the clipboard is denied, the value is selected and the
+// hint says to press ⌘C.
 export function installCopy() {
+  let live = document.getElementById("copy-live");
+  if (!live) {
+    live = Object.assign(document.createElement("span"), { id: "copy-live", className: "visually-hidden" });
+    live.setAttribute("aria-live", "polite");
+    document.body.append(live);
+  }
   document.addEventListener("click", async (e) => {
+    const x = e.target.closest(".hash__expand");
+    if (x) {
+      const h = x.closest(".hash"), v = h.querySelector(".hash__value"), open = !h.classList.contains("is-expanded");
+      h.classList.toggle("is-expanded", open);
+      v.innerHTML = hashGroupsHTML(v.dataset.hex, open);
+      x.textContent = open ? "Collapse" : "Expand";
+      x.setAttribute("aria-expanded", String(open));
+      return;
+    }
     const b = e.target.closest(".hash__copy");
     if (!b) return;
-    try { await navigator.clipboard.writeText(b.dataset.copy); } catch { return; }
+    try {
+      await navigator.clipboard.writeText(b.dataset.copy);
+    } catch {
+      const v = b.closest(".hash")?.querySelector(".hash__value") ?? b.previousElementSibling;
+      if (v) {
+        if (v.dataset.hex) v.innerHTML = hashGroupsHTML(v.dataset.hex, true);
+        getSelection().selectAllChildren(v);
+        if (!b.parentElement.querySelector(".hash__hint")) b.insertAdjacentHTML("afterend", `<span class="hash__hint">Press ${/Mac/.test(navigator.platform) ? "⌘C" : "Ctrl+C"} to copy</span>`);
+      }
+      return;
+    }
     const label = b.getAttribute("aria-label");
     b.classList.add("is-copied");
     b.setAttribute("aria-label", "Copied");
-    setTimeout(() => { b.classList.remove("is-copied"); b.setAttribute("aria-label", label); }, 1400);
+    live.textContent = "Copied";
+    setTimeout(() => { b.classList.remove("is-copied"); b.setAttribute("aria-label", label); live.textContent = ""; }, 1500);
   });
+}
+
+// A status pill (§8.13): running, pending, match, mismatch, paused,
+// stalled, default, skipped, done. The glyph comes from the state.
+export const pillHTML = (state, text, title = "") =>
+  `<span class="pill" data-state="${state}"${title ? ` title="${esc(title)}"` : ""}>${state === "running" ? `<i class="pill__g" aria-hidden="true"></i>` : ""}${esc(text)}</span>`;
+
+// Toasts (§8.12): the result of the user's own action, bottom right. kind is
+// pending, sent, confirmed, failed or copied. Returns update(kind, text,
+// href), so a pending transaction updates in place. Hover pauses the 5 s
+// timer; a failed toast stays until dismissed. System faults are banners.
+export function toast(kind, text, href = "") {
+  let box = document.querySelector(".toasts");
+  if (!box) {
+    box = Object.assign(document.createElement("ol"), { className: "toasts" });
+    box.setAttribute("aria-live", "polite");
+    document.body.append(box);
+  }
+  const li = document.createElement("li");
+  li.className = "toast";
+  box.append(li);
+  let timer = 0, left = 5000, since = 0;
+  const sticky = () => li.dataset.kind === "failed" || li.dataset.kind === "pending";
+  const close = () => { clearTimeout(timer); li.remove(); };
+  const arm = () => { since = performance.now(); timer = setTimeout(close, left); };
+  li.addEventListener("mouseenter", () => { clearTimeout(timer); left -= performance.now() - since; });
+  li.addEventListener("mouseleave", () => { if (!sticky()) arm(); });
+  const update = (k, t, h = "") => {
+    clearTimeout(timer);
+    li.dataset.kind = k;
+    li.setAttribute("role", k === "failed" ? "alert" : "status");
+    li.innerHTML = `<span class="toast__g" aria-hidden="true"></span><p>${esc(t)}${h ? ` <a href="${esc(h)}" target="_blank" rel="noopener">Transaction ↗</a>` : ""}</p>` +
+      `<button class="toast__close" type="button" aria-label="Dismiss">✕</button>`;
+    li.querySelector(".toast__close").onclick = close;
+    left = 5000;
+    if (!sticky()) arm();
+  };
+  update(kind, text, href);
+  return update;
 }
 
 // Small "What's this?" link into the Docs page, which holds the
@@ -49,7 +135,7 @@ export const whatHTML = (anchor, label = "What's this?") =>
 // biggest wallet's. Rows are buttons carrying data-wallet; stakerRoster()
 // turns them into a spotlight on the map. Empty string when the colony has
 // no stakes (an even map, no staker ants).
-// A forecaster agent's posted odds, "Cut 60.0% · Hold 30.0% · …".
+// An agent's posted odds, "Cut 60.0% · Hold 30.0% · …".
 export function postedHTML(odds, labels = null) {
   return odds.map((x, o) => `${labels ? `<span class="opt" data-opt="${o}">${esc(labels[o])}</span> ` : ""}<span class="num">${(x / 100).toFixed(1)}%</span>`).join(" · ");
 }
@@ -204,28 +290,34 @@ export function beliefBoard(ul, labels, odds, { compact = false } = {}) {
     li.querySelector(".belief__value").firstChild.textContent = pct(swarm[o]);
     const delta = li.querySelector(".delta");
     delta.className = `delta ${d > 0 ? "delta--up" : d < 0 ? "delta--down" : "delta--flat"}`;
-    delta.textContent = compact ? pct(Math.abs(d)) : `${pct(Math.abs(d))} pts vs market`;
-    if (compact) delta.title = `${pct(Math.abs(d))} pts ${d > 0 ? "above" : d < 0 ? "below" : "level with"} the market's ${pct(odds[o])}%`;
+    delta.textContent = compact ? pct(Math.abs(d)) : `${pct(Math.abs(d))} pp vs market`;
+    if (compact) delta.title = `${pct(Math.abs(d))} pp ${d > 0 ? "above" : d < 0 ? "below" : "level with"} the market's ${pct(odds[o])}%`;
   });
 }
 
-const TPS = { 1: 12, 4: 48, 16: 192, 128: 1536 }; // ticks per second for each speed button
+const TPS = { 1: 12, 4: 48, 16: 192, 128: 1536 }; // ticks per second for each speed button (default 4×)
 const TWEEN_MS = 90;                    // single-step animation
+const CHECKPOINT = 100;                 // SCORE_EVERY: a scrub mark, and the reduced-motion play step
+// Scrub marks: every scoring checkpoint, or every hour on a Burn day (43,200 ticks over 12 h).
+const markEvery = (ticks) => (ticks <= 4000 ? CHECKPOINT : ticks / 12);
 // A Burn run is 43,200 ticks, so the player keeps a copy of the colony
 // every KEY_EVERY ticks and seeks from the nearest one at least WARM ticks
 // back (the warm-up lets the map's worn roads and trails build up again).
 const KEY_EVERY = 2000, WARM = 300;
 
-// Canvas, HUD and playback controls for one colony, built inside `host`.
-// load(make, labels) starts a colony at tick 0; onTick(col) runs after the
-// tick changes, onDone(col) once the final tick has run, and onSelect(a) when
-// a click on the map (or select()) picks the ant to follow.
+// The colony stage (design system §8.2): canvas, overlay and playback bar
+// for one colony, built inside `host`. load(make, labels) starts a colony at
+// tick 0; onTick(col) runs after the tick changes, onDone(col) once the final
+// tick has run, and onSelect(a) when a click on the map (or select()) picks
+// the ant to follow. setChain(t) makes it a live run: playing and scrubbing
+// stop at the tick the chain has reached. Under prefers-reduced-motion, Play
+// steps one scoring checkpoint (100 ticks) a second with no in-between frames.
 export class Player {
   constructor(host, { onTick = () => {}, onDone = () => {}, onSelect = () => {} } = {}) {
     host.innerHTML = `
-      <div class="player">
-        <div class="sim-frame">
-          <canvas width="1440" height="960" aria-label="Colony map at the current tick"></canvas>
+      <div class="player stage">
+        <div class="sim-frame" tabindex="0" aria-label="Colony map. Space plays or pauses, arrow keys step, Home and End jump.">
+          <canvas width="1440" height="960" aria-hidden="true"></canvas>
           <div class="sim-frame__hud">
             <span class="sim-frame__tick">tick <strong data-r="tick">0000</strong>/<span data-r="ticks">0800</span></span>
             <span class="sim-frame__tick" data-r="leader">no trail yet</span>
@@ -237,8 +329,10 @@ export class Player {
         </div>
         <div class="playback">
           <button class="btn btn--icon btn--sm" type="button" data-r="play" aria-label="Play">▶</button>
-          <button class="btn btn--icon btn--sm btn--ghost" type="button" data-r="step" aria-label="Step one tick">⏭</button>
-          <input class="scrubber" type="range" data-r="scrubber" min="0" max="800" value="0" aria-label="Tick">
+          <button class="btn btn--icon btn--sm btn--ghost" type="button" data-r="back" aria-label="Step back one tick">←</button>
+          <button class="btn btn--icon btn--sm btn--ghost" type="button" data-r="step" aria-label="Step one tick">→</button>
+          <button class="btn btn--icon btn--sm btn--ghost" type="button" data-r="end" aria-label="Jump to the end">⇥</button>
+          <div class="scrub" data-r="scrub"><input class="scrubber" type="range" data-r="scrubber" min="0" max="800" value="0" aria-label="Tick"><span class="scrub__chain" data-r="chain">chain</span></div>
           <div class="seg" role="group" aria-label="Speed">
             <button type="button" aria-pressed="false" data-speed="1">1×</button>
             <button type="button" aria-pressed="true" data-speed="4">4×</button>
@@ -249,11 +343,11 @@ export class Player {
             <button type="button" aria-pressed="true" data-view="nest">Nest</button>
             <button type="button" aria-pressed="false" data-view="cells">Cells</button>
           </div>
-          <span class="playback__keys text-xs text-faint" aria-hidden="true">space · ← →</span>
+          <span class="playback__keys text-xs text-faint" aria-hidden="true">space · ← → · home end</span>
         </div>
       </div>`;
     const r = (k) => host.querySelector(`[data-r="${k}"]`);
-    this.el = Object.fromEntries(["tick", "ticks", "leader", "foraging", "carrying", "delivered", "play", "step", "scrubber"].map((k) => [k, r(k)]));
+    this.el = Object.fromEntries(["tick", "ticks", "leader", "foraging", "carrying", "delivered", "play", "back", "step", "end", "scrub", "scrubber", "chain"].map((k) => [k, r(k)]));
     this.cv = host.querySelector("canvas");
     this.view = new ColonyView(this.cv, { labels: [], glyphs: GLYPHS });
     this.onTick = onTick;
@@ -261,6 +355,7 @@ export class Player {
     this.onSelect = onSelect;
     this.playing = false;
     this.speed = 4;
+    this.chainT = null; // live runs: the last tick the chain has reached
     this.raf = 0; this.lastNow = 0; this.acc = 0; this.tweenEnd = 0;
     this.wire(host);
     document.fonts.ready.then(() => { if (this.col && !this.raf) this.view.draw(1); });
@@ -277,9 +372,25 @@ export class Player {
     this.view.attach(this.col);
     if (this.view.selected >= this.col.ants) this.view.selected = 0;
     this.el.scrubber.max = this.col.ticks;
+    this.el.scrub.style.setProperty("--marks", this.col.ticks / markEvery(this.col.ticks));
     this.el.ticks.textContent = padTick(this.col.ticks, this.col.ticks);
+    this.setChain(this.chainT);
     this.render();
   }
+
+  // Live run: the chain has reached tick t (null for a finished run).
+  setChain(t) {
+    this.chainT = t;
+    const live = t != null && this.col && t < this.col.ticks;
+    this.el.scrub.classList.toggle("scrub--live", live);
+    if (live) {
+      this.el.scrub.style.setProperty("--chain", (t / this.col.ticks) * 100);
+      this.el.chain.textContent = `chain ${padTick(t, this.col.ticks)}`;
+    }
+  }
+
+  // The last tick playing and scrubbing may reach.
+  get limit() { return this.chainT == null ? this.col.ticks : Math.min(this.col.ticks, this.chainT); }
 
   // One tick forward, keeping a seek point every KEY_EVERY ticks.
   step(fx) {
@@ -303,12 +414,12 @@ export class Player {
     while (this.col.t < t) this.step(fx);
   }
 
-  get done() { return this.col.t === this.col.ticks; }
+  get done() { return this.col.t >= this.limit; }
 
   // Pause and show tick t.
   seek(t) {
     this.stop();
-    this.goTo(Math.max(0, Math.min(this.col.ticks, t)));
+    this.goTo(Math.max(0, Math.min(this.limit, t)));
     this.render();
   }
 
@@ -345,15 +456,24 @@ export class Player {
   loop(now) {
     this.raf = 0;
     const { col, view } = this, t0 = col.t;
-    if (this.playing) {
+    const reduced = view.motion.matches;
+    if (this.playing && reduced) {
+      // One scoring checkpoint a second, no in-between frames.
+      this.acc += Math.min(1000, now - this.lastNow);
+      if (this.acc >= 1000) {
+        this.acc = 0;
+        this.goTo(Math.min(this.limit, (Math.floor(col.t / CHECKPOINT) + 1) * CHECKPOINT));
+      }
+      if (this.col.t >= this.limit) this.stop();
+    } else if (this.playing) {
       this.acc += (Math.min(100, now - this.lastNow) / 1000) * TPS[this.speed];
-      while (this.acc >= 1 && col.t < col.ticks) { this.step(true); this.acc -= 1; }
-      if (col.t >= col.ticks) { this.acc = 1; this.stop(); }
+      while (this.acc >= 1 && col.t < this.limit) { this.step(true); this.acc -= 1; }
+      if (col.t >= this.limit) { this.acc = 1; this.stop(); }
     }
     this.lastNow = now;
-    const frac = this.playing ? this.acc : this.tweenEnd > now ? 1 - (this.tweenEnd - now) / TWEEN_MS : 1;
+    const frac = this.playing && !reduced ? this.acc : this.tweenEnd > now ? 1 - (this.tweenEnd - now) / TWEEN_MS : 1;
     const busy = view.draw(frac, now);
-    if (col.t !== t0) this.panels();
+    if (this.col.t !== t0) this.panels();
     if (this.playing || busy || this.tweenEnd > now) this.raf = requestAnimationFrame((n) => this.loop(n));
   }
 
@@ -367,7 +487,7 @@ export class Player {
     if (this.done) { this.goTo(0); this.panels(); }
     this.playing = true;
     this.acc = 0;
-    this.el.play.textContent = "❚❚";
+    this.el.play.textContent = "‖";
     this.el.play.setAttribute("aria-label", "Pause");
     this.kick();
   }
@@ -380,7 +500,15 @@ export class Player {
 
   wire(host) {
     const { el, cv, view } = this;
-    el.scrubber.addEventListener("input", (e) => { this.stop(); this.goTo(+e.target.value); this.render(); });
+    el.scrubber.addEventListener("input", (e) => {
+      this.stop();
+      const t = Math.min(+e.target.value, this.limit);
+      e.target.value = t;
+      this.goTo(t);
+      this.render();
+    });
+    el.back.addEventListener("click", () => this.seek(this.col.t - 1));
+    el.end.addEventListener("click", () => this.seek(this.limit));
     el.step.addEventListener("click", () => {
       this.stop();
       if (this.done) return;
@@ -412,7 +540,7 @@ export class Player {
         ArrowRight: () => el.step.click(),
         ArrowLeft: () => this.seek(this.col.t - 1),
         Home: () => this.seek(0),
-        End: () => this.seek(this.col.ticks),
+        End: () => this.seek(this.limit),
       };
       if (!keys[e.key]) return;
       e.preventDefault();
@@ -421,25 +549,25 @@ export class Player {
   }
 }
 
-const MARK = `<svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
-  <circle cx="4" cy="17" r="2" fill="var(--amber-600)"/><circle cx="10" cy="12" r="2.5" fill="var(--amber-400)"/>
-  <circle cx="17" cy="6" r="3.5" fill="var(--amber-300)"/></svg>`;
+// The ant mark from web/brand/mark.svg (made by web/brand/make_brand.mjs),
+// cropped to the ant. See docs/BRAND.md.
+export const MARK = `<svg width="17" height="24" viewBox="12 4 40 56" aria-hidden="true"><g fill="var(--accent)">
+  <path d="M28.8 26 L22.5 22.5 L20 17 M35.2 26 L41.5 22.5 L44 17 M28.6 29.5 L20 31 L15.5 35 M35.4 29.5 L44 31 L48.5 35 M29.2 32 L23 37 L19 44.5 M34.8 32 L41 37 L45 44.5 M29.6 13 L27 8 L22.5 6.5 M34.4 13 L37 8 L41.5 6.5" fill="none" stroke="var(--accent)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="32" cy="17" r="5.2"/><ellipse cx="32" cy="28.5" rx="3.8" ry="5.2"/><ellipse cx="32" cy="46" rx="8.2" ry="11"/></g></svg>`;
 
 const PAGES = [
   ["live.html", "live", "Live"],
-  ["burn.html", "burn", "Burn"],
-  ["recruit.html", "recruit", "Recruit"],
-  ["random.html", "random", "Random"],
+  ["pot.html", "pot", "Pot"],
   null,
-  ["replay.html", "replay", "Replay"],
-  ["receipts.html", "receipts", "Receipts"],
+  ["replay.html", "history", "History"],
   null,
   ["docs.html", "docs", "Docs"],
 ];
 
-// Shared header. `page` is "home" (the landing page, which the brand links
-// to and the nav leaves out), "live", "burn", "recruit", "random", "replay",
-// "receipts" or "docs". `demo` is kept as the name of the option that shows
+// Shared header. `page` is "home" (app.html, the nest, the app's home, which
+// the brand links to and the nav leaves out), "landing" (index.html, the front
+// page: same bar, but its brand links back to itself), "live", "pot", "recruit", "history" (the
+// History page, replay.html, which Replay and Receipts became) or "docs". `demo` is kept as the name of the option that shows
 // the status strip (testnet, play token, which contract); pages that never
 // touch the chain pass `demo: false`. The wallet button sits at the end of the
 // bar on every page (`mountWallet` wires it), and every page has the $ANTO
@@ -448,15 +576,18 @@ export function topbar(page, end = "", { demo = true } = {}) {
   const nav = PAGES.map((p) => p
     ? `<a href="${p[0]}"${p[1] === page ? ' aria-current="page"' : ""}>${p[2]}</a>`
     : `<span class="nav__sep" aria-hidden="true"></span>`).join("");
+  // Recruit is the one item that starts something, so it sits at the end of
+  // the bar by the wallet as an amber outline, not in the nav with the tabs.
+  const cta = `<a class="nav__cta" href="recruit.html" title="Ask the swarm for a forecast"${page === "recruit" ? ' aria-current="page"' : ""}><span aria-hidden="true">+</span> Recruit</a>`;
   const cid = contractId();
   const chip = `<a class="anto-chip" id="anto-chip" href="index.html#anto" title="$ANTO, the play token on NEAR testnet"><b>$ANTO</b><span class="anto-chip__v num">…</span></a>`;
   queueMicrotask(mountWallet);
   queueMicrotask(mountTokenChip);
   queueMicrotask(centerCurrentTab);
   return `<header class="topbar"><div class="container topbar__row">
-    <a class="brand" href="index.html">${MARK}<b>Anto<span>nomy</span></b></a>
+    <a class="brand" href="${page === "landing" ? "index.html" : "app.html"}">${MARK}<b><span>Anto</span>nomy</b></a>
     <nav class="nav" aria-label="Pages">${nav}</nav>
-    <div class="topbar__end" id="topbar-end">${end}${chip}<button class="btn btn--sm" id="wallet-btn" type="button">Connect wallet</button></div>
+    <div class="topbar__end" id="topbar-end">${end}${chip}${cta}<button class="btn btn--sm" id="wallet-btn" type="button">Connect wallet</button></div>
   </div></header>` + (demo ? `<div class="demo-strip"><div class="container"><p style="margin: 0">
     <strong>${NETWORK} · play token.</strong> Everything here is read from the contract
     <a href="https://testnet.nearblocks.io/address/${cid}" target="_blank" rel="noopener"><code>${cid}</code></a>;
@@ -481,7 +612,7 @@ export function mountWallet() {
   const paint = (acct) => {
     btn.textContent = acct ? acct : "Connect wallet";
     btn.title = acct ? "Connected. Click to disconnect." : "Connect a NEAR testnet wallet";
-    btn.classList.toggle("btn--primary", !acct);
+    // Never amber: the page's own action is its one primary.
   };
   wallet.onChange(paint);
   btn.addEventListener("click", async () => {
@@ -522,22 +653,32 @@ export function mountTokenChip() {
   setInterval(() => { if (!document.hidden) paintChip(); }, 60_000);
 }
 
+// The Recruit page's tabs, which the footer lists as their own group.
+const RECRUIT = [
+  ["recruit.html#forecast", "Forecast on request"],
+  ["recruit.html#random", "Randomness"],
+  ["recruit.html#agents", "Answer as an agent"],
+];
+
 // Shared footer, with the known limits the README also states. The pages
-// come in the nav's groups: the doing pages, then checking and Docs.
+// come in the nav's groups (the doing pages, then checking and Docs), with
+// Recruit's sections as their own group.
 export function footer() {
   const groups = [[]];
   for (const p of PAGES) p ? groups[groups.length - 1].push(p) : groups.push([]);
-  const list = (ps) => `<ul>${ps.map((p) => `<li><a href="${p[0]}">${p[2]}</a></li>`).join("")}</ul>`;
+  const list = (ps) => `<ul>${ps.map((p) => `<li><a href="${p[0]}">${p.at(-1)}</a></li>`).join("")}</ul>`;
   const cid = contractId();
   return `<footer class="page-foot"><div class="container">
     <div class="page-foot__grid">
       <div class="page-foot__brand">
-        <a class="brand" href="index.html">${MARK}<b>Anto<span>nomy</span></b></a>
+        <a class="brand" href="app.html">${MARK}<b><span>Anto</span>nomy</b></a>
         <p>Forecasts by ant colonies, run on-chain from one public seed and re-run in your browser.</p>
+        <p><a href="app.html">The nest: the whole project as one ant base →</a></p>
         <p>Forecasts are not advice. Nobody is paid for being right, and nothing here links to a trading venue.</p>
       </div>
       <nav class="page-foot__nav" aria-label="Footer">
         <div><h2>Take part</h2>${list(groups[0])}</div>
+        <div><h2>Recruit the swarm</h2>${list(RECRUIT)}</div>
         <div><h2>Check &amp; learn</h2>${list(groups.slice(1).flat())}</div>
       </nav>
       <div>

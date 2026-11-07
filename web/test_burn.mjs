@@ -16,7 +16,7 @@ import {
 } from "./burn.mjs";
 import { burnDay, drawnBurnDay, dayPhase, runProgress, dayProgress, rememberBurnDay, knownBurnDay, burnColony } from "./round.mjs";
 import {
-  loadBurn, burnView, runSpec, verifyRun, indexerBurns, burnRow, loadHistory, chainSkew, ensureBurnDay, treasuryId,
+  loadBurn, burnView, runSpec, verifyRun, indexerBurns, indexerCrankPayouts, burnRow, loadHistory, chainSkew, ensureBurnDay, treasuryId,
 } from "./burnchain.mjs";
 import { BURN_TICKS, trailShares } from "../sim/js/antosim.mjs";
 
@@ -202,6 +202,7 @@ function chainOf({ day, phase, run = null, last = null, snaps = {}, treasury = "
       case "staked_by": return me?.staked ?? "0";
       case "stakes_of": return me?.stakes ?? [];
       case "rewards_earned": return "0";
+      case "is_paused": return false;
       default: throw new Error(`unexpected ${method}`);
     }
   };
@@ -352,11 +353,63 @@ function chainOf({ day, phase, run = null, last = null, snaps = {}, treasury = "
   assert.equal(bad.index, undefined);
   assert.equal(bad.day, V.day - 1);
   // loadHistory: indexer down -> empty list and a flag; never fixtures.
+  // A rate-limit reply (no txns, a message) is the indexer being down, not "no payouts".
+  await assert.rejects(() => indexerBurns({ fetchFn: async () => ({ ok: true, json: async () => ({ message: "You have exceeded your API request limit." }) }) }), /request limit/);
   const down = await loadHistory({ fetchFn: async () => { throw new Error("offline"); } });
   assert.deepEqual([down.rows, down.indexer], [[], false]);
   const full = await loadHistory({ fetchFn, read: readAt });
   assert.equal(full.indexer, true);
   assert.equal(full.rows.length, 2);
+}
+{
+  // Days paid by the next day's first crank_burn, which the execute_burn list
+  // misses. The earliest crank at or after a day's 12:00 is the candidate for
+  // the day before; cranks before 12:00 only step the older run.
+  const D = V.day + 3;
+  const crank = (ms, tx, height, status = true) => ({
+    transaction_hash: tx, predecessor_account_id: "cranker.testnet", receiver_account_id: "antonomy-oracle.testnet",
+    receipt_block: { block_height: height }, block_timestamp: String(BigInt(ms) * 1_000_000n),
+    actions: [{ action: "FUNCTION_CALL", method: "crank_burn", args: "{}" }], outcomes: { status },
+  });
+  const cranks = [
+    crank(dayRunAt(D) + 900_000, "C2", 9100),          // a later crank the same day
+    crank(dayRunAt(D) + 5_000, "C1", 9000),            // the first: starts D, pays D-1
+    crank(dayRunAt(D) - 600_000, "C0", 8900),          // before 12:00: steps D-1 only
+    crank(dayRunAt(D) + 1_000, "Cfail", 8990, false),  // failed: ignored
+    crank(dayRunAt(D - 1) + 2_000, "B1", 8000),        // starts D-1: candidate for D-2
+    crank(dayRunAt(D - 2) + 2_000, "A1", 7000),        // starts D-2: candidate for D-3
+  ];
+  const fetchFn = async (url) => {
+    if (url.includes("method=crank_burn")) return { ok: true, json: async () => ({ txns: cranks }) };
+    return { ok: true, json: async () => ({ txns: [{
+      transaction_hash: "X", predecessor_account_id: "k", receiver_account_id: "antonomy-oracle.testnet", receipt_block: { block_height: 6000 },
+      block_timestamp: String(BigInt(dayEndAt(D - 4) + 60_000) * 1_000_000n), actions: [{ method: "execute_burn", args: JSON.stringify({ day: D - 4 }) }], outcomes: { status: true },
+    }] }) };
+  };
+  const list = await indexerCrankPayouts({ fetchFn });
+  assert.deepEqual(list.map((x) => [x.day, x.tx, x.via]), [[D - 1, "C1", "crank"], [D - 2, "B1", "crank"], [D - 3, "A1", "crank"]]);
+  // At block 8999 the contract held D-1's finished run, unpaid: the crank paid it.
+  // D-2's run never finished: skipped. D-3 had been paid already: no row.
+  const T0 = 900_000n * ONE, S0 = 990_000n * ONE, BURNT = 2_000n * ONE, PAID = 100n * ONE;
+  const readAt = async (h, method) => {
+    if (method === "burn_run") return h === 8999 ? { ...doneRun, day: D - 1 } : h === 7999 ? { ...doneRun, day: D - 2, done: false, t: 30_000, winner_option: null, result_hash: null } : h === 6999 ? { ...doneRun, day: D - 3 } : { ...doneRun, day: D - 4 };
+    if (method === "last_burn_day") return h === 8999 ? D - 3 : h === 7999 ? D - 3 : h === 6999 ? D - 3 : D - 5;
+    if (method === "burn_snapshot") return { hash: V.stake_hash, entries: V.entries };
+    if (method === "ft_total_supply") return String(h === 9000 || h === 6000 ? S0 - BURNT : S0);
+    return String(h === 9000 || h === 6000 ? T0 - BURNT - PAID : T0);
+  };
+  const paid = await burnRow(list[0], { read: readAt });
+  assert.equal(paid.detail, true);
+  assert.equal(paid.via, "crank");
+  assert.equal(paid.burned, BURNT);
+  assert.equal(paid.reward, PAID);
+  const skipped = await burnRow(list[1], { read: readAt });
+  assert.equal(skipped.skipped, true);
+  assert.equal(skipped.t, 30_000);
+  assert.equal(await burnRow(list[2], { read: readAt }), null);
+  // loadHistory merges them under the execute_burn rows, newest first.
+  const h = await loadHistory({ fetchFn, read: readAt });
+  assert.deepEqual(h.rows.map((r) => [r.day, !!r.skipped, r.via ?? "execute"]), [[D - 1, false, "crank"], [D - 2, true, "crank"], [D - 4, false, "execute"]]);
 }
 
 console.log("burn: ok");

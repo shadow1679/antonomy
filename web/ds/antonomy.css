@@ -1,9 +1,9 @@
-/* Antonomy design system entry point. Link this one file:
+/* Antonomy design system entry point (v1, "Nest and ledger"). Link this one file:
    <link rel="stylesheet" href="ds/antonomy.css">
    Fonts load from Google Fonts. Without them, the stacks in tokens.css
-   fall back to system serif and monospace. */
+   fall back to system serif, sans and monospace. */
 
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,400..700,0..100&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,400..700,0..100&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
 @import url("tokens.css");
 @import url("base.css");
 @import url("components.css");

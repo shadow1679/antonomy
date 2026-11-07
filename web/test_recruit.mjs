@@ -1,8 +1,5 @@
 // Offline tests for the Recruit page's logic (Recruit the swarm): node web/test_recruit.mjs
-// REAL is request #0 on antonomy-oracle.testnet (worlds-2026-winner, one keeper,
-// one forecaster agent). Its inputs, seed and payouts are from the live
-// contract; the colony hashes, swarm, market hash and crank rows were recomputed
-// for three colonies (the testnet contract ran five until it was redeployed).
+// REAL is request #0 on antonomy-oracle.testnet (test_chain_fixture.mjs).
 import assert from "node:assert/strict";
 import { forecastMarket } from "../sim/js/antosim.mjs";
 import {
@@ -11,119 +8,8 @@ import {
   commands, requestColony, stakesOf, stakingOpen, stakesLocked,
 } from "./recruit.mjs";
 import { hexToBytes } from "./chain.mjs";
+import { REQUEST_0 as REAL } from "./test_chain_fixture.mjs";
 
-const REAL = {
-  "id": 0,
-  "colony": 32768,
-  "requester": "requester.antonomy-oracle.testnet",
-  "market_id": "worlds-2026-winner",
-  "fee": "100000000000000000000000000",
-  "phase": "done",
-  "created_at_ms": 1793095654722,
-  "odds_by_ms": 1793096254722,
-  "forecast_by_ms": 1793095830072,
-  "keepers_posted": [],
-  "market": {
-    "colony": 32768,
-    "market_id": "worlds-2026-winner",
-    "outcomes": [
-      "Gen.G",
-      "T1",
-      "Dplus KIA",
-      "Bilibili Gaming",
-      "Other"
-    ],
-    "odds": [
-      4350,
-      1550,
-      1205,
-      1150,
-      1745
-    ],
-    "odds_6h": [
-      4350,
-      1550,
-      1095,
-      1150,
-      1855
-    ],
-    "odds_hash": "8bfef0c590c502552ed03f49fc9f5f25affc78f9a113970eb07c0922e96a4cb9",
-    "raw_hashes": [
-      [
-        "keeper.antonomy-oracle.testnet",
-        "e0c740fd2885c0767ed2d2ad9b63f28cf17ccf188bf214a1117f8fcd4bd69460"
-      ]
-    ]
-  },
-  "agents": {
-    "odds": [
-      4000,
-      2000,
-      1200,
-      1200,
-      1600
-    ],
-    "hash": "7826c3058bca43daae432e7c4b3d5498b1be249e0dadc3cc155bbf86b7f62e6d",
-    "posts": [
-      [
-        "agent.antonomy-oracle.testnet",
-        [
-          4000,
-          2000,
-          1200,
-          1200,
-          1600
-        ]
-      ]
-    ]
-  },
-  "seed": "2c6896734b408ba1cb0c0b8ff446b088085c1189afcda29ed3d1c6e05c4aaafb",
-  "colony_hashes": [
-    "72aa20d788ddaeb9632f99d50a3cbe42aaac341196d176eff35a0b88b4019c5b",
-    "0d6966e007d9248b95a88384e1b0dbb9b2c166206e73da1e4ea8b0ef64428bd3",
-    "ebf761afa0ec53f82d23d2ab8cf504184369fc93e1de90602ba0dfa2079afcbc"
-  ],
-  "crankers": [
-    "cranker.antonomy-oracle.testnet",
-    "cranker.antonomy-oracle.testnet",
-    "cranker.antonomy-oracle.testnet"
-  ],
-  "swarm": [
-    3409,
-    1457,
-    2690,
-    1702,
-    742
-  ],
-  "market_hash": "ae6c24108df6b4ed00d9e8b47dbd842ddf7e57fe7bd55822260968301c2cc987",
-  "paid_keepers": [
-    [
-      "keeper.antonomy-oracle.testnet",
-      "20000000000000000000000000"
-    ]
-  ],
-  "paid_agents": [
-    [
-      "agent.antonomy-oracle.testnet",
-      "30000000000000000000000000"
-    ]
-  ],
-  "paid_cranks": [
-    [
-      "cranker.antonomy-oracle.testnet",
-      "3333333333333333333333333"
-    ],
-    [
-      "cranker.antonomy-oracle.testnet",
-      "3333333333333333333333333"
-    ],
-    [
-      "cranker.antonomy-oracle.testnet",
-      "3333333333333333333333333"
-    ]
-  ],
-  "to_treasury": "40000000000000000000000001"
-};
 
 // request_config as the contract returns it (fee 100, 20/30/10, the treasury gets the rest).
 const CFG = parseConfig({
@@ -302,7 +188,8 @@ assert.equal(c.ask, "python3 -I bots/recruit.py ask --contract anto.testnet --ac
 assert.equal(c.verify, "python3 -I bots/recruit.py verify --contract anto.testnet --request 4");
 assert.match(c.post, /--odds 6000,3000,1000 --send$/);
 assert.match(c.signs.request, /request_forecast json-args '\{"market_id":"ecb-decision-december"\}' prepaid-gas '30.0 Tgas'/);
-assert.match(c.signs.post, /"colony":32772/);
+assert.match(c.signs.post, /commit_forecast json-args '\{"colony":32772,"hash":/);
+assert.match(c.signs.reveal, /reveal_forecast json-args '\{"colony":32772,"odds":\[6000,3000,1000\],"salt":/);
 assert.match(c.signs.crank, /'100.0 Tgas'/);
 assert.match(commands("anto.testnet", "me.testnet", "ecb", 0, null, { outcomes: ["Cut", "Rate hold"], odds: [6000, 4000] }).askSend,
   /--market ecb --wait --odds 'Cut=6000,Rate hold=4000' --send$/);

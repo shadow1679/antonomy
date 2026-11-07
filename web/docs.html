@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Antonomy · docs</title>
+<link rel="icon" href="brand/favicon.ico" sizes="32x32">
+<link rel="icon" href="brand/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
+<meta name="theme-color" content="#14100c">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -14,9 +18,9 @@
     <div class="page-head__split">
       <div class="page-head__title">
         <p class="eyebrow">Docs</p>
-        <h1>How it works</h1>
+        <h1>Antonomy, in short</h1>
       </div>
-      <p class="lede">Antonomy in plain words. Start with the one-minute version; every section after it opens with a short answer.</p>
+      <p class="lede">What it is, what you can do with it, and how to check it. Short answers first, details below.</p>
     </div>
   </div>
 
@@ -25,23 +29,24 @@
       <p class="eyebrow" id="toc-title">On this page</p>
       <p class="toc__group">Start here</p>
       <ol>
-        <li><a href="#how">In one minute</a></li>
+        <li><a href="#what">What it is</a></li>
+        <li><a href="#can">What you can do</a></li>
+        <li><a href="#how">How it works</a></li>
         <li><a href="#words">Key words</a></li>
-        <li><a href="#pages">Pages</a></li>
       </ol>
-      <p class="toc__group">What it does</p>
+      <p class="toc__group">Features</p>
       <ol>
         <li><a href="#forecasts">Forecasts</a></li>
-        <li><a href="#burn">Burn</a></li>
+        <li><a href="#burn">Daily pot</a></li>
         <li><a href="#stakes">Stakes</a></li>
         <li><a href="#recruit">Recruit the swarm</a></li>
+        <li><a href="#random">Randomness</a></li>
       </ol>
-      <p class="toc__group">Read and check</p>
+      <p class="toc__group">Check it</p>
       <ol>
-        <li><a href="#random">Randomness as a service</a></li>
         <li><a href="#reading">Reading a colony</a></li>
         <li><a href="#verify">Verifying</a></li>
-        <li><a href="#demo">What runs where, and limits</a></li>
+        <li><a href="#demo">What runs where, limits</a></li>
       </ol>
     </nav>
 
@@ -49,95 +54,103 @@
 
       <!-- ================= Start here ================= -->
 
+      <section class="doc-section" id="what" aria-labelledby="what-title">
+        <h2 id="what-title">What it is</h2>
+        <p class="doc-section__gist">Antonomy runs ant colonies inside a NEAR contract. Each colony chooses between a few options by laying scent trails, from a public random seed. Anyone can re-run any colony in a browser and check the result.</p>
+        <dl class="kv docs-facts">
+          <dt>Does</dt><dd>Forecasts Polymarket markets, picks a daily token pot, serves random numbers</dd>
+          <dt>Token</dt><dd>$ANTO, a play token on NEAR testnet. No mainnet.</dd>
+          <dt>Seed</dt><dd>A drand round, its signature checked by the contract itself</dd>
+          <dt>Checked by</dt><dd>Rust (contract), JavaScript (browser) and Python give the same hash</dd>
+          <dt>Contract</dt><dd><code>antonomy-oracle.testnet</code></dd>
+          <dt>Not</dt><dd>Betting or advice. Every output is a forecast, and nobody is paid for being right.</dd>
+        </dl>
+      </section>
+
+      <section class="doc-section" id="can" aria-labelledby="can-title">
+        <h2 id="can-title">What you can do</h2>
+        <p class="doc-section__gist">Six things, each on its own page.</p>
+        <ul class="do-cards">
+          <li class="chamber do-card">
+            <p class="eyebrow">Watch</p>
+            <h3>Read a forecast</h3>
+            <p>Three colonies read each trending Polymarket market. See their swarm belief next to the market odds.</p>
+            <p class="do-card__go"><a href="live.html">Open Live →</a><a href="#forecasts">How ↓</a></p>
+          </li>
+          <li class="chamber do-card">
+            <p class="eyebrow">Steer</p>
+            <h3>Stake on the daily pot</h3>
+            <p>Drop sugar on a pot size before 12:00 UTC. The colony picks one; part pays its stakers, the rest burns.</p>
+            <p class="do-card__go"><a href="pot.html">Open Pot →</a><a href="#burn">How ↓</a></p>
+          </li>
+          <li class="chamber do-card">
+            <p class="eyebrow">Request</p>
+            <h3>Ask for a forecast</h3>
+            <p>Pay a $ANTO fee and the swarm forecasts a Polymarket market you pick.</p>
+            <p class="do-card__go"><a href="recruit.html#forecast">Open Recruit →</a><a href="#recruit">How ↓</a></p>
+          </li>
+          <li class="chamber do-card">
+            <p class="eyebrow">Build</p>
+            <h3>Answer as an agent</h3>
+            <p>Post your own odds into the Agents colony from any model, by CLI or MCP. Paid from fees for posting, not for being right.</p>
+            <p class="do-card__go"><a href="recruit.html#agents">Open Agents →</a><a href="#agents-colony">How ↓</a></p>
+          </li>
+          <li class="chamber do-card">
+            <p class="eyebrow">Request</p>
+            <h3>Get a random value</h3>
+            <p>Any account or contract can ask for a value nobody could pick, then check it against drand.</p>
+            <p class="do-card__go"><a href="recruit.html#random">Open Randomness →</a><a href="#random">How ↓</a></p>
+          </li>
+          <li class="chamber do-card">
+            <p class="eyebrow">Check</p>
+            <h3>Check any run</h3>
+            <p>Re-run any past round or pot from its seed, follow any ant, and compare every hash with the chain's.</p>
+            <p class="do-card__go"><a href="replay.html">Open History →</a><a href="#verify">How ↓</a></p>
+          </li>
+        </ul>
+        <p class="entry__note">New wallets claim 150 $ANTO of play tokens once, on first use. <a href="app.html">The nest</a> shows the whole system as one live ant base.</p>
+      </section>
+
       <section class="doc-section" id="how" aria-labelledby="how-title">
-        <h2 id="how-title">In one minute</h2>
-        <p class="doc-section__gist">A public random number drives an ant colony run on the NEAR contract. The ants pick between a few options by laying scent trails, and anyone can re-run the colony to check the result.</p>
+        <h2 id="how-title">How it works</h2>
+        <p class="doc-section__gist">Seed, colony, hash.</p>
         <ol class="steps">
-          <li><h3>One public seed</h3><p>Each round commits to a future drand round before anyone knows it. Its randomness becomes the seed, and every colony's map, food and ants come from it.</p></li>
-          <li><h3>Colonies forage</h3><p>Ants lay trail between the nest and the food piles, one pile per option. Market odds or $ANTO stakes make some piles richer. The option with the most trail over the whole run wins.</p></li>
-          <li><h3>Anyone can check</h3><p>Your browser runs the same code as the contract. Re-run any colony and compare its hash with the one on-chain.</p></li>
+          <li><h3>One public seed</h3><p>Entries close, then a future drand round becomes the seed. Every map, food pile and ant comes from it.</p></li>
+          <li><h3>Ants forage</h3><p>One food pile per option. Odds or stakes make piles richer. Most trail over the run wins.</p></li>
+          <li><h3>Anyone checks</h3><p>Your browser runs the same code as the contract and compares the hash.</p></li>
         </ol>
-        <div class="uses">
-          <a class="uses__item" href="#forecasts"><b>Forecasts</b><span>Three colonies read a Polymarket market and give a swarm belief.</span></a>
-          <a class="uses__item" href="#burn"><b>Burn</b><span>One colony a day picks how much of the treasury to burn.</span></a>
-          <a class="uses__item" href="#recruit"><b>Recruit the swarm</b><span>Pay a fee to have the swarm forecast a market you pick.</span></a>
-        </div>
       </section>
 
       <section class="doc-section" id="words" aria-labelledby="words-title">
         <h2 id="words-title">Key words</h2>
-        <p class="doc-section__gist">Eight words cover most of the app. Each one links to its full entry.</p>
         <dl class="glossary">
-          <div><dt><a href="#seeds">Seed</a></dt><dd>A public random number. The same seed always gives the same colony.</dd></div>
-          <div><dt><a href="#map">Colony</a></dt><dd>One run of the sim: a map, a nest, food piles and ants.</dd></div>
-          <div><dt><a href="#map">Option</a></dt><dd>One choice, shown as a food pile with its own colour and glyph (▲ ■ ◆ ● ★).</dd></div>
-          <div><dt><a href="#trail-share">Trail share</a></dt><dd>How much of the colony's scent sits around each option's pile. Most trail wins.</dd></div>
-          <div><dt><a href="#swarm-belief">Swarm belief</a></dt><dd>The average trail share of a market's forecasters. A forecast, not advice.</dd></div>
-          <div><dt><a href="#sugar">Stake (sugar)</a></dt><dd>$ANTO you put on an option to make its food richer. It tilts the odds; it doesn't decide.</dd></div>
-          <div><dt><a href="#result-hash">Hash</a></dt><dd>A fingerprint of a run's inputs and result. If one bit changes, the hash changes.</dd></div>
-          <div><dt><a href="#recruit-pay">Keeper, agent, cranker</a></dt><dd>Outside helpers: keepers post market odds, agents post their own odds, crankers run the colonies.</dd></div>
+          <div><dt><a href="#seeds">Seed</a></dt><dd>A public random number. Same seed, same colony.</dd></div>
+          <div><dt><a href="#map">Colony</a></dt><dd>One run of the sim: a map, a nest, food piles, ants.</dd></div>
+          <div><dt><a href="#map">Option</a></dt><dd>One choice, a food pile with its colour and glyph (▲ ■ ◆ ● ★).</dd></div>
+          <div><dt><a href="#trail-share">Trail share</a></dt><dd>Each option's share of the scent. Most trail wins.</dd></div>
+          <div><dt><a href="#swarm-belief">Swarm belief</a></dt><dd>A market's three colonies combined. A forecast, not a probability.</dd></div>
+          <div><dt><a href="#sugar">Sugar</a></dt><dd>$ANTO staked on an option. It tilts the food, it doesn't decide.</dd></div>
+          <div><dt><a href="#result-hash">Hash</a></dt><dd>A fingerprint of a run. One changed bit, a different hash.</dd></div>
+          <div><dt><a href="#recruit-pay">Keeper, agent, cranker</a></dt><dd>Helpers: keepers post odds, agents post their own, crankers run colonies.</dd></div>
         </dl>
       </section>
 
-      <section class="doc-section" id="pages" aria-labelledby="pages-title">
-        <h2 id="pages-title">Pages</h2>
-        <p class="doc-section__gist">Watch on Live and Burn, take part on Burn and Recruit, play in Sandbox, check on Replay and Receipts.</p>
-        <div class="page-cards">
-          <a class="chamber page-card" href="live.html">
-            <p class="eyebrow">Watch</p>
-            <h3>Live</h3>
-            <p>Every colony of the current round, running now. Open a market to watch its three colonies.</p>
-            <span class="page-card__go">Open Live →</span>
-          </a>
-          <a class="chamber page-card" href="burn.html">
-            <p class="eyebrow">Watch · steer</p>
-            <h3>Burn</h3>
-            <p>Drop sugar on today's burn until 12:00 UTC, then watch the colony run until 24:00. See every past burn.</p>
-            <span class="page-card__go">Open Burn →</span>
-          </a>
-          <a class="chamber page-card" href="recruit.html">
-            <p class="eyebrow">Request · build</p>
-            <h3>Recruit</h3>
-            <p>Request a forecast on a market you pick, watch it run step by step and see who got paid.</p>
-            <span class="page-card__go">Open Recruit →</span>
-          </a>
-          <a class="chamber page-card" href="random.html">
-            <p class="eyebrow">Request · build</p>
-            <h3>Random</h3>
-            <p>Ask the contract for a random value, draw a winner and check it against drand.</p>
-            <span class="page-card__go">Open Random →</span>
-          </a>
-          <a class="chamber page-card" href="replay.html">
-            <p class="eyebrow">Check</p>
-            <h3>Replay</h3>
-            <p>Re-run one colony from its seed, step tick by tick, follow any ant and compare the hash.</p>
-            <span class="page-card__go">Open Replay →</span>
-          </a>
-          <a class="chamber page-card" href="receipts.html">
-            <p class="eyebrow">Check</p>
-            <h3>Receipts</h3>
-            <p>Re-run a whole round and compare every colony and market hash at once.</p>
-            <span class="page-card__go">Open Receipts →</span>
-          </a>
-        </div>
-      </section>
-
-      <!-- ================= What it does ================= -->
+      <!-- ================= Features ================= -->
 
       <section class="doc-section" id="forecasts" aria-labelledby="forecasts-title">
         <h2 id="forecasts-title">Forecasts <span class="tag-forecast">Forecast · not advice</span></h2>
-        <p class="doc-section__gist">Each market gets three colonies, and each reads the market in its own way. The average of their trail shares is the swarm belief. Nobody is paid for being right.</p>
+        <p class="doc-section__gist">Each market gets three colonies that read it in different ways. Their combined trail share is the swarm belief.</p>
 
         <article class="entry" id="forecasters">
           <h3>Three forecasters</h3>
-          <p class="entry__gist">Three colonies, each on its own map from the same seed, with 60 ants and 300 ticks.</p>
+          <p class="entry__gist">Each on its own map from the same seed, 60 ants for 300 ticks.</p>
           <div class="table-wrap">
             <table class="table docs-table">
-              <thead><tr><th scope="col">Forecaster</th><th scope="col">Reads</th><th scope="col">Rule for the food</th></tr></thead>
+              <thead><tr><th scope="col">Colony</th><th scope="col">Reads</th><th scope="col">Sits out when</th></tr></thead>
               <tbody>
-                <tr><th scope="row">Momentum</th><td>Market odds and their six-hour move</td><td>Food follows the odds plus twice their change, with a 2% floor so no outcome starves.</td></tr>
-                <tr><th scope="row">Community</th><td>$ANTO stakes</td><td>Ignores the odds and reads what holders staked on the market.</td></tr>
-                <tr><th scope="row">Agents</th><td>AI agents' odds</td><td>Richer food where the agents' median odds are higher.</td></tr>
+                <tr><th scope="row">Momentum</th><td>Market odds and their 1, 6 and 24 hour moves, damped on reversals and choppy paths</td><td>Never</td></tr>
+                <tr><th scope="row">Community</th><td>$ANTO stakes, square-root weighted, each wallet scaled by its record</td><td>Nobody staked</td></tr>
+                <tr><th scope="row">Agents</th><td>Agents' revealed odds, skill-weighted median</td><td>No agent revealed</td></tr>
               </tbody>
             </table>
           </div>
@@ -145,59 +158,61 @@
 
         <article class="entry" id="swarm-belief">
           <h3>Swarm belief</h3>
-          <p class="entry__gist">The average trail share per outcome, over the forecasters that have input.</p>
+          <p class="entry__gist">The weighted average trail share of the colonies with input.</p>
           <ul>
-            <li>Momentum always counts.</li>
-            <li>Community sits out when nobody staked on the market, and Agents when no agent posted, since an even map is not a belief. They still run, and their hashes are still committed.</li>
-            <li>On each bar, the tick marks the market odds, and the delta is the gap in percentage points.</li>
-            <li>It isn't calibrated as a probability yet, and nobody is paid for being right.</li>
+            <li>Weights come from each colony's scored record; equal until 20 markets are scored.</li>
+            <li>A colony that sits out still runs and its hash is still committed. An even map isn't a belief.</li>
+            <li>On each bar the tick marks the market odds; the delta is the gap in points.</li>
+            <li>Not a calibrated probability. Nobody is paid for being right.</li>
           </ul>
         </article>
 
         <article class="entry" id="agents-colony">
           <h3>Agents colony</h3>
-          <p class="entry__gist">Registered forecaster agents post their own odds, and the third colony runs on them.</p>
+          <p class="entry__gist">Registered agents post their own odds; the third colony runs on them.</p>
           <ol class="flow">
-            <li><b>Agents post.</b> Any model will do: their own LLM, news, base rates. Posts stay open until the seed is drawn.</li>
-            <li><b>Posts freeze.</b> They become an agent-odds snapshot, and the colony uses the lower median of the posts per outcome.</li>
-            <li><b>The hash commits it.</b> The result hash includes the snapshot's hash, so the result is still a pure function of the seed, the stakes, the market odds and the agents' odds.</li>
+            <li><b>Register.</b> A 10 $ANTO refundable deposit.</li>
+            <li><b>Commit.</b> In the window's first two thirds, post a hash of your odds and a salt.</li>
+            <li><b>Reveal.</b> In the last third, reveal them. Only revealed odds count.</li>
+            <li><b>Median.</b> The colony uses the skill-weighted median per outcome, and its hash commits the agents' snapshot.</li>
           </ol>
-          <p class="entry__note">With no posts the map is even and the colony sits out of the swarm belief. Register as an agent on the Live or Recruit page (a 10 $ANTO refundable deposit) and post your own odds while the agents' window is open.</p>
-          <p class="entry__note"><b>Agents on the map.</b> Each agent's ants hatch in its colour in the Agents colony, an equal share each, since the median weighs every post the same. Click one for the odds its agent posted. Brier scores come once markets resolve; none has yet. The tint is a view only: the sim reads the median, not the ants' owners.</p>
+          <p class="entry__note">Each agent's ants hatch in its own colour on the Agents map; click one for its odds. The tint is a view only.</p>
         </article>
 
         <article class="entry" id="odds">
           <h3>Market odds</h3>
-          <p class="entry__gist">From Polymarket, posted on-chain by several keepers. The contract takes the median.</p>
+          <p class="entry__gist">From Polymarket, posted by three keepers. The contract takes the median.</p>
           <ul>
-            <li>Keepers post snapshots independently, and the contract takes the median per outcome.</li>
+            <li>Accepted when 2 of 3 keepers agree on the market and its outcomes.</li>
             <li>Each snapshot stores a hash of the raw API response.</li>
-            <li>Markets about violence, deaths or private individuals are excluded.</li>
+            <li>No markets about violence, deaths or private individuals.</li>
+          </ul>
+        </article>
+
+        <article class="entry" id="scoring">
+          <h3>Scoring</h3>
+          <p class="entry__gist">When a market resolves, every source is scored. Skill sets weights, never money.</p>
+          <ul>
+            <li>Keepers post resolutions under the same 2 of 3 quorum.</li>
+            <li><b>Skill</b> = the market's Brier score minus the source's. Copying the market scores 0.</li>
+            <li>Scored: the market, each colony, the swarm, each agent, each wallet.</li>
+            <li>Weights freeze with a round's inputs and go into the hash, so every result still replays.</li>
           </ul>
         </article>
 
         <article class="entry" id="market-hash">
           <h3>Market hash</h3>
-          <p class="entry__gist">One hash that pins the whole forecast.</p>
-          <p>It appears once all three colonies finish. It commits the three colony result hashes and the swarm belief.</p>
+          <p class="entry__gist">One hash for the whole forecast: the three colony hashes and the swarm belief.</p>
         </article>
       </section>
 
       <section class="doc-section" id="burn" aria-labelledby="burn-title">
-        <h2 id="burn-title">Burn</h2>
-        <p class="doc-section__gist">Once a day, a colony picks the size of the daily pot, from a fixed menu capped at 2% of the treasury. A small part of the pot goes to the stakers on that size and the rest burns. Holders steer it with sugar in the morning and watch it run in the afternoon.</p>
+        <h2 id="burn-title">Daily pot</h2>
+        <p class="doc-section__gist">Once a day the Burn colony picks the pot size from a fixed menu, capped at 2% of the treasury. A small part pays the stakers on that size; the rest burns.</p>
 
         <article class="entry" id="burn-menu">
-          <h3>The daily pot</h3>
-          <p class="entry__gist">Five fixed sizes. The colony picks an index, never an amount.</p>
-          <ul class="menu-row" aria-label="Pot sizes">
-            <li class="opt" data-opt="0">0.10%</li>
-            <li class="opt" data-opt="1">0.25%</li>
-            <li class="opt" data-opt="2">0.50%</li>
-            <li class="opt" data-opt="3">1.00%</li>
-            <li class="opt" data-opt="4">2.00%</li>
-          </ul>
-          <p>Each is a share of the treasury, and the contract caps the pot at 2%. The colony runs 150 ants for 43,200 ticks, one a second from 12:00 to 24:00 UTC.</p>
+          <h3>The menu</h3>
+          <p class="entry__gist">Five sizes. The colony picks an index, never an amount.</p>
           <div class="table-wrap">
             <table class="table">
               <thead><tr><th scope="col">Pot</th><th scope="col" class="num">Burned</th><th scope="col" class="num">To its stakers</th><th scope="col" class="num">Handicap</th></tr></thead>
@@ -211,63 +226,56 @@
             </table>
           </div>
           <ul>
-            <li><b>Why the reward hardly grows.</b> If stakers took a share of the whole pot, a 2.00% pot would pay twenty times a 0.10% one, and everyone would stake on 2.00%. Here the reward only doubles from the smallest pot to the biggest, so a bigger pot mostly means a bigger burn.</li>
-            <li><b>Why big pots are handicapped.</b> The sim scales each size's food, the flat base and the stakes on it alike, by its handicap, so the same stake steers a big pot less. Over 2,000 days with no stakes the five sizes won about 29, 26, 20, 14 and 11% of the time; 100 $ANTO on 2.00% lifts it to about 44% (51% without the handicap).</li>
-            <li><b>Crowding dilutes.</b> The reward is split by stake among the stakers on the picked size, so the more crowded a size, the less each of them gets.</li>
+            <li><b>Reward barely grows</b> (×2 from smallest to biggest), so a bigger pot mostly means a bigger burn.</li>
+            <li><b>Handicap:</b> bigger pots get less food, so the same stake steers them less. With no stakes the sizes won about 29, 26, 20, 14 and 11% of 2,000 days.</li>
+            <li><b>Crowding dilutes:</b> the reward is split by stake among that size's stakers.</li>
           </ul>
         </article>
 
         <article class="entry" id="burn-day">
-          <h3>One burn a day</h3>
-          <p class="entry__gist">Stake in the morning, watch the same colony in the afternoon. All times are UTC.</p>
+          <h3>One day, in UTC</h3>
           <ol class="timeline">
-            <li><span class="timeline__time">00:00 – 12:00</span><p><b>Staking is open.</b> Sugar piles up. The Burn page shows the scent per option and the staker ants waiting at the nest. There is no map yet, because the map comes from the seed.</p></li>
-            <li><span class="timeline__time">12:00</span><p><b>Stakes close and the day seed is drawn.</b></p></li>
-            <li><span class="timeline__time">12:00 – 24:00</span><p><b>The colony runs.</b> 43,200 ticks, one a second, with the morning's sugar in it. Between ticks the ants keep walking toward their next cell, so the map never stands still.</p></li>
-            <li><span class="timeline__time">24:00</span><p><b>The pick is final.</b> Anyone sends <code>execute_burn</code>: the contract burns the pot's burn part and pays its reward part to the stakers on that size. Their stakes unlock once it has.</p></li>
+            <li><span class="timeline__time">00:00 – 12:00</span><p><b>Staking open.</b> Sugar piles up; staker ants wait at the nest.</p></li>
+            <li><span class="timeline__time">12:00</span><p><b>Stakes freeze, seed drawn.</b></p></li>
+            <li><span class="timeline__time">12:00 – 24:00</span><p><b>The colony runs.</b> 150 ants, 43,200 ticks, one a second.</p></li>
+            <li><span class="timeline__time">24:00</span><p><b>Pick is final.</b> Anyone sends <code>execute_burn</code>: burn, pay stakers, unlock stakes.</p></li>
           </ol>
-          <ul>
-            <li>A trail fades to nothing about 14 minutes (852 ticks) after the last ant walks it, so the lead can shift many times. The score adds the trail up every 100 ticks over all twelve hours.</li>
-            <li>The Burn colony runs apart from the forecast rounds.</li>
-            <li>Twelve hours of staking favours some time zones, but everyone gets the same twelve hours.</li>
-          </ul>
+          <p class="entry__note">A trail fades about 14 minutes (852 ticks) after it was last walked, so the lead can change many times. The score adds up every 100 ticks.</p>
         </article>
 
         <article class="entry" id="burn-pick">
           <h3>Leading vs final</h3>
-          <p class="entry__gist">During the run you see the current leader. The pick is final only at tick 43,200.</p>
-          <p>The pick card shows the leader, which can still change, and roughly what it would burn if the day ended now. The result is already fixed by the seed and the stakes, so Replay can show today's ending early. Nobody can act on it, since staking for today closed before the seed was drawn.</p>
+          <p class="entry__gist">During the run you see the current leader. The pick is final at tick 43,200.</p>
+          <p>The result is already fixed by the seed and stakes, but nobody can act on it: staking closed before the seed.</p>
         </article>
 
         <article class="entry" id="sugar">
           <h3>Sugar</h3>
-          <p class="entry__gist">Sugar is a stake on a pot size. It tilts the food, not the outcome.</p>
+          <p class="entry__gist">A stake on a pot size. It tilts the food, not the outcome.</p>
           <ul>
-            <li><b>Before 12:00 UTC</b> it feeds today's colony. <b>After 12:00</b> today's stakes have closed, so it feeds tomorrow's.</li>
-            <li>The map, the ants and the seed still decide, and one seed is one draw.</li>
-            <li><b>The preview</b> plays a short 800-tick run twice, with and without your sugar, on the newest map there is: yesterday's in the morning (with today's sugar so far), today's in the afternoon. The seed your sugar will meet isn't drawn yet. The two result hashes differ because the stakes differ.</li>
-            <li>Stakes are real testnet transactions from your connected wallet, capped at 100 $ANTO per wallet across all colonies. New wallets can claim 150 play tokens once from the faucet, enough for one requested forecast plus the agent deposit.</li>
+            <li><b>Before 12:00</b> it feeds today's colony, <b>after</b> tomorrow's.</li>
+            <li><b>Preview:</b> a short run with and without your sugar on the newest map. It stakes nothing.</li>
+            <li>Real testnet transactions, capped at 100 $ANTO per wallet across all colonies.</li>
           </ul>
         </article>
 
         <article class="entry" id="burn-history">
-          <h3>Burn history</h3>
-          <p class="entry__gist">One row per finished day, each checked by your browser as it's drawn.</p>
+          <h3>Past pots</h3>
+          <p class="entry__gist">One row per day: pick, burned, paid, treasury left, hash.</p>
           <ul>
-            <li>Each row shows the pick, the tokens burned, the treasury left and the result hash. Each day burns from what the day before left.</li>
-            <li>Your browser re-runs every past day from its day seed to build the table. Replay re-runs one day tick by tick.</li>
-            <li>The contract keeps no list of past burns, so the rows come from its <code>execute_burn</code> transactions as listed by the nearblocks testnet indexer (labelled as such), and each row's inputs are read back from the contract at the block before the burn. If the indexer or the archive is down the page says so and shows less; it never fills the gap.</li>
+            <li>Read from the contract's state at past blocks, the same walk as <a href="#history">History</a>.</li>
+            <li>Your browser re-runs each day from its seed. If the archive is down the page says so; it never fills the gap.</li>
           </ul>
         </article>
       </section>
 
       <section class="doc-section" id="stakes" aria-labelledby="stakes-title">
         <h2 id="stakes-title">Stakes</h2>
-        <p class="doc-section__gist">$ANTO stakes make an option's food richer, in the Community forecaster and in the Burn colony. Weight grows with the square root of the stake, so a crowd counts for more than one whale.</p>
+        <p class="doc-section__gist">$ANTO stakes make an option's food richer, in the Community colony and the Burn colony. Weight is the square root of the stake, so a crowd beats one whale.</p>
 
         <article class="entry" id="sqrt">
           <h3>Square-root weight</h3>
-          <p class="entry__gist">Four times the tokens only doubles the weight.</p>
+          <p class="entry__gist">Four times the tokens, twice the weight.</p>
           <div class="table-wrap table-wrap--narrow">
             <table class="table docs-table">
               <thead><tr><th scope="col" class="num">Stake ($ANTO)</th><th scope="col" class="num">Weight (√)</th><th scope="col" class="num">Staker ants</th></tr></thead>
@@ -279,102 +287,92 @@
               </tbody>
             </table>
           </div>
-          <p>One budget covers every colony, and each wallet has a cap.</p>
         </article>
 
         <article class="entry" id="scent">
           <h3>Scent</h3>
           <p class="entry__gist">How rich each food pile is, up to 1.30 for the strongest option.</p>
           <ul>
-            <li><b>From odds</b> (Momentum, Agents): in proportion to the food weight, down to 0, so a colony's trail follows its odds closely.</li>
-            <li><b>From stakes</b> (Community, Burn): from 0.35 to 1.30, over the sum of √tokens per option plus a base, so unstaked options still have food.</li>
+            <li><b>From odds</b> (Momentum, Agents): in proportion, down to 0.</li>
+            <li><b>From stakes</b> (Community, Burn): 0.35 to 1.30, with a base so unstaked options still have food.</li>
           </ul>
         </article>
 
         <article class="entry" id="staker-ants">
           <h3>Staker ants</h3>
-          <p class="entry__gist">Each staking wallet hatches tinted ants, so you can see square-root weighting: 4× the stake hatches 2× the ants.</p>
+          <p class="entry__gist">Each wallet's stake hatches ants in its own tint: 3 per √token.</p>
           <ul>
-            <li>3 ants per √token, tinted by a hash of the wallet's account id.</li>
-            <li><b>Hover</b> a wallet in a stakers list (Burn, Live's Community stakers, Replay) to light up its ants on the map. <b>Click</b> to keep the light on. The other ants fade back.</li>
-            <li>Before 12:00 UTC the Burn page shows them waiting at the nest, and a new wallet's ants pop in as its sugar arrives. On Live, the Community thumbnails draw staker ants in their tints too.</li>
-            <li>The tint is cosmetic. The sim reads only the summed weight per option, and which ant wears which tint comes from the stakes alone.</li>
+            <li><b>Hover</b> a wallet in a stakers list to light up its ants; <b>click</b> to keep it lit.</li>
+            <li>The tint is cosmetic. The sim reads only the summed weight per option.</li>
           </ul>
         </article>
 
         <article class="entry" id="closing">
           <h3>When staking closes</h3>
-          <p class="entry__gist">Before the seed is published, so nobody can stake after seeing it.</p>
+          <p class="entry__gist">Before the seed is published, so nobody stakes after seeing it.</p>
           <ul>
-            <li>For the Burn colony that is 12:00 UTC each day, when the seed is drawn and the run starts.</li>
-            <li>Burn stakes stay in and count every day until withdrawn. They freeze at 12:00, and a stake is locked until the pot of the day it counts for has paid, just after 24:00: a morning stake that night, an afternoon stake the next night. If a pot is a day overdue, or the contract is paused, the lock lifts.</li>
-            <li>The stake snapshot hash is an input to the sim and goes into the result hash.</li>
+            <li><b>Forecasts:</b> when the round's staking window ends. Stakes are refunded when the next round starts.</li>
+            <li><b>Burn:</b> 12:00 UTC. Stakes stay in until withdrawn, and are locked until every day they count for has paid. The lock lifts if a pot is a day overdue or the contract is paused.</li>
+            <li>The stake snapshot's hash goes into the result hash.</li>
           </ul>
         </article>
 
         <article class="entry" id="rewards">
           <h3>Rewards</h3>
-          <p class="entry__gist">Burn stakers share the reward part of the daily pot. Forecasts never pay.</p>
+          <p class="entry__gist">Only Burn stakers are paid. Forecasts never pay.</p>
           <ul>
-            <li>The stakers on the size the colony picks share 0.08% to 0.16% of the treasury, by stake. If nobody staked on it, the reward stays in the treasury.</li>
-            <li>It is paid for staking on the size the colony picked, a seeded draw that stakes steer, not for any forecast. Forecast colonies never pay anyone for being right.</li>
-            <li>A testnet play token only. The page lists the top earners from <code>reward_leaderboard</code>.</li>
+            <li>Stakers on the picked size share 0.08% to 0.16% of the treasury, by stake. No stakers: it stays in the treasury.</li>
+            <li>Paid for staking on what a seeded draw picked, not for a forecast. Play token only.</li>
           </ul>
         </article>
       </section>
 
       <section class="doc-section" id="recruit" aria-labelledby="recruit-title">
         <h2 id="recruit-title">Recruit the swarm</h2>
-        <p class="doc-section__gist">Anyone can pay a $ANTO fee to have the swarm forecast a market they pick. The fee pays the agents who do the work, never anyone for being right.</p>
+        <p class="doc-section__gist">Pay a $ANTO fee and the swarm forecasts a market you pick. The fee pays the helpers for their work, never anyone for being right.</p>
 
         <article class="entry" id="recruit-flow">
           <h3>How a request runs</h3>
-          <p class="entry__gist">Five steps, from paying the fee to a hash anyone can check.</p>
           <ol class="flow">
-            <li><b>Request.</b> Pay the fee and name a Polymarket market by its id. The Recruit page searches Polymarket for any open market. The contract refuses markets about violence, deaths or private individuals, the same filter as trending markets.</li>
-            <li><b>Keepers post odds.</b> The rule is the same as for trending markets: a quorum of keepers with matching outcomes, then the median per outcome. With no quorum by the deadline the request is skipped and the fee is refunded.</li>
-            <li><b>Agents post, holders stake.</b> Registered forecaster agents post their own odds until the forecast window closes. The requester can post too, as a forecaster agent. In the same window anyone can stake $ANTO on an outcome of the request, which feeds its Community colony.</li>
-            <li><b>Anyone cranks.</b> Each crank call runs one of the three colonies on-chain, and the first draws the seed.</li>
-            <li><b>Done.</b> After the third, the contract stores the swarm belief and the market hash, and pays out the fee. Anyone can re-run the request in the browser and compare the hash.</li>
+            <li><b>Request.</b> Pay the fee and name a Polymarket market. The same content filter applies.</li>
+            <li><b>Keepers post odds.</b> Quorum and median, as for trending markets. No quorum by the deadline: skipped, fee refunded.</li>
+            <li><b>Agents post, holders stake.</b> Agents commit and reveal odds; anyone can stake on the request's Community colony.</li>
+            <li><b>Anyone cranks.</b> Three calls, one per colony. The first draws the seed from drand.</li>
+            <li><b>Done.</b> The contract stores the swarm belief and market hash, and pays out the fee.</li>
           </ol>
-          <p class="entry__note">Stakes on a request are frozen when its seed is drawn and locked until the third colony has run; then you withdraw them on the Recruit page. Nothing pays them. With no stakes its Community colony runs an even map and sits out of the swarm belief. Finished requests show on the Live page under Requested forecasts, apart from the round's markets, and open on the Replay page like any colony.</p>
+          <p class="entry__note">Request stakes lock until the third colony runs; then withdraw them on the market page. Nothing pays them.</p>
         </article>
 
         <article class="entry" id="recruit-pay">
           <h3>Who is paid what</h3>
-          <p class="entry__gist">Every role is open to agents. All pay comes from the fee, for work done.</p>
           <div class="fee-split docs-fee">
-            <div class="fee-split__head"><span>Fee <b class="num">100</b> $ANTO</span><span class="chip">sample split</span></div>
+            <div class="fee-split__head"><span>Fee <b class="num">100</b> $ANTO</span><span class="chip">testnet values</span></div>
             <div class="fee-split__bar" aria-hidden="true"><span data-fee="keepers" style="--part: 20"></span><span data-fee="agents" style="--part: 30"></span><span data-fee="crank" style="--part: 10"></span><span data-fee="treasury" style="--part: 40"></span></div>
             <ul class="fee-split__key">
-              <li data-fee="keepers"><span>Keepers</span><span class="num">20%</span><small>shared equally among the keepers in the accepted quorum</small></li>
-              <li data-fee="agents"><span>Forecaster agents</span><span class="num">30%</span><small>shared equally among on-time posts; goes to the treasury if nobody posted</small></li>
-              <li data-fee="crank"><span>Crankers</span><span class="num">10%</span><small>an equal bounty per crank call, three calls a request</small></li>
-              <li data-fee="treasury"><span>Treasury</span><span class="num">40%</span><small>the rest, rounding dust included; it funds the faucet and the Burn colony's pots, nothing is burned</small></li>
+              <li data-fee="keepers"><span>Keepers</span><span class="num">20%</span><small>split among the accepted quorum</small></li>
+              <li data-fee="agents"><span>Forecaster agents</span><span class="num">30%</span><small>split among on-time posts; treasury if none</small></li>
+              <li data-fee="crank"><span>Crankers</span><span class="num">10%</span><small>a bounty per crank, three a request</small></li>
+              <li data-fee="treasury"><span>Treasury</span><span class="num">40%</span><small>the rest; funds the faucet and the pots</small></li>
             </ul>
           </div>
-          <ul>
-            <li>The fee is 100 $ANTO on this testnet deployment, split 20% keepers, 30% agents, 10% crankers and the rest to the treasury. These are sample values; the real fee size and split are still open.</li>
-            <li>Agents register with a refundable deposit (10 $ANTO) as a spam guard.</li>
-          </ul>
         </article>
 
         <article class="entry" id="recruit-tool">
           <h3>The agent tool</h3>
-          <p class="entry__gist"><code>bots/recruit.py</code> is the main way in for agents. It needs only the Python standard library.</p>
+          <p class="entry__gist"><code>bots/recruit.py</code>: a CLI and an MCP server, Python standard library only.</p>
           <div class="table-wrap">
             <table class="table docs-table">
               <thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead>
               <tbody>
                 <tr><td><code>ask</code></td><td>Requests a forecast and waits for the swarm belief.</td></tr>
-                <tr><td><code>register</code>, <code>post</code></td><td>Make an agent a forecaster and post its odds.</td></tr>
+                <tr><td><code>register</code>, <code>post</code></td><td>Become a forecaster and post odds (commit, then reveal).</td></tr>
                 <tr><td><code>crank</code></td><td>Runs the next colony.</td></tr>
                 <tr><td><code>verify</code></td><td>Re-runs a request and compares the market hash.</td></tr>
-                <tr><td><code>mcp</code></td><td>Serves the same as an MCP server over stdio, with the tools <code>ask_swarm</code>, <code>post_forecast</code> and <code>verify</code>.</td></tr>
+                <tr><td><code>mcp</code></td><td>The same as MCP tools: <code>ask_swarm</code>, <code>post_forecast</code>, <code>verify</code>.</td></tr>
               </tbody>
             </table>
           </div>
-          <p>Every command is a dry run unless you add <code>--send</code>, which signs one NEAR CLI call from your local keychain. Keepers answer requests with <code>keeper/trending.py --request</code>.</p>
+          <p class="entry__note">Every command is a dry run unless you add <code>--send</code>, which signs from your local keychain.</p>
           <h4>By role, ready to copy</h4>
           <div class="chamber rq-tool">
             <div class="seg" role="tablist" aria-label="Agent tool, by role" id="tool-tabs"></div>
@@ -382,100 +380,85 @@
           </div>
           <p class="entry__note" id="tool-note">The commands name a sample market and account until the contract answers; then they use its newest request, and your account once a wallet is connected.</p>
         </article>
-
       </section>
 
       <section class="doc-section" id="random" aria-labelledby="random-title">
         <h2 id="random-title">Randomness as a service</h2>
-        <p class="doc-section__gist">Any account or contract can ask for a random value that nobody, the asker included, could pick. It is built on the same drand check the seeds use.</p>
+        <p class="doc-section__gist">Any account or contract can get a random value nobody could pick, the asker included. Same drand check as the seeds.</p>
 
         <article class="entry" id="random-flow">
           <h3>How a request runs</h3>
-          <p class="entry__gist">Three steps. The value is a full 32-byte hash.</p>
           <ol class="flow">
-            <li><b>Request.</b> <code>request_randomness</code> burns a small $ANTO fee from the caller and commits the request to the first drand round published after the call, plus one round for clock skew. It returns an id.</li>
-            <li><b>Prove the round.</b> Once drand publishes that round, anyone sends its signature to <code>fulfill_randomness</code>. The contract checks it on chain with NEAR's BLS12-381 host functions and stores drand's randomness (sha256 of the signature). It takes only rounds that some request is waiting for.</li>
-            <li><b>Read.</b> Each request on that round gets its own value, <code>sha256("ANTO-RAND-v1", randomness, request id, requester, contract)</code>, from <code>randomness_value(id)</code>. A contract reads it with a cross-contract view.</li>
+            <li><b>Request.</b> <code>request_randomness</code> burns a small $ANTO fee and commits to the next drand round. Returns an id.</li>
+            <li><b>Prove.</b> Once the round is out, anyone sends its signature to <code>fulfill_randomness</code>; the contract checks it on-chain.</li>
+            <li><b>Read.</b> <code>randomness_value(id)</code> returns that request's own 32-byte value.</li>
           </ol>
-          <p class="entry__note">Latency is a few seconds after the committed round, not a block. One proof settles every request on the round. The keeper daemon proves rounds, and anyone else can.</p>
+          <p class="entry__note">A few seconds after the round. One proof settles every request on it.</p>
         </article>
 
         <article class="entry" id="random-trust">
-          <h3>What you trust, and the limits</h3>
-          <p class="entry__gist">drand's network and the contract's own check. No keeper, no colony.</p>
+          <h3>Trust and limits</h3>
           <ul>
-            <li>A keeper can only prove a round late, never forge or choose one, and the requester can't know the round's randomness when it asks.</li>
-            <li>No drand beacon means no value. Requests wait for it.</li>
-            <li>The colony is not in this path: a winner among five options carries about two bits, so the output is the whole hash, not a winner index. The Random page shows how to turn a value into a draw among a list.</li>
-            <li>The fee is burned and set by the contract account (<code>set_randomness_fee</code>); it is a spam guard, not income. Testnet play token only.</li>
-            <li><b>Commit first.</b> Fix your choices (the list of names, the order) before you ask. Once the round is out, anyone can see its randomness.</li>
-            <li><b>Not per move.</b> The value comes seconds after the round, so don't use it where a player waits on every move.</li>
+            <li>You trust drand's network and the contract's check. A keeper can only prove a round late, never choose one.</li>
+            <li>No drand, no value: requests wait.</li>
+            <li><b>Commit first:</b> fix your list before you ask.</li>
+            <li><b>Not per move:</b> seconds of latency.</li>
+            <li>The fee is a burned spam guard, not income.</li>
           </ul>
         </article>
 
         <article class="entry" id="random-contract">
           <h3>Use it from a contract</h3>
-          <p class="entry__gist">Two cross-contract calls: one to ask, one to read.</p>
-          <p>The caller of <code>request_randomness</code> pays the fee from its own $ANTO balance, so fund the contract first, and keeps the id it returns. Once the round is proven, <code>randomness_value(id)</code> returns the 64-hex value, and <code>null</code> until then. Measured in the sandbox: a request takes about 2 TGas and a read about 2 per receipt.</p>
+          <p class="entry__gist">Two cross-contract calls: ask, then read (about 2 TGas each).</p>
           <pre class="cmd" id="snippet-box"><code id="snippet"></code><button class="hash__copy" type="button" aria-label="Copy the contract code" id="snippet-copy"></button></pre>
-          <p>To draw among <i>n</i> things, read the value as a big-endian integer mod <i>n</i>; the bias is under <i>n</i> / 2<sup>256</sup>. The <a href="random.html">Random page</a> does exactly that for a list of names and checks the value against drand in your browser.</p>
+          <p class="entry__note">The caller pays the fee from its own $ANTO, so fund it first. <code>randomness_value</code> is <code>null</code> until proven. To draw among <i>n</i> things, take the value mod <i>n</i>; <a href="recruit.html#random">Randomness</a> does that for a list of names.</p>
         </article>
       </section>
 
-      <!-- ================= Read and check ================= -->
+      <!-- ================= Check it ================= -->
 
       <section class="doc-section" id="reading" aria-labelledby="reading-title">
         <h2 id="reading-title">Reading a colony</h2>
-        <p class="doc-section__gist">Coloured piles are options, amber is trail. The option whose ring holds the most trail over the run wins.</p>
+        <p class="doc-section__gist">Coloured piles are options, amber is trail. The ring with the most trail over the run wins.</p>
 
         <article class="entry" id="map">
           <h3>The map</h3>
-          <p class="entry__gist">What each thing on the map stands for.</p>
           <ul>
-            <li><b>Food piles</b> show their option's colour and glyph.</li>
-            <li><b>Amber</b> is pheromone, brighter where it's stronger.</li>
+            <li><b>Food piles</b> carry their option's colour and glyph.</li>
+            <li><b>Amber</b> is pheromone, brighter where stronger.</li>
             <li><b>A returning ant</b> carries a crumb in its pile's colour.</li>
-            <li><b>Nest view</b> draws soil and roots as decoration. <b>Cells view</b> drops them and shows the raw grid, one pixel per cell.</li>
           </ul>
         </article>
 
         <article class="entry" id="trail-share">
           <h3>Trail share</h3>
-          <p class="entry__gist">Each option's share of the trail inside its scoring ring, the cells within 6 of its food pile.</p>
+          <p class="entry__gist">Each option's share of the trail within 6 cells of its pile.</p>
           <ul>
-            <li>The score adds up the trail in each ring every 100 ticks and at the last tick, so a lead held all run beats a late spurt.</li>
-            <li>The highest score wins. A tie goes to the lowest pile index.</li>
-            <li>Live shares are the score so far, as if the run ended now, in rounded percentages. Final shares are exact basis points from the result.</li>
+            <li>Summed every 100 ticks and at the end, so a steady lead beats a late spurt.</li>
+            <li>Ties go to the lowest pile index.</li>
+            <li>Live shares are the score so far; final shares are exact basis points.</li>
           </ul>
         </article>
 
         <article class="entry" id="playback">
           <h3>Playback</h3>
-          <p class="entry__gist">Every player takes the same keys.</p>
           <dl class="keys">
             <div><dt><kbd>Space</kbd></dt><dd>Play or pause</dd></div>
             <div><dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Step one tick</dd></div>
-            <div><dt><kbd>Home</kbd> <kbd>End</kbd></dt><dd>Jump to the start or the end</dd></div>
+            <div><dt><kbd>Home</kbd> <kbd>End</kbd></dt><dd>Start or end</dd></div>
           </dl>
-          <p class="entry__note">Going back replays from tick 0, since the sim only runs forward.</p>
+          <p class="entry__note">Going back replays from tick 0; the sim only runs forward.</p>
         </article>
 
         <article class="entry" id="autopsy">
           <h3>Ant autopsy</h3>
-          <p class="entry__gist">Click any ant to follow it. On Replay you can see its whole life, trip by trip.</p>
-          <h4>On a live map</h4>
-          <p>Click an ant on the Burn colony or on any of a market's three colonies on Live. A ring and a number tag follow it on the map, and a card shows whether it is searching or carrying a crumb, the crumbs it has brought home in their piles' colours, and a link that opens Replay on that ant at that tick.</p>
-          <h4>On Replay</h4>
+          <p class="entry__gist">Click any ant to follow it. On History, see its whole life trip by trip.</p>
           <ul>
-            <li><b>Pick an ant</b> on the map, by number, or from the notable ants: the busiest forager, the first ant home, the most loyal one (every crumb from one pile), a lost one that never found food, and a staker ant.</li>
-            <li><b>The timeline</b> draws its whole run as one strip, a bar per trip in its pile's colour. Click a bar to jump there.</li>
-            <li><b>The trip log</b> has one row per trip: the pile, the tick it took food (↑), the tick it got home (⌂), each a link into the replay, and its deposit.</li>
+            <li><b>Notable ants:</b> busiest forager, first home, most loyal, lost, a staker ant.</li>
+            <li><b>Timeline:</b> one bar per trip in its pile's colour; click to jump.</li>
+            <li><b>Trip log:</b> pile, tick it took food (↑), tick home (⌂), deposit.</li>
           </ul>
-          <dl class="glossary glossary--inline">
-            <div><dt>Deposit</dt><dd>The pheromone it lays per step on the way home. It starts higher for richer piles and fades by 1/32 each step.</dd></div>
-            <div><dt>Scent</dt><dd>The pheromone on its cell now (cap 5120).</dd></div>
-          </dl>
-          <p class="entry__note">Ants move in a fixed order from one seeded RNG, so this ant does the same thing on every replay. The trip log only reads the colony, so it can't change a hash.</p>
+          <p class="entry__note">Ants move in a fixed order from one seeded RNG, so an ant does the same on every replay. Following it can't change a hash.</p>
         </article>
       </section>
 
@@ -483,7 +466,7 @@
         <h2 id="verify-title">Verifying</h2>
         <p class="doc-section__gist">Same inputs, same result, same hash. Your browser re-runs the colony and compares.</p>
         <ol class="chain" aria-label="From seed to hash">
-          <li>drand round seed</li>
+          <li>drand round</li>
           <li>colony seed</li>
           <li>run the sim</li>
           <li>result hash</li>
@@ -492,22 +475,32 @@
 
         <article class="entry" id="seeds">
           <h3>Seeds</h3>
-          <p class="entry__gist">The round seed comes from drand. Each colony's seed comes from the round seed and the colony's index.</p>
-          <p>A colony's seed picks its map and shuffles which option sits on which pile.</p>
+          <p class="entry__gist">Round seed from drand; each colony's seed from the round seed and its index.</p>
+          <p>A colony's seed picks its map and which option sits on which pile.</p>
         </article>
 
         <article class="entry" id="result-hash">
           <h3>Result hash</h3>
-          <p class="entry__gist">One changed bit in any input gives a different hash.</p>
-          <p>It commits the sim version, the colony seed, the stake and odds snapshot hashes, the food piles, the final scores and the winner. The contract (Rust), these pages (JavaScript) and the reference (Python) agree on it.</p>
+          <p class="entry__gist">Commits the sim version, seed, stake and odds snapshots, food piles, scores and winner.</p>
+          <p>Rust, JavaScript and Python agree on it across 10,000 seeds.</p>
+        </article>
+
+        <article class="entry" id="history">
+          <h3>History</h3>
+          <p class="entry__gist">Every round and pot, read from the contract's own state at past blocks. No server of ours in between.</p>
+          <ul>
+            <li>The contract keeps only the current and previous round, so older ones come from archival RPCs.</li>
+            <li>Requests are listed under the round that was open when they were asked.</li>
+            <li>Finished rows never change, so your browser keeps them. A first visit fills a row at a time.</li>
+          </ul>
         </article>
 
         <article class="entry" id="receipts">
           <h3>Receipts</h3>
-          <p class="entry__gist">A receipt lists the round seed and every colony and market hash. Checking it re-runs the whole round.</p>
+          <p class="entry__gist">A round's seed and every colony and market hash, requests included, as JSON.</p>
           <ul>
-            <li>Each hash is marked as a match or a mismatch.</li>
-            <li>The receipt is issued from the contract's own stored hashes; the check re-runs the round in your browser and compares. Edit a hash in the JSON to see it fail.</li>
+            <li>On History, open a round and press Check every hash: each is marked match or mismatch.</li>
+            <li>Edit a hash to see it fail, or paste someone else's receipt.</li>
             <li>From the command line: <code>node web/receipts.mjs issue &lt;round&gt;</code>.</li>
           </ul>
         </article>
@@ -515,23 +508,26 @@
 
       <section class="doc-section" id="demo" aria-labelledby="demo-title">
         <h2 id="demo-title">What runs where, and limits</h2>
-        <p class="doc-section__gist">This is a testnet deployment with a play token. Rounds, burn days and requests run on the contract; what still rests on trust is listed below.</p>
+        <p class="doc-section__gist">Testnet, play token. Rounds, pots and requests run on the contract.</p>
 
         <article class="entry">
-          <h3>What runs on the contract</h3>
+          <h3>Where things run</h3>
           <ul>
-            <li><b>Rounds.</b> Keepers post the trending market, stakes close, the agents' window passes, then three cranks run the market's colonies on-chain. The next round then starts and old forecast stakes are refunded.</li>
-            <li><b>The burn day.</b> Cranks step the Burn colony through the day, one tick a second since 12:00 UTC at most. After 24:00 anyone can send the burn; it uses the colony's pick, with no trusted account.</li>
-            <li><b>Requests.</b> The fee, keepers' odds, agents' posts, three cranks and the fee split all happen on the contract.</li>
-            <li><b>Your browser</b> re-runs every colony from the chain's inputs and compares hashes. It reads forecast inputs from the contract only; the Recruit page's market search is the one outside read.</li>
-            <li><b>A keeper daemon</b> (<code>keeper/daemon.py</code>) makes the calls nobody else is making: the keeper's posts and the cranks. Anyone can also press the crank buttons.</li>
+            <li><b>Contract:</b> rounds, the burn day, requests, fee splits, scoring, drand checks.</li>
+            <li><b>Your browser:</b> re-runs every colony from the chain's inputs. Market search in Add a market is its one outside read.</li>
+            <li><b>Keeper daemon:</b> makes the calls nobody else does (odds, cranks). Anyone can crank too.</li>
           </ul>
         </article>
 
         <article class="entry">
           <h3>Known limits</h3>
           <ul>
-            <li>Seeds come from the block's random seed at the first crank, not a drand round, so whoever cranks first can pick the block.</li>
+            <li><b>Seeds wait on drand.</b> The contract checks drand's signature, so it trusts drand's network, not a keeper. If drand is unreachable, the seed waits.</li>
+            <li><b>A pot can be lost</b> if nobody cranks it for about a day. The team's daemon does.</li>
+            <li><b>Swarm belief is not a probability.</b> Momentum echoes the market with noise.</li>
+            <li><b>The swarm has barely learned.</b> Weights stay equal until 20 markets are scored.</li>
+            <li><b>Resolutions trust the keepers</b>, under a 2 of 3 quorum.</li>
+            <li><b>Agents can withhold</b> a reveal after seeing others'. Sybil resistance is a deposit only.</li>
           </ul>
         </article>
 
@@ -585,9 +581,9 @@ function renderCommands() {
   $("tool-panel").innerHTML = {
     ask: step("Ask the swarm", `Pays the fee and requests the market; <code>--wait</code> waits for the swarm belief, and <code>--crank</code> also does the permissionless steps when they are due. If a request for that market exists already, it reads that one instead of paying again.`, c.askSend, "ask command") +
       signs(c.signs.request, "request call"),
-    forecast: step("Register as a forecaster agent", `Locks the ${tool.deposit != null ? tokens(tool.deposit) : "10"} $ANTO deposit, refundable. Only registered agents' posts reach the Agents colony.`, c.register, "register command") +
-      step("Post your odds", "Basis points per outcome, in the market's order, summing to 10000. From any model: your own LLM, news, base rates. Allowed until the agents' window closes.", c.post, "post command") +
-      signs(c.signs.post, "post call"),
+    forecast: step("Register as an agent", `Locks the ${tool.deposit != null ? tokens(tool.deposit) : "10"} $ANTO deposit, refundable. Only registered agents' posts reach the Agents colony.`, c.register, "register command") +
+      step("Post your odds", "Basis points per outcome, in the market's order, summing to 10000. From any model: your own LLM, news, base rates. Odds stay hidden until every agent has had its say: run it once in the agents' window's first two thirds (it commits a hash of your odds and a salt), then again in the last third (it reveals them). Only revealed odds count; agents with a scored record weigh more in the median.", c.post, "post command") +
+      signs(c.signs.post, "commit call") + signs(c.signs.reveal, "reveal call"),
     crank: step("Crank", "Runs the next colony on-chain and earns the crank bounty. The first call draws the seed, so it must carry the signature of the request's drand round; the tool fetches it for you. The raw call below works for the later cranks.", c.crank, "crank command") +
       signs(c.signs.crank, "crank call"),
     verify: step("Verify", "Re-runs all three colonies from the request's seed and inputs and compares the market hash with the contract's. Reads only; signs nothing.", c.verify, "verify command"),

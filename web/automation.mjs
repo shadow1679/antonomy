@@ -21,7 +21,7 @@ export function automationRows({ keepers, quorum, agents, marketCount, cranks, t
     },
     {
       key: "agents", title: "Agents post forecasts",
-      status: !agents.length ? "no forecaster agents registered"
+      status: !agents.length ? "no agents registered"
         : marketCount ? `${plural(agents.length, "agent")} registered · ${marketCount} markets open to post on`
         : `${plural(agents.length, "agent")} registered`,
       accounts: agents.map((a) => ({

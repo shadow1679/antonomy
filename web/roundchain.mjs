@@ -13,7 +13,7 @@
 // drand commit.
 
 import {
-  toHex, marketResult, oddsSnapshotHash, KINDS,
+  toHex, marketResult, oddsSnapshotHash, KINDS, EQUAL_WEIGHTS,
 } from "../sim/js/antosim.mjs";
 import { marketForecasters, KIND_NAMES } from "./round.mjs";
 import { view, hexToBytes, ZERO_HASH, ONE } from "./chain.mjs";
@@ -70,20 +70,23 @@ export function walletsFor(entries, colony, nOptions) {
 
 // One market: `mv` is a MarketView; `run` is null before the colonies run, else
 // { seed: hex, stakeHash: hex, weights, agents: {odds, hash, posts},
-// colonyHashes, crankers, swarm, marketHash }. `extra` can carry stakes
+// colonyHashes, crankers, swarm, marketHash, colonyWeights }. `extra` can carry stakes
 // (raw totals per option) and wallets. `tag` prefixes colony keys.
 export function buildMarket(mv, run, { index = 0, tag = "m", stakes = null, wallets = null } = {}) {
   const outcomes = mv.outcomes, n = outcomes.length;
   const odds = mv.odds, odds6h = mv.odds_6h;
+  // The odds 1 hour and 24 hours ago, when every agreeing keeper posted them.
+  const odds1h = mv.odds_1h ?? null, odds24h = mv.odds_24h ?? null;
+  const ext = odds1h && odds24h ? [odds1h, odds24h] : null;
   const m = {
     index, key: `${tag}${index}`,
     colony: mv.colony,
     marketId: mv.market_id,
     title: slugTitle(mv.market_id),
-    outcomes, odds, odds6h,
+    outcomes, odds, odds6h, odds1h, odds24h,
     oddsHash: mv.odds_hash,
     // The page can check the keepers' median odds against the hash it was given.
-    oddsHashOk: toHex(oddsSnapshotHash(odds, odds6h)) === mv.odds_hash,
+    oddsHashOk: toHex(oddsSnapshotHash(odds, odds6h, ext)) === mv.odds_hash,
     rawHashes: mv.raw_hashes ?? [],
     stakes,
     run: null, forecasters: null, swarm: null, marketHash: null, cranked: 0, done: false,
@@ -97,8 +100,11 @@ export function buildMarket(mv, run, { index = 0, tag = "m", stakes = null, wall
   m.run = { seed: run.seed, stakeHash: run.stakeHash, weights, agents, crankers: run.crankers ?? [] };
   m.agents = agents;
   m.weights = weights;
+  // The colonies' weights in the swarm belief, frozen at the round's first
+  // crank (equal for rounds before the scorebook, and until it has a record).
+  m.colonyWeights = run.colonyWeights ?? EQUAL_WEIGHTS;
   const specs = marketForecasters(seed, mv.colony, {
-    title: m.title, outcomes, odds, odds6h, weights, stakeHash,
+    title: m.title, outcomes, odds, odds6h, odds1h, odds24h, weights, stakeHash,
     wallets: ws, agentOdds: { odds: agents.odds, hash: hexToBytes(agents.hash), posts: agents.posts ?? [] },
   }, m.key);
   const hashes = run.colonyHashes ?? [];
@@ -120,6 +126,7 @@ function roundOf({ id, markets, run, tag, totals, snap }) {
     return buildMarket(mv, rm ? {
       seed: run.seed, stakeHash: run.stake_hash, weights: rm.weights, agents: rm.agents,
       colonyHashes: rm.colony_hashes, crankers: rm.crankers, swarm: rm.swarm, marketHash: rm.market_hash,
+      colonyWeights: run.colony_weights,
     } : null, {
       index: i, tag,
       stakes: totals?.[i] ?? null,
@@ -147,6 +154,7 @@ export function buildRound(status, last = null, { totals = null, snap = null } =
     phase: status.phase,
     closeMs: status.close_at_ms,
     publishMs: status.publish_at_ms,
+    drandRound: status.drand_round ?? null,
     hasRun: !!status.run,
     previous,
   };
@@ -187,8 +195,9 @@ export async function loadRound({ call = view, now = Date.now() } = {}) {
   // While the round is posting the contract has no market yet (it is accepted
   // after staking closes), but the keepers' own posts are readable. Show the
   // proposal so a wallet knows what it would stake on; it is final at close.
+  // The same holds after close until someone calls finalize_markets.
   let proposed = false;
-  if (!status.markets && status.phase === "posting") {
+  if (!status.markets && (status.phase === "posting" || status.phase === "agents")) {
     try {
       const prop = await proposalFromKeepers(call);
       if (prop) { status = { ...status, markets: prop }; proposed = true; }
@@ -231,7 +240,7 @@ export async function verifyMarket(m, { yieldTo } = {}) {
   }
   if (out.results.every(Boolean)) {
     const counted = m.forecasters.map((f) => f.counted);
-    const res = marketResult(m.colony, out.results, counted);
+    const res = marketResult(m.colony, out.results, counted, m.colonyWeights ?? EQUAL_WEIGHTS);
     const hashOk = !!m.marketHash && res.hash === m.marketHash;
     const swarmOk = !!m.swarm && res.swarm.length === m.swarm.length && res.swarm.every((x, i) => x === m.swarm[i]);
     out.market = { state: hashOk && swarmOk ? "match" : m.marketHash ? "mismatch" : "pending", expected: m.marketHash, actual: res.hash, swarm: res.swarm, hashOk, swarmOk, result: res };

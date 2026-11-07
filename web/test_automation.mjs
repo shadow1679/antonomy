@@ -17,7 +17,7 @@ assert.deepEqual(c.accounts, [{ id: "cranker.t", note: "2 colonies" }, { id: "bo
 // Empty chain: honest text, no rows.
 const [k0, a0, c0] = automationRows({ keepers: [], quorum: 0, agents: [], marketCount: 0, cranks: [], total: 0 });
 assert.equal(k0.status, "none allow-listed");
-assert.equal(a0.status, "no forecaster agents registered");
+assert.equal(a0.status, "no agents registered");
 assert.equal(c0.status, "no colonies to run yet");
 assert.deepEqual([k0, a0, c0].map((r) => r.accounts.length), [0, 0, 0]);
 

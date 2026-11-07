@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Antonomy · market</title>
+<link rel="icon" href="brand/favicon.ico" sizes="32x32">
+<link rel="icon" href="brand/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
+<meta name="theme-color" content="#14100c">
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="live.css">
 </head>
@@ -46,12 +50,18 @@ import { GLYPHS, KIND_BLURB, KIND_NAMES } from "./round.mjs";
 import { loadRound } from "./roundchain.mjs";
 import { isqrt } from "./burncard.mjs";
 import { chain, view, wallet, yocto, ensureTokens, ONE, ZERO_HASH } from "./chain.mjs";
+import { sendForecast, forecastNote } from "./forecastpost.mjs";
 import { createAutoCrank } from "./autocrank.mjs";
 import { TripTracker } from "./autopsy.mjs";
 import { $, esc, pad4, hms, hashHTML, installCopy, liveShares, shareBars, topbar, footer, stakerRoster, beliefBoard, whatHTML, wireMapPick, followHTML } from "./ui.mjs";
 import { LIVE_TPS, pct, utc, wait, fmtT, sumBig, bigJSON, deltaCls, gl, marketHref, liveHref, stepsHTML, clockOf, finished, sigOf, makeVerifier, marketState, colonyCache } from "./lv.mjs";
 
-$("topbar").outerHTML = topbar("live", `<span class="chip chip--live" id="live-chip">live</span>`);
+// ?r=<id> is a requested forecast: requestview.mjs shows it instead of a
+// round market, and the round code below stays idle.
+const rParam = new URLSearchParams(location.search).get("r") ?? "";
+const REQ = /^\d+$/.test(rParam) ? +rParam : null;
+
+$("topbar").outerHTML = topbar(REQ != null ? "recruit" : "live", `<span class="chip chip--live" id="live-chip">live</span>`);
 $("footer").outerHTML = footer();
 installCopy();
 $("back").href = liveHref("#forecasts");
@@ -126,7 +136,7 @@ addEventListener("popstate", () => { pin = null; if (round) { show(resolve()); h
 // ---- the market ----
 
 const ABSTAIN = { [COMMUNITY]: "Nobody staked on this market, so Community has no input and sits out of the swarm belief.",
-  [AGENTS]: "No forecaster agent posted, so Agents has no input and sits out of the swarm belief." };
+  [AGENTS]: "No agent posted, so Agents has no input and sits out of the swarm belief." };
 
 function keepersHTML(m) {
   if (!m.rawHashes.length) return `<p class="text-sm text-muted" style="margin: 0">No keeper list accepted yet.</p>`;
@@ -214,7 +224,7 @@ const stageHTML = (m, sel) => `
     ${m.forecasters[AGENTS]?.stakers?.total ? `
     <div class="lv-roster">
       <h3>Who feeds Agents</h3>
-      <p class="lv-panel__note">Each forecaster agent's ants hatch in its colour, an equal share each, since the median weighs every post the same. Hover an agent to light up its ants on the Agents map; click an ant for its posted odds. ${whatHTML("agents-colony", "Agents colony")}</p>
+      <p class="lv-panel__note">Each agent's ants hatch in its colour, an equal share each, since the median weighs every post the same. Hover an agent to light up its ants on the Agents map; click an ant for its posted odds. ${whatHTML("agents-colony", "Agents colony")}</p>
       <div data-r="agent-roster"></div>
     </div>` : ""}
   </div>`;
@@ -308,13 +318,22 @@ function closeMarket() {
   mk = null;
 }
 
+// The colony first on the stage: &c=momentum|community|agents (a map on the
+// Forecast list links here with it), read once; later markets open on Momentum.
+let colonyAsked = new URLSearchParams(location.search).get("c");
+function colonyParam() {
+  const k = KIND_NAMES.findIndex((n) => n.toLowerCase() === colonyAsked);
+  colonyAsked = null;
+  return Math.max(0, k);
+}
+
 let shownSig = "";
 function openMarket(it) {
   const sig = JSON.stringify([round.id, round.phase, it.group, sigOf(it.m)]);
   const same = mk && mk.it.m.key === it.m.key && mk.it.rd.id === it.rd.id;
   if (same && sig === shownSig) { mk.it = it; return; }
   shownSig = sig;
-  const sel = same ? mk.sel : 0;
+  const sel = same ? mk.sel : colonyParam();
   closeMarket();
   document.title = `${it.m.title} · Antonomy`;
   $("market").innerHTML = marketHTML(it, sel);
@@ -534,7 +553,7 @@ function header(now = Date.now()) {
   [$("rc-next-label").textContent, $("rc-next").textContent] = clockOf(rd, now);
   const lines = {
     posting: "Staking is open: stake $ANTO on an outcome to feed this market's Community colony.",
-    agents: "Staking is closed. Registered forecaster agents post their odds; then anyone can crank the colonies.",
+    agents: "Staking is closed. Registered agents post their odds; then anyone can crank the colonies.",
     ready: "Anyone can crank: the first call draws the seed, then each call runs one colony inside the contract.",
     running: "The colonies are running on-chain. Each finished one is replayed and checked here.",
     done: rd === round ? "Every colony ran and the result is final. The next round opens when anyone calls start_round."
@@ -654,7 +673,7 @@ function stakeBody(m, a, mine, open) {
 }
 
 function postBody(m, a, posts, mineP) {
-  const intro = `<p class="lv-act__text">Registered forecaster agents post their own odds after staking closes. The Agents colony follows their median; agents are paid for work, never for being right. ${whatHTML("recruit", "Agents")}</p>`;
+  const intro = `<p class="lv-act__text">Registered agents post their own odds after staking closes. The Agents colony follows their median; agents are paid for work, never for being right. ${whatHTML("recruit", "Agents")}</p>`;
   const list = posts.length ? `<ul class="lv-posts" aria-label="Posted so far">${posts.map(([id, o]) => `<li><code>${esc(id)}</code> <span class="num">${o.map(pct).join(" / ")}%</span></li>`).join("")}</ul>` : "";
   if (!acct) return intro + connectHTML("post odds") + list;
   if (a?.error) return `<p class="lv-act__text">Could not read your account: ${esc(a.error)}</p>`;
@@ -707,7 +726,7 @@ function agentSum() {
   if (!ins.length || !out) return;
   const sum = ins.reduce((a, i) => a + Math.round((+i.value || 0) * 100), 0);
   out.textContent = `${sum === 10000 ? "✓" : "✗"} total ${(sum / 100).toFixed(2)}%`;
-  out.style.color = sum === 10000 ? "var(--success)" : "var(--warning)";
+  out.style.color = sum === 10000 ? "var(--text)" : "var(--text-muted)";
   const b = document.querySelector("#act-panel [data-act=post]");
   if (b) b.disabled = sum !== 10000;
 }
@@ -736,7 +755,17 @@ document.addEventListener("click", async (e) => {
     } else if (act === "post") {
       const odds = [...document.querySelectorAll("#act-panel [data-ag]")].map((i) => Math.round((+i.value || 0) * 100));
       if (odds.reduce((a, x) => a + x, 0) !== 10000) throw new Error("Odds must sum to 100%.");
-      await sendTx("post_forecast", { colony: m.colony, odds }, { gasTgas: 60 }, "Forecast posted.", "post");
+      // Commit while the window hides posts, reveal in its last third.
+      const setPost = (text) => {
+        txState.post = text;
+        const el = document.querySelector("#act-panel .tx-status");
+        if (el && actTab === "post") el.textContent = text;
+      };
+      setPost("Waiting for your wallet…");
+      const out = await sendForecast({ colony: m.colony, odds, account: acct, send: (meth, a) => wallet.call(meth, a, { gasTgas: 60 }) });
+      setPost(forecastNote(out));
+      await wait(2500);
+      await refresh();
     }
   } catch (err) {
     txState[t] = `Not sent: ${String(err.message || err).slice(0, 200)}`;
@@ -745,7 +774,7 @@ document.addEventListener("click", async (e) => {
   } finally { b.disabled = false; }
 });
 
-wallet.onChange(async () => { actSig = ""; await loadAcct(); renderAct(); });
+wallet.onChange(async () => { if (REQ != null) return; actSig = ""; await loadAcct(); renderAct(); });
 
 // ---- polling ----
 
@@ -782,7 +811,7 @@ function frame(perf) {
 let lastSec = -1;
 setInterval(() => {
   const now = Date.now(), sec = Math.floor(now / 1000);
-  if (sec === lastSec) return;
+  if (!round || sec === lastSec) return;
   lastSec = sec;
   header(now);
 }, 500);
@@ -791,10 +820,15 @@ async function poll() {
   await loadCfg();
   await refresh();
 }
-poll();
-setInterval(() => { if (!document.hidden) poll(); }, 20_000); // public RPCs rate-limit by IP
-requestAnimationFrame(frame);
-document.fonts.ready.then(() => { if (mk) mk.busy = true; });
+if (REQ != null) {
+  document.querySelector(".lv-round--slim").hidden = true;
+  import("./requestview.mjs").then((v) => v.followRequest(REQ));
+} else {
+  poll();
+  setInterval(() => { if (!document.hidden) poll(); }, 20_000); // public RPCs rate-limit by IP
+  requestAnimationFrame(frame);
+  document.fonts.ready.then(() => { if (mk) mk.busy = true; });
+}
 </script>
 </body>
 </html>

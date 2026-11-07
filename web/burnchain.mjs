@@ -21,12 +21,14 @@ import {
 } from "./burn.mjs";
 import { burnColony, rememberBurnDay, knownBurnDay } from "./round.mjs";
 
-export const ARCHIVAL_RPCS = ["https://archival-rpc.testnet.near.org", ...RPCS];
+// Archival nodes first (fastnear's answers in about 0.5 s, near.org's in 3 to
+// 4 s); the others only hold the last few days.
+export const ARCHIVAL_RPCS = ["https://archival-rpc.testnet.fastnear.com", ...new Set(["https://archival-rpc.testnet.near.org", ...RPCS])];
 export const INDEXER = "https://api-testnet.nearblocks.io/v1";
 export const treasuryId = () => `treasury.${contractId()}`;
 
 const bigs = (a) => a.map((x) => BigInt(x));
-const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
+export const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
 
 // Offset (ms) to add to the browser clock to get chain time, from the newest
 // block's timestamp. 0 if the RPC can't be reached. The burn clock is the
@@ -56,7 +58,7 @@ export async function loadBurn({ account = wallet.accountId, read = view, skew =
   const errors = [];
   const soft = async (name, p, dflt = null) => { try { return await p; } catch (e) { errors.push(`${name}: ${e.message ?? e}`); return dflt; } };
   const schedule = await read("burn_schedule");
-  const [run, last, totals, sw, cfg, treasury, supply, pot, board] = await Promise.all([
+  const [run, last, totals, sw, cfg, treasury, supply, pot, board, paused] = await Promise.all([
     soft("burn_run", read("burn_run")),
     soft("last_burn_day", read("last_burn_day")),
     soft("stake_totals", read("stake_totals", { colony: BURN_COLONY, n_options: N_OPTIONS })),
@@ -66,6 +68,7 @@ export async function loadBurn({ account = wallet.accountId, read = view, skew =
     soft("ft_total_supply", read("ft_total_supply")),
     soft("daily_pot", read("daily_pot")),
     soft("reward_leaderboard", read("reward_leaderboard")),
+    soft("is_paused", read("is_paused"), false),
   ]);
   const executed = (d) => last !== null && d <= last; // the contract forgets executed days' snapshots
   const today = schedule.day;
@@ -111,7 +114,7 @@ export async function loadBurn({ account = wallet.accountId, read = view, skew =
     };
   }
   return {
-    at: Date.now(), skew, schedule, run, lastBurnDay: last, today, running,
+    at: Date.now(), skew, schedule, run, lastBurnDay: last, today, running, paused: paused === true,
     totals: totals ? bigs(totals) : null,
     weights: sw ? weightsFromSqrtYocto(sw) : null,
     cap: cfg ? BigInt(cfg.cap_per_wallet) : null,
@@ -252,8 +255,9 @@ export async function indexerBurns({ fetchFn = globalThis.fetch, limit = 40, con
   const r = await withTimeout(fetchFn(`${INDEXER}/account/${contract}/txns?method=execute_burn&per_page=${limit}`), 12000);
   if (!r.ok) throw new Error(`indexer ${r.status}`);
   const out = await r.json();
+  if (!Array.isArray(out.txns)) throw new Error(out.message ?? "indexer gave no transaction list"); // e.g. its rate limit
   const rows = [];
-  for (const t of out.txns ?? []) {
+  for (const t of out.txns) {
     if (t.outcomes?.status === false || t.receiver_account_id !== contract) continue;
     const a = (t.actions ?? []).find((x) => x.method === "execute_burn");
     let day;
@@ -269,6 +273,33 @@ export async function indexerBurns({ fetchFn = globalThis.fetch, limit = 40, con
   const byDay = new Map();
   for (const x of rows) if (!byDay.has(x.day)) byDay.set(x.day, x);
   return [...byDay.values()].sort((a, b) => b.day - a.day);
+}
+
+// Days paid by the next day's first crank_burn, which execute_burn's list
+// misses: the first successful crank_burn at or after a day's 12:00 starts that
+// day and first pays the day before if nobody did (or logs it skipped). The
+// indexer gives no logs, so each candidate names the day it may have paid
+// (`via: "crank"`) and burnRow checks it against the chain at that block.
+// Newest first, one per day. Cranks run about 30 a day, so `limit` reaches
+// back a few days only.
+export async function indexerCrankPayouts({ fetchFn = globalThis.fetch, limit = 100, contract = contractId() } = {}) {
+  const r = await withTimeout(fetchFn(`${INDEXER}/account/${contract}/txns?method=crank_burn&per_page=${limit}`), 12000);
+  if (!r.ok) throw new Error(`indexer ${r.status}`);
+  const out = await r.json();
+  if (!Array.isArray(out.txns)) throw new Error(out.message ?? "indexer gave no transaction list");
+  const first = new Map(); // day started -> earliest crank at or after its 12:00
+  for (const t of out.txns) {
+    if (t.outcomes?.status === false || t.receiver_account_id !== contract) continue;
+    if (!(t.actions ?? []).some((x) => x.method === "crank_burn")) continue;
+    const ms = Math.floor(Number(BigInt(t.block_timestamp ?? 0) / 1_000_000n));
+    const d = dayOf(ms);
+    if (ms < dayRunAt(d)) continue; // before 12:00 a crank only steps the day before
+    const height = t.receipt_block?.block_height ?? t.block?.block_height ?? null;
+    const row = { day: d - 1, tx: t.transaction_hash, signer: t.predecessor_account_id ?? null, height, receipt: t.receipt_block?.block_height != null, ms, via: "crank" };
+    const had = first.get(d);
+    if (!had || ms < had.ms) first.set(d, row);
+  }
+  return [...first.values()].sort((a, b) => b.day - a.day);
 }
 
 const HIST_KEY = "antonomy:burn-rows:v2";
@@ -289,16 +320,29 @@ const fromJsonRow = (r) => Object.fromEntries(Object.entries(r).map(([k, v]) => 
 // ran. Cached after the first read. Resolves to
 // { day, tx, ms, index, before, burned, reward, after, seed, stakeHash, hash, scores, perm, entries }
 // or, if the archive can't be read, the indexer facts alone (`detail: false`).
+//
+// A crank candidate (`via: "crank"`) resolves to null when that crank paid
+// nothing (the day was already paid, or it isn't the run the contract held),
+// and to `{ skipped: true }` when the day's run never finished.
 export async function burnRow(x, { opts = {}, read = viewAt } = {}) {
   const hit = cachedRows()[x.tx];
-  if (hit) return fromJsonRow(hit);
-  const base = { day: x.day, tx: x.tx, ms: x.ms, signer: x.signer, detail: false };
-  if (!x.height) return base;
+  if (hit) return hit.none ? null : fromJsonRow(hit);
+  const base = { day: x.day, tx: x.tx, ms: x.ms, signer: x.signer, detail: false, ...(x.via ? { via: x.via } : {}) };
+  if (!x.height) return x.via ? null : base;
   try {
     const h = x.height - 1, hAfter = x.receipt === false ? x.height + 2 : x.height;
+    if (x.via === "crank") {
+      const [run, last] = await Promise.all([read(h, "burn_run", {}, opts), read(h, "last_burn_day", {}, opts)]);
+      if (!run || run.day !== x.day || (last !== null && last >= x.day)) { cacheRow(x.tx, { none: true }); return null; }
+      if (!run.done) {
+        const row = { ...base, detail: true, skipped: true, t: run.t, seed: run.seed, stakeHash: run.stake_hash };
+        cacheRow(x.tx, row);
+        return row;
+      }
+    }
     const [run, snap, bal, supply, balAfter, supplyAfter] = await Promise.all([
       read(h, "burn_run", {}, opts),
-      read(h, "burn_snapshot", { day: x.day }, opts),
+      read(h, "burn_snapshot", { day: x.day }, opts).catch(() => null), // panics for a day it doesn't hold
       read(h, "ft_balance_of", { account_id: treasuryId() }, opts),
       read(h, "ft_total_supply", {}, opts),
       read(hAfter, "ft_balance_of", { account_id: treasuryId() }, opts),
@@ -309,7 +353,7 @@ export async function burnRow(x, { opts = {}, read = viewAt } = {}) {
     const row = {
       ...base, detail: true, index: run.winner_option, before, burned, reward: before - after - burned, after,
       seed: run.seed, stakeHash: run.stake_hash, hash: run.result_hash, scores: run.scores, perm: run.perm,
-      entries: snapshotHash(snap.entries) === run.stake_hash ? snap.entries : null,
+      entries: snap && snapshotHash(snap.entries) === run.stake_hash ? snap.entries : null,
     };
     cacheRow(x.tx, jsonRow(row));
     if (row.entries) rememberBurnDay({ day: x.day, seed: run.seed, stakeHash: run.stake_hash, entries: row.entries, winner: run.winner_option, hash: run.result_hash });
@@ -322,13 +366,20 @@ export async function burnRow(x, { opts = {}, read = viewAt } = {}) {
 // All of it: the indexer list, then each row's chain facts, newest first.
 // `onRow(row, i, n)` fires as rows arrive. Resolves to { rows, indexer: true }
 // or { rows: [], indexer: false, error } when the indexer is unreachable.
+// Days paid by a crank (and skipped days) come from the crank_burn list;
+// a day execute_burn paid is never listed twice.
 export async function loadHistory({ onRow, fetchFn, read, opts, limit = 40 } = {}) {
   let list;
   try { list = await indexerBurns({ fetchFn, limit }); } catch (e) { return { rows: [], indexer: false, error: String(e.message ?? e) }; }
+  let cranks = [];
+  try { cranks = await indexerCrankPayouts({ fetchFn }); } catch { /* execute_burn rows alone */ }
+  const paid = new Set(list.map((x) => x.day));
+  const oldest = list.length ? list[list.length - 1].day : -Infinity;
+  list = [...list, ...cranks.filter((x) => !paid.has(x.day) && x.day > oldest)].sort((a, b) => b.day - a.day);
   const rows = [];
   for (const [i, x] of list.entries()) {
     const row = await burnRow(x, { read, opts });
-    rows.push(row);
+    if (row) rows.push(row);
     onRow?.(row, i, list.length);
   }
   return { rows, indexer: true };

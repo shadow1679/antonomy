@@ -7,12 +7,11 @@
 
 import { W, H, NEST_X, NEST_Y, CAP, FOOD_RADIUS_SQ, SCORE_RADIUS_SQ } from "../../sim/js/antosim.mjs";
 import { walletColor } from "./staker-ants.mjs";
+import { TAU, LIGHT, BLACK, WHITE, tok, rgb, css, mix, layer, prng, earthColors, drawAnt, pebble, growRoot, strokeSegs, leaf, makeTuft, drawTuft } from "./earth-paint.mjs";
 
-const TAU = Math.PI * 2;
 const TRAIL = 24;            // ticks of path kept per ant, for the selection trail
 const PARTY_MS = 1800;       // winner celebration length
 const MAX_PARTICLES = 320;
-const LIGHT = [-0.55, -0.6, 0.58]; // scenery is lit from the top left
 
 // Roads: each tick an ant wears its cell (a loaded ant twice as much), and
 // wear fades so an abandoned route grows back over a few hundred ticks.
@@ -22,38 +21,8 @@ const RS = 3, RW = W * RS, RH = H * RS; // road mask resolution (3 px per cell)
 const ROAD_SPREAD = [1, 0.95, 0.85, 0, 0.72, 0.6, 0, 0, 0.45]; // by distance² in cells
 const MOUND_R = 4.4;               // anthill radius in cells
 
-// Ant geometry in body units (1 unit = ANT_SCALE cells), facing +x.
+// Ant size in cells per body unit (earth-paint.mjs draws the ant).
 const ANT_SCALE = 0.62;
-const HIP = [0.14, 0.04, -0.06], KNEE = [0.36, 0.06, -0.26], FOOT = [0.62, 0.02, -0.62];
-
-// Tokens are read once per page: getComputedStyle right after new markup
-// goes in forces a style recalc, and every view would pay it again.
-const TOKENS = new Map();
-const tok = (n) => {
-  if (!TOKENS.has(n)) TOKENS.set(n, getComputedStyle(document.documentElement).getPropertyValue(n).trim());
-  return TOKENS.get(n);
-};
-const rgb = (hex) => { const v = parseInt(hex.slice(1), 16); return [v >> 16, (v >> 8) & 255, v & 255]; };
-const css = ([r, g, b], a = 1) => `rgba(${r | 0},${g | 0},${b | 0},${a})`;
-const mix = (p, q, k) => p.map((v, i) => v + (q[i] - v) * k);
-const BLACK = [0, 0, 0], WHITE = [255, 255, 255];
-
-function layer(w, h) {
-  const c = document.createElement("canvas");
-  c.width = w; c.height = h;
-  return c;
-}
-
-// mulberry32, seeded from the first 4 seed bytes plus a salt per use.
-function prng(seed, salt) {
-  let a = (seed[0] | (seed[1] << 8) | (seed[2] << 16) | (seed[3] << 24)) ^ salt;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 const smooth = (lo, hi, v) => { const k = Math.min(1, Math.max(0, (v - lo) / (hi - lo))); return k * k * (3 - 2 * k); };
 
@@ -113,16 +82,9 @@ export class ColonyView {
     this.S = canvas.width / W; // pixels per cell
     this.labels = labels;
     this.glyphs = glyphs;
-    this.c = {
-      soil: Object.fromEntries([950, 900, 800, 700, 600, 500].map((k) => [k, rgb(tok(`--soil-${k}`))])),
-      bone: rgb(tok("--bone-100")),
-      boneMuted: rgb(tok("--bone-300")),
-      amberHi: rgb(tok("--amber-300")),
-      amberLo: rgb(tok("--amber-600")),
-      opt: glyphs.map((_, i) => rgb(tok(`--opt-${i}`))),
-      grass: rgb(tok("--scene-grass")),
-      leaf: rgb(tok("--scene-leaf")),
-    };
+    // The ground reads the map's earth scale (`c.soil` is --earth-*), the
+    // ants --ant-*; the pheromone ramp and option colours are unchanged.
+    this.c = { ...earthColors(), opt: glyphs.map((_, i) => rgb(tok(`--opt-${i}`))) };
     this.font = tok("--font-mono");
     this.motion = matchMedia("(prefers-reduced-motion: reduce)");
     this.mode = "nest";      // "nest" = scenery, "cells" = plain grid, one pixel per cell
@@ -162,6 +124,7 @@ export class ColonyView {
     this.tints = [];
     this.halos = [];
     this.spotlight = -1;     // wallet whose ants get a halo, -1 for none
+    this.focusSource = -1;   // pile whose scoring ring is lit, -1 for the leader's
     this.dimOthers = true;   // with a spotlight, fade every other ant
   }
 
@@ -370,19 +333,12 @@ export class ColonyView {
       const segs = [];
       this.growRoot(segs, r, cx * S, cy * S, r() * TAU, 2.2 + r() * 2.4, 9 + Math.floor(r() * 12), 1);
       const bark = mix(c.leaf, c.soil[600], 0.3 + r() * 0.3);
-      const passes = [
-        [(w) => w + 1, BLACK, 0.45, 3, 4],
+      strokeSegs(g, segs, [
+        [(w) => w + 1, BLACK, 0.4, 3, 4],
         [(w) => w + 1.5, mix(bark, BLACK, 0.5), 1, 0, 0],
         [(w) => w, bark, 1, 0, 0],
         [(w) => Math.max(0.7, w * 0.3), mix(bark, c.soil[500], 0.6), 0.7, -0.6, -0.8],
-      ];
-      for (const [width, tone, alpha, ox, oy] of passes) {
-        g.strokeStyle = css(tone, alpha);
-        for (const sg of segs) {
-          g.lineWidth = width(sg.w);
-          g.beginPath(); g.moveTo(sg.x0 + ox, sg.y0 + oy); g.lineTo(sg.x1 + ox, sg.y1 + oy); g.stroke();
-        }
-      }
+      ]);
     });
 
     // Fallen leaves
@@ -401,129 +357,17 @@ export class ColonyView {
     // Vignette
     const v = g.createRadialGradient(Wp / 2, Hp / 2, Wp * 0.3, Wp / 2, Hp / 2, Wp * 0.72);
     v.addColorStop(0, "rgba(0,0,0,0)");
-    v.addColorStop(1, "rgba(0,0,0,0.6)");
+    v.addColorStop(1, "rgba(0,0,0,0.38)");
     g.fillStyle = v;
     g.fillRect(0, 0, Wp, Hp);
   }
 
-  growRoot(segs, r, x, y, ang, w, steps, depth) {
-    const step = this.S * 0.55;
-    for (let i = 0; i < steps; i++) {
-      const x1 = x + Math.cos(ang) * step, y1 = y + Math.sin(ang) * step;
-      const wi = w * (1 - i / steps) + 0.6;
-      segs.push({ x0: x, y0: y, x1, y1, w: wi });
-      x = x1; y = y1;
-      ang += (r() - 0.5) * 0.45;
-      if (depth < 2 && r() < 0.07) {
-        this.growRoot(segs, r, x, y, ang + (r() < 0.5 ? -0.9 : 0.9), wi * 0.6, Math.floor((steps - i) * 0.6), depth + 1);
-      }
-    }
-  }
-
-  // A dead leaf seen from above: shadow, blade folded along the midrib, veins.
-  leaf(g, r, x, y, L, ang) {
-    const { c } = this, w = L * (0.2 + r() * 0.1);
-    const tone = mix(c.leaf, c.soil[600], r() * 0.45);
-    const cs = Math.cos(ang), sn = Math.sin(ang);
-    const shape = () => {
-      g.beginPath();
-      g.moveTo(-L / 2, 0);
-      g.bezierCurveTo(-L * 0.2, -w * 1.3, L * 0.25, -w * 0.95, L / 2, 0);
-      g.bezierCurveTo(L * 0.25, w * 0.95, -L * 0.2, w * 1.3, -L / 2, 0);
-      g.closePath();
-    };
-    g.save();
-    g.setTransform(cs, sn, -sn, cs, x + L * 0.05, y + L * 0.08);
-    shape(); g.fillStyle = "rgba(0,0,0,0.5)"; g.fill();
-    g.setTransform(cs, sn, -sn, cs, x, y);
-    const body = g.createLinearGradient(-L / 2, 0, L / 2, 0);
-    body.addColorStop(0, css(mix(tone, BLACK, 0.25)));
-    body.addColorStop(0.5, css(mix(tone, c.soil[500], 0.18)));
-    body.addColorStop(1, css(tone));
-    shape(); g.fillStyle = body; g.fill();
-    // Fold: the half facing away from the light sits in shade. The leaf's
-    // local -y axis points (sn, -cs) on screen.
-    const upLit = sn * LIGHT[0] - cs * LIGHT[1] > 0;
-    g.save(); shape(); g.clip();
-    g.fillStyle = "rgba(0,0,0,0.22)";
-    g.fillRect(-L, upLit ? 0 : -L, L * 2, L);
-    g.restore();
-    shape(); g.strokeStyle = "rgba(0,0,0,0.45)"; g.lineWidth = 1; g.stroke();
-    g.strokeStyle = css(mix(tone, c.soil[500], 0.5), 0.8);
-    g.lineWidth = 1.4;
-    g.beginPath(); g.moveTo(-L * 0.6, 0); g.lineTo(L * 0.46, 0); g.stroke();   // stem and midrib
-    g.lineWidth = 0.8;
-    g.beginPath();
-    for (let i = 1; i <= 5; i++) {
-      const vx = -L / 2 + (i / 6.2) * L, reach = Math.sin((i / 6) * Math.PI) * w * 0.85;
-      for (const sd of [-1, 1]) { g.moveTo(vx, 0); g.lineTo(vx + L * 0.11, sd * reach); }
-    }
-    g.stroke();
-    g.restore();
-  }
-
-  pebble(g, r, x, y, rad) {
-    const pts = [], k = 9;
-    for (let i = 0; i < k; i++) {
-      const a = (i / k) * TAU, d = rad * (0.78 + r() * 0.3);
-      pts.push([x + Math.cos(a) * d, y + Math.sin(a) * d * (0.75 + r() * 0.1)]);
-    }
-    const path = (dx, dy) => {
-      g.beginPath();
-      pts.forEach(([px, py], i) => (i ? g.lineTo(px + dx, py + dy) : g.moveTo(px + dx, py + dy)));
-      g.closePath();
-    };
-    path(rad * 0.12, rad * 0.2);
-    g.fillStyle = "rgba(0,0,0,0.55)";
-    g.fill();
-    path(0, 0);
-    const { soil } = this.c;
-    g.fillStyle = css(mix(soil[700], soil[600], r()));
-    g.fill();
-    const hl = g.createRadialGradient(x - rad * 0.35, y - rad * 0.4, 0, x, y, rad);
-    hl.addColorStop(0, css(this.c.bone, 0.13));
-    hl.addColorStop(1, css(this.c.bone, 0));
-    g.fillStyle = hl;
-    g.fill();
-    g.strokeStyle = "rgba(0,0,0,0.35)";
-    g.lineWidth = 1;
-    g.stroke();
-  }
-
-  // Grass seen from above: blades fan out from a base. lift lightens tufts
-  // that stand over the ants and pushes their shadow further out.
-  makeTuft(r, x, y, size, lift) {
-    const blades = [], n = 6 + Math.floor(r() * 6), lean = r() * TAU;
-    for (let i = 0; i < n; i++) {
-      blades.push({
-        ang: lean + (r() - 0.5) * 3.4, len: size * (0.55 + r() * 0.55),
-        bend: (r() - 0.5) * 0.9, w: (0.07 + r() * 0.06) * this.S, k: r(),
-      });
-    }
-    return { x, y, blades, lift, phase: r() * TAU };
-  }
-
-  drawTuft(g, t, sway) {
-    const { c, S } = this, base = mix(mix(c.grass, BLACK, 0.2), c.soil[500], t.lift);
-    const tip = mix(c.grass, c.soil[500], 0.3 + t.lift);
-    const path = (b, ox, oy) => {
-      const a1 = b.ang + b.bend * 0.5 + sway * 0.5, a2 = b.ang + b.bend + sway;
-      g.moveTo(t.x + ox, t.y + oy);
-      g.quadraticCurveTo(t.x + ox + Math.cos(a1) * b.len * 0.55, t.y + oy + Math.sin(a1) * b.len * 0.55,
-        t.x + ox + Math.cos(a2) * b.len, t.y + oy + Math.sin(a2) * b.len);
-    };
-    g.lineCap = "round";
-    g.strokeStyle = "rgba(0,0,0,0.4)";                   // shadow on the ground
-    g.lineWidth = S * 0.14;
-    g.beginPath();
-    for (const b of t.blades) path(b, S * 0.12 * (1 + t.lift * 3), S * 0.18 * (1 + t.lift * 3));
-    g.stroke();
-    for (const b of t.blades) {
-      g.strokeStyle = css(mix(base, tip, b.k));
-      g.lineWidth = b.w;
-      g.beginPath(); path(b, 0, 0); g.stroke();
-    }
-  }
+  // Scenery props, drawn by earth-paint.mjs at this map's scale.
+  growRoot(segs, r, x, y, ang, w, steps, depth) { growRoot(segs, r, x, y, ang, w, steps, depth, this.S * 0.55); }
+  leaf(g, r, x, y, L, ang) { leaf(g, this.c, r, x, y, L, ang); }
+  pebble(g, r, x, y, rad) { pebble(g, this.c, r, x, y, rad); }
+  makeTuft(r, x, y, size, lift) { return makeTuft(r, x, y, size, lift, this.S); }
+  drawTuft(g, t, sway) { drawTuft(g, this.c, this.S, t, sway); }
 
   // The anthill: a crater mound of excavated subsoil, lighter than the
   // topsoil, lit from the top left, with a cast shadow and a dark bowl.
@@ -765,11 +609,11 @@ export class ColonyView {
     const { S, cv } = this;
     g.fillStyle = css(this.c.soil[950]);
     g.fillRect(0, 0, cv.width, cv.height);
-    g.fillStyle = css(this.c.bone, 0.05);
+    g.fillStyle = "rgba(0,0,0,0.16)";
     for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) g.fillRect((x + 0.5) * S - 1, (y + 0.5) * S - 1, 2, 2);
   }
 
-  // Strong cells run hot (amber-300), weak ones cool (amber-600).
+  // One amber ramp (--pher-lo to --pher-hi): lighter and more opaque = stronger.
   drawPheromone(ctx, cells) {
     const { cv, col, c } = this, d = this.phImg.data;
     for (let i = 0, j = 0; i < W * H; i++, j += 4) {
@@ -799,16 +643,19 @@ export class ColonyView {
   }
 
   // Scoring rings. Dashes march while playing; the leader's ring is brighter.
+  // With focusSource set (an outcome hovered or focused elsewhere on the
+  // page), that pile's ring is the bright one and the others fade.
   drawRings(now, lead) {
-    const { ctx, S, col, c } = this, R = Math.sqrt(SCORE_RADIUS_SQ) * S;
+    const { ctx, S, col, c } = this, R = Math.sqrt(SCORE_RADIUS_SQ) * S, focus = this.focusSource ?? -1;
     ctx.setLineDash([S * 0.6, S * 0.45]);
     ctx.lineDashOffset = this.still ? 0 : -now / 40;
     for (let s = 0; s < col.n; s++) {
       const color = c.opt[this.optOf(s)];
       const x = (col.sx[s] + 0.5) * S, y = (col.sy[s] + 0.5) * S;
-      ctx.fillStyle = css(color, 0.045);
-      ctx.strokeStyle = css(color, s === lead ? 0.9 : 0.45);
-      ctx.lineWidth = s === lead ? 3 : 2;
+      const strong = focus >= 0 ? s === focus : s === lead;
+      ctx.fillStyle = css(color, focus === s ? 0.12 : 0.045);
+      ctx.strokeStyle = css(color, strong ? 0.95 : focus >= 0 ? 0.2 : 0.45);
+      ctx.lineWidth = strong ? 3 : 2;
       ctx.beginPath(); ctx.arc(x, y, R, 0, TAU); ctx.fill(); ctx.stroke();
     }
     ctx.setLineDash([]);
@@ -866,61 +713,10 @@ export class ColonyView {
     }
   }
 
-  // One ant: dark halo for contrast, six legs in a tripod gait, antennae,
-  // bone body. A returning ant holds a crumb from the pile it visited.
+  // One brown ant (earth-paint.mjs). A returning ant holds a crumb from the
+  // pile it visited; a staker ant wears its wallet's tint.
   ant(x, y, ang, phase, crumb, tint = null) {
-    const { ctx } = this, k = this.S * ANT_SCALE;
-    const cs = Math.cos(ang) * k, sn = Math.sin(ang) * k, lw = 1.7 / k;
-    const swing = this.still ? 0 : 0.2;
-    ctx.setTransform(cs, sn, -sn, cs, x, y);
-
-    ctx.fillStyle = "rgba(8,6,4,0.55)";
-    ctx.beginPath(); ctx.ellipse(-0.15, 0, 1.15, 0.64, 0, 0, TAU); ctx.fill();
-
-    ctx.strokeStyle = css(this.c.boneMuted, 0.9);
-    ctx.lineWidth = lw;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    for (let i = 0; i < 3; i++) {
-      for (const sd of [-1, 1]) {
-        const sw = Math.sin(phase + ((i + (sd > 0 ? 1 : 0)) & 1) * Math.PI) * swing;
-        ctx.moveTo(HIP[i], sd * 0.08);
-        ctx.lineTo(KNEE[i] + sw * 0.5, sd * 0.38);
-        ctx.lineTo(FOOT[i] + sw, sd * 0.62);
-      }
-    }
-    const wig = this.still ? 0 : Math.sin(phase * 0.5) * 0.06;
-    for (const sd of [-1, 1]) {
-      ctx.moveTo(0.58, sd * 0.06);
-      ctx.lineTo(0.82, sd * 0.22);
-      ctx.lineTo(1.05, sd * (0.3 + wig));
-    }
-    ctx.stroke();
-
-    ctx.fillStyle = css(this.c.bone, 0.95);
-    ctx.beginPath();
-    ctx.moveTo(-0.12, 0); ctx.ellipse(-0.58, 0, 0.46, 0.32, 0, 0, TAU);       // gaster
-    ctx.moveTo(-0.03, 0); ctx.arc(-0.1, 0, 0.07, 0, TAU);                    // petiole
-    ctx.moveTo(0.24, 0); ctx.ellipse(0.04, 0, 0.2, 0.12, 0, 0, TAU);         // thorax
-    ctx.moveTo(0.65, 0); ctx.ellipse(0.46, 0, 0.19, 0.17, 0, 0, TAU);        // head
-    ctx.fill();
-    if (tint) {                                                              // staker ant: wallet colour on gaster and thorax
-      ctx.fillStyle = tint;
-      ctx.beginPath();
-      ctx.moveTo(-0.12, 0); ctx.ellipse(-0.58, 0, 0.46, 0.32, 0, 0, TAU);
-      ctx.moveTo(0.24, 0); ctx.ellipse(0.04, 0, 0.2, 0.12, 0, 0, TAU);
-      ctx.fill();
-    }
-    ctx.fillStyle = "rgba(255,255,255,0.2)";
-    ctx.beginPath(); ctx.ellipse(-0.66, -0.1, 0.2, 0.1, 0, 0, TAU); ctx.fill();
-
-    if (crumb) {
-      ctx.fillStyle = css(crumb);
-      ctx.strokeStyle = "rgba(0,0,0,0.55)";
-      ctx.lineWidth = lw * 0.8;
-      ctx.beginPath(); ctx.arc(0.86, 0, 0.24, 0, TAU); ctx.fill(); ctx.stroke();
-    }
+    drawAnt(this.ctx, this.c, { x, y, ang, phase, k: this.S * ANT_SCALE, still: this.still, crumb, tint });
   }
 
   drawSelection(frac, now) {

@@ -1,6 +1,6 @@
 // Recruit the swarm, in the browser: anyone pays a $ANTO fee for a forecast
 // on a market of their choice, and agents are paid from the fee for work,
-// never for being right. Keepers post the market's odds, forecaster agents
+// never for being right. Keepers post the market's odds, agents
 // post their own odds (the Agents colony reads their lower median), and
 // crankers run the three colonies, one per call. All of that happens on the
 // contract; this file is the pure part the pages share: it reads the
@@ -12,7 +12,7 @@
 // Amounts are yocto (BigInt) here, as on chain; the views carry them as
 // decimal strings. The fee size and split come from the `request_config` view.
 
-import { toHex, marketResult, voters, oddsSnapshotHash, KINDS } from "../sim/js/antosim.mjs";
+import { toHex, marketResult, voters, oddsSnapshotHash, KINDS, EQUAL_WEIGHTS } from "../sim/js/antosim.mjs";
 import { marketForecasters, KIND_NAMES } from "./round.mjs";
 import { agentSnapshot } from "./agents.mjs";
 import { chain, hexToBytes, ZERO_HASH } from "./chain.mjs";
@@ -52,6 +52,22 @@ export function feePools(cfg) {
   return { keepers, agents, crank, treasury: cfg.fee - keepers - agents - crank };
 }
 
+// The `.fee-split` block: the fee, one bar part per pool, and a key. `notes`
+// adds the line under each pool; the narrow Add a market panel leaves it out.
+export function feeSplitHTML(cfg, { notes = true } = {}) {
+  const p = feePools(cfg), fee = cfg.fee, part = (x) => (fee ? Number((x * 1000n) / fee) : 0);
+  const parts = [
+    ["keepers", "Keepers", p.keepers, "split among the keepers whose odds were accepted"],
+    ["agents", "Forecaster agents", p.agents, "split among on-time posts; the treasury's if none"],
+    ["crank", "Crankers", p.crank, `${tokens(cfg.crankBounty)} per call × ${CRANK_CALLS} calls`],
+    ["treasury", "Treasury", p.treasury, "the rest, rounding dust included"],
+  ];
+  return `<div class="fee-split__head"><span>Fee <b class="num">${tokens(fee)}</b> $ANTO</span><span class="chip">from the contract</span></div>` +
+    `<div class="fee-split__bar" aria-hidden="true">${parts.map(([k, , x]) => `<span data-fee="${k}" style="--part: ${part(x)}"></span>`).join("")}</div>` +
+    `<ul class="fee-split__key">${parts.map(([k, label, x, note]) =>
+      `<li data-fee="${k}"><span>${label}</span><span class="num">${tokens(x)}</span>${notes ? `<small>${note}</small>` : ""}</li>`).join("")}</ul>`;
+}
+
 // ---- reading a request ----
 
 const ms = (x) => (x == null ? null : Number(x));
@@ -80,6 +96,7 @@ export function specOf(r) {
   const st = stakesOf(r);
   return {
     title: r.market_id, outcomes: m.outcomes, odds: m.odds, odds6h: m.odds_6h,
+    odds1h: m.odds_1h ?? null, odds24h: m.odds_24h ?? null,
     weights: st.weights, stakeHash: hexToBytes(st.hash), wallets: st.wallets,
     agentOdds: { odds: ag.odds, hash: hexToBytes(ag.hash), posts: ag.posts },
   };
@@ -114,12 +131,13 @@ export function verifyRequest(r) {
   const colonies = runs.map((x, k) => ({ kind: k, name: KIND_NAMES[k], chain: r.colony_hashes[k], replay: x.hash, match: x.hash === r.colony_hashes[k] }));
   const m = r.market, n = m.outcomes.length;
   // The snapshots the colonies commit: recompute them from the raw posts.
-  const oddsHash = toHex(oddsSnapshotHash(m.odds, m.odds_6h)) === m.odds_hash;
+  const ext = m.odds_1h && m.odds_24h ? [m.odds_1h, m.odds_24h] : null;
+  const oddsHash = toHex(oddsSnapshotHash(m.odds, m.odds_6h, ext)) === m.odds_hash;
   const posts = r.agents.posts.map(([id, odds]) => ({ id, odds }));
-  const agentsHash = (posts.length ? toHex(agentSnapshot(posts, n).hash) : ZERO_HASH) === r.agents.hash;
+  const agentsHash = (posts.length ? toHex(agentSnapshot(posts, n, r.agents.weights).hash) : ZERO_HASH) === r.agents.hash;
   let market = null, swarm = null;
   if (r.phase === "done" && runs.length === CRANK_CALLS) {
-    const res = marketResult(r.colony, runs, countedOf(r));
+    const res = marketResult(r.colony, runs, countedOf(r), r.colony_weights ?? EQUAL_WEIGHTS);
     market = { chain: r.market_hash, replay: res.hash, match: res.hash === r.market_hash };
     swarm = res.swarm.length === r.swarm.length && res.swarm.every((x, i) => x === r.swarm[i]);
   }
@@ -181,7 +199,7 @@ export function timeline(r, cfg, nowMs = Date.now()) {
     return steps.map((s, i) => ({ ...s, state: i < 2 ? "done" : "now" }));
   }
   steps.push({ key: "final", title: "Odds final", text: "The keepers' median odds are on chain" });
-  steps.push({ key: "agents", title: "Agents post, holders stake", text: `For ${Math.round(cfg.forecastWindowMs / 1000)} seconds, registered forecaster agents post their own odds and holders stake $ANTO on outcomes for Community` });
+  steps.push({ key: "agents", title: "Agents post, holders stake", text: `For ${Math.round(cfg.forecastWindowMs / 1000)} seconds, registered agents post their own odds and holders stake $ANTO on outcomes for Community` });
   KIND_NAMES.forEach((name, k) => steps.push({ key: `crank-${k}`, title: `Crank ${k + 1}: ${name}`,
     text: `${k === 0 ? "Draws the seed, then runs" : "Runs"} the ${name} colony${r.crankers[k] ? ` · ${r.crankers[k]}` : ""}` }));
   steps.push({ key: "done", title: "Result", text: "Swarm belief and market hash stored, fee paid out" });
@@ -277,7 +295,10 @@ export function commands(contract, account, marketId, id = 0, odds = null, mine 
     keeper: `python3 -I keeper/trending.py --request ${id} --market ${quote(marketId)}`,
     signs: {
       request: nearCall(contract, account, "request_forecast", { market_id: marketId }),
-      post: nearCall(contract, account, "post_forecast", { colony: requestColony(id), odds: odds ?? [] }),
+      // Agents commit a hash first and reveal the odds in the window's last
+      // third (docs/FORECAST_QUALITY.md §3); `recruit.py post` makes both calls.
+      post: nearCall(contract, account, "commit_forecast", { colony: requestColony(id), hash: "<sha256 of colony, odds, salt, account>" }),
+      reveal: nearCall(contract, account, "reveal_forecast", { colony: requestColony(id), odds: odds ?? [], salt: "<your 64-hex salt>" }),
       crank: nearCall(contract, account, "crank_request", { request_id: id }, "100.0 Tgas"),
       stake: nearCall(contract, account, "stake", { colony: requestColony(id), option: 0, amount: String(ONE) }),
     },

@@ -53,10 +53,11 @@ export class ColonyThumb {
     this.S = canvas.width / W; // pixels per cell
     this.glyphs = glyphs;
     this.c = {
-      bg: tok("--soil-950"),
+      bg: tok("--earth-900"),          // the map's loam
       bone: rgb(tok("--bone-100")),
-      amberHi: rgb(tok("--amber-300")),
-      amberLo: rgb(tok("--amber-600")),
+      ant: rgb(tok("--ant-body")),      // brown ants
+      amberHi: rgb(tok("--pher-hi")),   // pheromone ramp: strong
+      amberLo: rgb(tok("--pher-lo")),   // pheromone ramp: weak
       opt: glyphs.map((_, i) => tok(`--opt-${i}`)),
     };
     this.font = tok("--font-mono");
@@ -120,11 +121,11 @@ export class ColonyThumb {
     const g = b.getContext("2d"), { S, c } = this;
     const nx = (NEST_X + 0.5) * S, ny = (NEST_Y + 0.5) * S;
     const grad = g.createRadialGradient(nx, ny, 0, nx, ny, b.width * 0.6);
-    grad.addColorStop(0, tok("--soil-700"));
+    grad.addColorStop(0, tok("--earth-700"));
     grad.addColorStop(1, c.bg);
     g.fillStyle = grad;
     g.fillRect(0, 0, b.width, b.height);
-    g.fillStyle = css(c.bone, 0.16);
+    g.fillStyle = "rgba(0,0,0,0.14)";
     const d = Math.max(1, S * 0.6);
     for (let y = 3; y < H; y += 6) for (let x = 3; x < W; x += 6) g.fillRect(x * S, y * S, d, d);
     this.bare = b;
@@ -155,7 +156,7 @@ export class ColonyThumb {
         ctx.moveTo(x + rr * k, y);
         ctx.arc(x, y, rr * k, 0, TAU);
       }
-      ctx.fillStyle = css(c.bone, lag ? 0.32 - lag : 0.9);
+      ctx.fillStyle = css(c.ant, lag ? 0.4 - lag : 0.95);
       ctx.fill();
     }
   }
@@ -184,13 +185,13 @@ export class ColonyThumb {
       ctx.fillText(this.glyphs[o], x, y + S * 0.3);
     }
 
-    // Ants: loaded ones bright, foragers dimmer, staker ants in their
+    // Ants: loaded ones solid, foragers fainter, staker ants in their
     // wallet's tint on top.
     const r = Math.max(1, S * 0.6), { owner } = this;
     const at = (a) => [(this.prevX[a] + (this.curX[a] - this.prevX[a]) * frac) / 256 * S,
       (this.prevY[a] + (this.curY[a] - this.prevY[a]) * frac) / 256 * S];
     for (const pass of [0, 1]) {
-      ctx.fillStyle = css(c.bone, pass ? 0.95 : 0.55);
+      ctx.fillStyle = css(c.ant, pass ? 0.95 : 0.6);
       ctx.beginPath();
       for (let a = 0; a < col.ants; a++) {
         if (col.returning[a] !== pass || (owner && owner[a] >= 0)) continue;

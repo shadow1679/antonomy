@@ -1,0 +1,172 @@
+/* Daily Pot page (web/pot.html, docs/DAILY_POT_PAGE.md). v1 "Nest and
+   ledger": the colony is the main view; everything around it is a ledger.
+   Amber only on the one primary action; burn and share are bone tones that
+   differ by form as well as tone, never red or green (burn is not a fault).
+   An estimate is dashed, never in the large number type. */
+
+body.page-pot main { padding-bottom: var(--space-8); }
+body.page-pot .eyebrow { margin: 0; }
+
+/* ---- page head: title and rule sentence, the one clock at the right ---- */
+.pot-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: var(--space-4) var(--space-7); padding-block: var(--space-6) var(--space-5); }
+.pot-head__text { flex: 1 1 32rem; min-width: 0; }
+.pot-head h1 { margin: var(--space-1) 0 var(--space-3); font-size: clamp(1.75rem, 1.2rem + 1.5vw, var(--text-2xl)); line-height: 1.1; }
+.pot-head__rule { margin: 0; max-width: 62ch; color: var(--text); font-size: var(--text-md); line-height: 1.5; text-wrap: pretty; }
+.pot-head__meta { margin: var(--space-2) 0 0; font-size: var(--text-xs); color: var(--text-faint); }
+.pot-head__clock { display: grid; justify-items: end; gap: 2px; text-align: right; }
+.pot-head__clock .eyebrow { white-space: nowrap; }
+.pot-head__clock .num-lg { color: var(--text); }
+
+/* ---- the day: five steps, the current one filling (the page's one
+   progress bar), then one line ---- */
+.pot-day { display: grid; gap: var(--space-3); padding-block: var(--space-4); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.pot-day .stepper__steps > li[aria-current]::before { background: linear-gradient(to right, var(--bone-100) var(--p, 100%), var(--border) var(--p, 100%)); }
+.pot-day .stepper__steps > li[data-state="stalled"]::before { background: var(--pattern-hatch); }
+.pot-day__line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.pot-day__line > span { flex: 1 1 28rem; }
+.pot-banners:not(:empty) { display: grid; gap: var(--space-2); padding-top: var(--space-4); }
+
+/* ---- the main grid: the colony beside the stake card and your part ---- */
+.pot-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
+  gap: var(--space-5) var(--space-6);
+  align-items: start;
+  padding-block: var(--space-5) var(--space-6);
+}
+.pot-side { display: grid; gap: var(--space-4); min-width: 0; }
+
+/* ---- today's pot: a strip at the top of the stake card ---- */
+.pot-card { display: grid; gap: var(--space-2); padding-bottom: var(--space-4); border-bottom: 1px solid var(--border); }
+.pot-card__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
+.pot-card__head h2, .pot-card__head h3 { margin: 0; font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 500; letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-muted); }
+.stake-card > .pot-card__head h2 { font-family: var(--font-sans); font-size: var(--text-md); letter-spacing: 0; text-transform: none; color: var(--text); font-weight: 600; }
+.pot-card__lead { margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.pot-card__lead b { color: var(--text); font-weight: 600; }
+.pot-card__nums { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin: 0; }
+.pot-card__num { display: grid; gap: 2px; min-width: 0; padding-left: var(--space-3); border-left: 3px solid var(--bone-300); }
+.pot-card__num[data-part="share"] { border-left-color: var(--bone-100); }
+.pot-card__num dt { font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-muted); }
+.pot-card__num dd { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-1); color: var(--text); }
+.pot-card__num .est, .pot-card__num .num { font-family: var(--font-mono); font-size: var(--text-md); line-height: var(--lh-md); }
+.pot-card__unit { font-size: var(--text-xs); color: var(--text-faint); }
+.pot-card__tense { margin-left: 2px; padding: 0 4px; border: 1px dashed var(--border-strong); border-radius: 2px; font-size: var(--text-2xs); letter-spacing: 0; text-transform: none; color: var(--text-muted); }
+.pot-card__cond { margin: 0; font-size: var(--text-xs); line-height: var(--lh-xs); color: var(--text-faint); }
+.pot-card__action { display: grid; gap: var(--space-1); justify-items: start; }
+.pot-card__action .btn { width: 100%; }
+.pot-card__last { margin: 0; padding-top: var(--space-2); border-top: 1px dashed var(--border); font-size: var(--text-xs); line-height: var(--lh-xs); color: var(--text-muted); }
+.pot-card__last .pill { margin-right: var(--space-1); }
+.pot-card__last .num { color: var(--text); font-weight: 500; }
+
+/* An estimate: "≈" and the value with a dashed underline; the word
+   "estimate" sits in the label or the note beside it. */
+.est { font-family: var(--font-mono); text-decoration: underline dashed var(--border-strong); text-underline-offset: 4px; text-decoration-thickness: 1px; }
+.est[title] { cursor: help; }
+
+/* ---- the stage ---- */
+.pot-stage { display: grid; gap: var(--space-3); min-width: 0; }
+.pot-stage .stage__head { justify-content: space-between; }
+.pot-stage__label { display: inline-flex; gap: var(--space-2); align-items: center; padding: 2px var(--space-2); border: 1px dashed var(--border-strong); border-radius: var(--radius-data); font-size: var(--text-xs); color: var(--text-muted); }
+.pot-stage.is-waiting .sim-frame canvas { opacity: 0.35; }
+.pot-live { display: grid; gap: var(--space-3); }
+.pot-live__bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.day-track { position: relative; flex: 1 1 14rem; min-width: 10rem; height: 30px; }
+.day-track__rail { position: absolute; left: 0; right: 0; top: 6px; height: 6px; border-radius: 3px; background: var(--bg-canvas); box-shadow: inset 0 0 0 1px var(--border); overflow: hidden; }
+.day-track__fill { position: absolute; inset: 0 auto 0 0; width: calc(var(--shown, 0) * 1%); background: var(--bone-500); }
+.day-track__chain { position: absolute; top: 2px; height: 14px; left: calc(var(--chain, 0) * 1%); width: 2px; margin-left: -1px; background: var(--bone-100); }
+.day-track__label { position: absolute; bottom: 0; font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-faint); white-space: nowrap; }
+.day-track__label--chain { left: clamp(0%, calc(var(--chain, 0) * 1%), calc(100% - 9.5rem)); }
+.pot-live__speed { font-family: var(--font-mono); white-space: nowrap; }
+.pot-live__bar .seg { margin-left: auto; }
+.stage-summary { margin: 0; max-width: 72ch; font-size: var(--text-sm); color: var(--text-muted); }
+/* Staker ants: open, a grid of wallets under the map. */
+.pot-roster { padding-top: var(--space-4); border-top: 1px solid var(--border); }
+.pot-roster .chamber__header { margin-bottom: var(--space-2); }
+.pot-roster__hint { margin: 0 0 var(--space-3); }
+#roster .pot-roster__hint { margin: var(--space-3) 0 0; }
+
+/* Your stakes, under the wallets: the share, the lock and Withdraw. */
+.pot-roster .nest { margin-bottom: var(--space-3); padding: var(--space-4); gap: 6px; }
+.pot-yours { display: grid; gap: var(--space-2); margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border); }
+.pot-yours .chamber__header { margin: 0; }
+.mine__note { display: block; margin: 0; font-size: var(--text-xs); color: var(--text-muted); }
+.mine__last { margin: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-data); font-size: var(--text-sm); color: var(--text); }
+.mine__last .pill { margin-right: var(--space-1); }
+.mine__stakes { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; font-size: var(--text-sm); }
+.mine__stakes li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.mine__stakes li .btn { margin-left: auto; }
+.mine__stakes .why { flex-basis: 100%; margin: 0; }
+.mine__stakes .mine__note { display: inline; }
+.mine__lock { margin: 0; font-size: var(--text-xs); color: var(--text-muted); }
+
+/* ---- the stake card: the five sizes as a list, then the amount ---- */
+.stake-card { display: grid; gap: var(--space-4); }
+.stake-card form { display: grid; gap: var(--space-4); }
+.stake-card .option-cards { gap: var(--space-1); }
+.stake-card .option-cards--list .option-card,
+.stake-card .option-cards--list .option-card:has(input:checked) {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "chip label meta" "chip facts facts";
+  gap: 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
+.stake-card .option-card > .opt-chip { grid-area: chip; align-self: center; }
+.stake-card .option-card > .option-card__label { grid-area: label; display: flex; align-items: baseline; gap: var(--space-2); font-family: var(--font-mono); font-weight: 500; }
+.stake-card .option-card > .option-card__meta { grid-area: meta; display: grid; justify-items: end; font-family: var(--font-mono); color: var(--text-muted); }
+.stake-card .option-card > .option-card__facts { grid-area: facts; text-align: left; font-family: var(--font-mono); color: var(--text-muted); }
+.stake-card .option-card:has(input:checked)::after { content: none; }
+.stake-card .option-card:has(input:checked) .option-card__label::before { content: "✓"; order: 2; font-size: var(--text-xs); color: var(--text); }
+.stake-card .option-card--picked::after { content: none; }
+.pot-sizes-head { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: var(--space-3); margin: 0 0 2px; padding-inline: var(--space-3); font-size: var(--text-2xs); color: var(--text-faint); }
+.pot-tag:empty { display: none; }
+.pot-tag { order: 1; padding: 0 5px; border: 1px solid var(--border-strong); border-radius: 2px; font-family: var(--font-sans); font-size: var(--text-2xs); font-weight: 400; color: var(--text); }
+.pot-mine { font-size: var(--text-2xs); color: var(--text); }
+.stake-card .stake { display: grid; gap: var(--space-3); }
+.stake__go { display: grid; gap: var(--space-1); }
+.stake__go .btn { width: 100%; }
+.stake__note { margin: 0; }
+.pot-how { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4) var(--space-6); font-size: var(--text-sm); color: var(--text-muted); }
+.pot-how p { margin: 0; }
+.pot-how b { color: var(--text); }
+
+/* ---- receipts and your days ---- */
+.pot-two { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--space-6) var(--space-7); align-items: start; }
+.day-receipts__kv { margin-bottom: var(--space-4); }
+.day-receipts__kv dd .why { display: block; }
+.my-days__life { margin: var(--space-3) 0 0; font-size: var(--text-sm); color: var(--text); }
+.my-days__table .why { display: block; }
+
+/* ---- 960 and below: one column; the colony, then the stake card ---- */
+@media (max-width: 960px) {
+  .pot-head { padding-block: var(--space-4) var(--space-3); }
+  .pot-grid { grid-template-columns: minmax(0, 1fr); padding-top: var(--space-4); }
+  .pot-how, .pot-two { grid-template-columns: minmax(0, 1fr); }
+}
+/* 390: the stepper names only the current step; the clock sits under the
+   title; the map runs full bleed. */
+@media (max-width: 600px) {
+  .pot-head { padding-block: var(--space-3); gap: var(--space-2); }
+  .pot-head h1 { margin-bottom: var(--space-2); }
+  .pot-head__rule { font-size: var(--text-base); }
+  .pot-head__meta { display: none; }
+  .pot-head__clock { grid-auto-flow: column; justify-content: start; align-items: baseline; gap: var(--space-2); text-align: left; }
+  .pot-head__clock .num-lg { font-size: var(--text-lg); }
+  .pot-day { padding-block: var(--space-2) var(--space-3); gap: var(--space-2); }
+  .pot-day__line { font-size: var(--text-xs); }
+  .pot-grid { padding-top: var(--space-3); }
+  .pot-grid .chamber { padding: var(--space-4); }
+  .pot-day .stepper__steps b { font-size: 0; }
+  .pot-day .stepper__steps b::before { font-size: var(--text-xs); }
+  .pot-day .stepper__steps li[aria-current] b { font-size: var(--text-xs); overflow: visible; }
+  .pot-day .stepper__at { display: none; }
+  .pot-grid > .pot-stage .sim-frame { margin-inline: calc(-1 * var(--gutter)); border-radius: 0; }
+  .pot-card__nums { gap: var(--space-2); }
+  /* Tables become one block per row: no sideways scroll (1.4.10). */
+  #history .table thead, .my-days__table thead { display: none; }
+  #history .table, #history .table tbody, #history .table tr, .my-days__table, .my-days__table tbody, .my-days__table tr { display: block; }
+  #history .table tr, .my-days__table tr { display: grid; grid-template-columns: auto 1fr; gap: var(--space-1) var(--space-3); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border); }
+  #history .table th, #history .table td, .my-days__table th, .my-days__table td { display: block; padding: 0; border: 0; text-align: left; }
+  #history .table td[colspan], #history .table td:nth-last-child(-n+2) { grid-column: 1 / -1; }
+  #history .table td.num::before, .my-days__table td::before { content: attr(data-label) " "; font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-faint); text-transform: uppercase; letter-spacing: var(--tracking-caps); }
+  #history .table caption { display: block; }
+}

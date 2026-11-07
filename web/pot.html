@@ -3,262 +3,156 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Antonomy · Burn: the daily pot</title>
+<title>Antonomy · Daily Pot: how much burns, how much is shared</title>
+<meta name="description" content="Every day an ant colony picks how big the daily $ANTO pot is, from 0.10% to 2.00% of the treasury. Most of it burns; 0.08% to 0.16% is shared with the stakers on the size it picks. Testnet play token.">
+<link rel="icon" href="brand/favicon.ico" sizes="32x32">
+<link rel="icon" href="brand/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
+<meta name="theme-color" content="#14100c">
 <link rel="stylesheet" href="app.css">
-<style>
-  .scent-table th, .scent-table td { padding-inline: var(--space-2); }
-  .burn-grid[hidden] { display: none; }
-  .nest__ant--others { background: var(--text-muted); }
-  .tx-status { margin: var(--space-4) 0 0; }
-  [hidden] { display: none !important; }
-  .own-stakes { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
-  .own-stakes li { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
-  .own-stakes .num { margin-inline-start: auto; }
-  .prev-grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); align-items: start; }
-</style>
+<link rel="stylesheet" href="pot.css">
 </head>
-<body>
+<body class="page-pot">
 <div id="topbar"></div>
 
 <main>
-  <div class="page-head container">
-    <div class="page-head__split">
-      <div class="page-head__title">
-        <p class="eyebrow">Burn colony · testnet play token</p>
-        <h1>One pot a day. The ants pick the size.</h1>
-      </div>
-      <p class="lede">Stake on a pot size before 12:00 UTC. The colony picks one at 24:00; its stakers share a small reward and the rest is burned. <a class="what" href="docs.html#burn">How it works</a></p>
+  <header class="pot-head container">
+    <div class="pot-head__text">
+      <p class="eyebrow"><span id="day-id">Daily pot</span> · <span id="day-date">UTC</span></p>
+      <h1>Daily Pot</h1>
+      <p class="pot-head__rule">Every day an ant colony picks how big today's pot is, from five sizes. Most of it burns. A small part is shared with the stakers on the size it picks.</p>
+      <p class="pot-head__meta">Testnet play token. No mainnet. <a class="what" href="docs.html#burn">How it works</a></p>
     </div>
-  </div>
+    <div class="pot-head__clock"><span class="eyebrow" id="clock-label">UTC</span><span class="num-lg" id="clock">…</span></div>
+  </header>
 
-  <div class="container">
-
-    <section class="chamber day-strip" aria-labelledby="dc-title">
-      <div class="day-strip__id">
-        <h2 class="chamber__title" id="dc-title">Day <span class="num" id="dc-date">…</span></h2>
-        <span class="chip" id="dc-phase">…</span>
-      </div>
-      <div class="round-bar" style="--run: 50">
-        <div class="round-progress" id="dc-progress" role="progressbar" aria-label="Day progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="round-progress__fill"></span></div>
-        <ol class="day-steps" id="dc-steps">
-          <li><span class="num">00:00</span> stake</li>
-          <li><span class="num">12:00</span> seed, run</li>
-          <li><span class="num">24:00</span> pot pays</li>
-        </ol>
-      </div>
-      <dl class="round-card__clocks">
-        <div><dt id="dc-left-label">Pot pays in</dt><dd class="num" id="dc-left">…</dd></div>
-        <div><dt>Treasury</dt><dd class="num" id="dc-treasury">…</dd></div>
-      </dl>
-      <dl class="day-facts">
-        <div><dt>Last pot</dt><dd id="dc-last"><span class="text-faint">loading…</span></dd></div>
-        <div><dt>Day seed</dt><dd id="dc-seed"></dd></div>
-        <div><dt>History</dt><dd><a href="#history">past pots ↓</a></dd></div>
-      </dl>
-    </section>
-    <div class="notice notice--danger" id="net-error" role="alert" hidden><p id="net-error-text"></p></div>
-    <div class="notice tx-status" id="tx-status" role="status" aria-live="polite" hidden><p id="tx-text"></p></div>
-
-    <!-- The newest run of an earlier day: its result, checked here, and the burn itself. -->
-    <section class="chamber" id="prev" aria-labelledby="prev-title" hidden>
-      <div class="chamber__header">
-        <h3 class="chamber__title" id="prev-title">Last colony</h3>
-        <span class="chip" id="prev-chip">…</span>
-      </div>
-      <div class="prev-grid">
-        <div id="prev-body"></div>
-        <dl class="kv text-xs" id="prev-facts"></dl>
-      </div>
-    </section>
-  </div>
-
-  <section class="page-section" id="sugar" aria-labelledby="sugar-title">
-    <div class="container">
-      <div class="section-head">
-        <h2 id="sugar-title">Stake sugar</h2>
-        <span class="chip" id="sugar-chip">…</span>
-        <a class="what spacer" href="docs.html#sugar">When sugar counts</a>
-      </div>
-      <p class="section-sub" id="sugar-sub"></p>
-      <div class="workbench workbench--controls-first">
-        <div class="workbench__col workbench__col--sticky">
-        <form class="chamber stack" id="form" novalidate>
-          <div class="chamber__header" style="margin: 0">
-            <h3 class="chamber__title">Your sugar</h3>
-            <span class="chip" id="me-chip">no wallet</span>
-          </div>
-          <p class="text-sm text-muted" style="margin: 0" id="me-line">Connect a NEAR testnet wallet to stake. A new wallet claims free play tokens first.</p>
-          <ul class="own-stakes" id="own-stakes" hidden></ul>
-          <fieldset class="option-cards option-cards--list" id="options" style="border: 0; padding: 0; margin-inline: 0; min-width: 0">
-            <legend class="field__label" style="margin-bottom: var(--space-2)">Pot size to back</legend>
-          </fieldset>
-          <div class="stake field">
-            <label class="field__label" for="stake-num">Sugar</label>
-            <div class="stake__row">
-              <input class="range" type="range" id="stake-range" min="0" step="1" aria-label="Sugar amount">
-              <div class="input-group"><input class="input num" type="number" id="stake-num" min="0" step="1"><span class="input-group__suffix">$ANTO</span></div>
-            </div>
-            <dl class="stake__readout">
-              <div><dt>Sugar</dt><dd class="num" id="r-stake">0</dd></div>
-              <div><dt>Weight √</dt><dd class="num is-accent" id="r-weight">0.0</dd></div>
-              <div><dt>Cap used</dt><dd class="num" id="r-cap">0%</dd></div>
-            </dl>
-            <span class="field__hint" id="cap-hint"></span>
-          </div>
-          <div class="cluster">
-            <button class="btn btn--primary" type="submit" id="stake-btn">Connect wallet to stake</button>
-            <button class="btn" type="button" id="drop" disabled>Preview</button>
-            <button class="btn btn--ghost" type="button" id="skip" disabled>Skip to the end</button>
-          </div>
-          <p class="text-xs text-faint" style="margin-bottom: 0" id="rule-line"></p>
-          <p class="text-xs text-faint" style="margin-bottom: 0">Stake sends a real testnet transaction (play tokens). Preview only runs a short colony in your browser and sends nothing. <a class="what" href="docs.html#sugar">More</a></p>
-          <p class="text-xs text-muted" style="margin: 0">Running an agent? <a href="recruit.html">Recruit the swarm</a>: request forecasts, post your own odds or crank the colonies, paid from the fee for the work.</p>
-        </form>
-        </div>
-
-        <div class="workbench__col">
-        <div class="section-head" style="margin: 0">
-          <h3 style="margin: 0" id="map-title">Preview: with and without</h3>
-          <span class="chip" id="run-chip">ready</span>
-        </div>
-        <div class="chamber" role="status" aria-live="polite" id="verdict"><p class="text-sm text-muted" style="margin: 0">Choose an amount to compare both colonies.</p></div>
-        <div class="tiles">
-          <div class="chamber tile" id="side-without">
-            <div class="chamber__header"><h4 class="chamber__title">Without your sugar</h4><span class="eyebrow" data-r="share-tick">tick 0</span></div>
-            <div class="sim-frame">
-              <canvas width="720" height="480" aria-label="Burn colony without your sugar"></canvas>
-              <div class="sim-frame__hud"><span class="sim-frame__tick">tick <strong data-r="tick">0000</strong>/0800</span><span class="sim-frame__tick" data-r="leader">no trail yet</span></div>
-            </div>
-            <ul class="share-bars share-bars--compact" data-r="bars"></ul>
-            <div data-r="result"></div>
-          </div>
-          <div class="chamber tile" id="side-with">
-            <div class="chamber__header"><h4 class="chamber__title">With your sugar</h4><span class="eyebrow" data-r="share-tick">tick 0</span></div>
-            <div class="sim-frame">
-              <canvas width="720" height="480" aria-label="Burn colony with your sugar"></canvas>
-              <div class="sim-frame__hud"><span class="sim-frame__tick">tick <strong data-r="tick">0000</strong>/0800</span><span class="sim-frame__tick" data-r="leader">no trail yet</span></div>
-            </div>
-            <ul class="share-bars share-bars--compact" data-r="bars"></ul>
-            <div data-r="result"></div>
-          </div>
-        </div>
-        <p class="text-xs text-faint" style="margin: 0">Your ants are tinted as <span class="wallet" style="--wallet-hue: 0" id="you-tint">you</span> and glow on the map with your sugar; every other wallet is one grey group, since the contract lists stakers only once the day freezes. One seed is one draw. <a class="what" href="docs.html#sugar">Why</a></p>
-
-        <details class="chamber scent-more">
-          <summary><h4 class="chamber__title">Scent, with and without</h4><span class="eyebrow">food richness per option</span></summary>
-          <div class="table-wrap">
-            <table class="table scent-table">
-              <thead><tr><th scope="col">Option</th><th scope="col" class="num">Weight</th><th scope="col" class="num">+ sugar</th><th scope="col" class="num">Scent</th><th scope="col" class="num">+ sugar</th></tr></thead>
-              <tbody id="scent"></tbody>
-            </table>
-          </div>
-          <p class="text-xs text-faint" style="margin: var(--space-3) 0 0"><span id="sqrt-note"></span> <a class="what" href="docs.html#scent">How to read this</a></p>
-        </details>
-        </div>
-      </div>
-    </div>
+  <!-- The day: five steps, the current one filling. The page's one progress bar. -->
+  <section class="pot-day container" aria-label="Where the day is">
+    <ol class="stepper__steps" id="steps" aria-label="The day's steps">
+      <li data-state="next"><b>Staking</b><span class="stepper__at">00:00–12:00</span></li>
+      <li data-state="next"><b>Seed</b><span class="stepper__at">12:00 · drand</span></li>
+      <li data-state="next"><b>Colony runs</b><span class="stepper__at">12:00–24:00</span></li>
+      <li data-state="next"><b>Final tick</b><span class="stepper__at">24:00 · pick known</span></li>
+      <li data-state="next"><b>Paid</b><span class="stepper__at">from 24:00 · anyone can run</span></li>
+    </ol>
+    <p class="pot-day__line"><span id="day-line">Reading the contract…</span><button class="btn btn--sm btn--ghost" type="button" data-act="crank" id="crank-btn" hidden>Crank now</button></p>
   </section>
+  <div class="container pot-banners" id="banners"></div>
 
-  <section class="page-section" id="colony" aria-labelledby="colony-title">
-    <div class="container">
-      <div class="section-head">
-        <h2 id="colony-title">Today's colony</h2>
-        <span class="chip" id="colony-chip">…</span>
-        <a class="what spacer" href="docs.html#burn-day">How the day runs</a>
+  <div class="container pot-grid">
+    <section class="pot-stage" id="stage" aria-labelledby="stage-title">
+      <div class="stage__head">
+        <h2 class="stage__name" id="stage-title">Pot colony</h2>
+        <span class="stage__what" id="stage-what"></span>
       </div>
-      <p class="visually-hidden" role="status" aria-live="polite" id="announce"></p>
-      <!-- 00:00 to 12:00 UTC: staking. No map until the seed is drawn. -->
-      <div class="burn-grid" id="stake-view" hidden>
-        <div class="chamber">
-          <div class="chamber__header">
-            <h3 class="chamber__title">At the nest</h3>
-            <span class="chip" id="nest-chip">…</span>
-          </div>
-          <div class="nest" id="nest" role="img"></div>
-          <p class="text-xs text-faint" style="margin: var(--space-3) 0 0" id="nest-note"></p>
-          <div class="nest-stakers">
-            <div class="chamber__header"><h4 class="eyebrow" style="margin: 0" id="stakers-title">Today's stakes</h4><a class="what" href="docs.html#closing">Close at 12:00</a></div>
-            <div class="staker-grid" id="stake-stakers"></div>
-          </div>
-          <div class="cluster" id="wait-actions" hidden style="margin-top: var(--space-4)">
-            <button class="btn btn--primary" type="button" data-act="crank">Send the first crank</button>
-            <span class="text-xs text-muted">Anyone can. It draws the seed and starts the colony.</span>
-          </div>
-        </div>
-        <div class="chamber">
-          <div class="chamber__header">
-            <h3 class="chamber__title" id="scent-title">Scent so far</h3>
-            <span class="eyebrow">food richness</span>
-          </div>
-          <div class="table-wrap">
-            <table class="table scent-table">
-              <thead><tr><th scope="col">Option</th><th scope="col" class="num">Sugar</th><th scope="col" class="num">Weight</th><th scope="col" class="num">Scent</th></tr></thead>
-              <tbody id="stake-scent"></tbody>
-            </table>
-          </div>
-          <p style="margin: var(--space-4) 0 0"><a class="what" href="docs.html#scent">How to read this</a></p>
-        </div>
-      </div>
-      <!-- 12:00 to 24:00 UTC: the run, one tick a second. -->
-      <div class="burn-grid" id="run-view">
-        <div class="sim-frame">
-          <canvas id="burn-canvas" width="1440" height="960" aria-label="Burn colony map, live. Click an ant to follow it."></canvas>
+      <p class="pot-stage__label" id="stage-label" hidden></p>
+      <!-- One map. Before the seed: the sample map, ants wandering, nothing collected.
+           From the seed: the day's real run, following the clock, one tick a second. -->
+      <div class="pot-live" id="live">
+        <div class="sim-frame" role="img" aria-label="Pot colony map" aria-describedby="stage-summary">
+          <canvas id="live-canvas" width="1440" height="960" aria-hidden="true"></canvas>
           <div class="sim-frame__hud">
-            <span class="sim-frame__tick">tick <strong data-r="tick">00000</strong>/<span data-r="ticks">43200</span></span>
-            <span class="sim-frame__tick" data-r="leader">no trail yet</span>
-          </div>
-          <span class="sim-frame__tick sim-frame__hint" id="follow-hint">click an ant to follow it</span>
-        </div>
-        <div class="burn-grid__side">
-          <div class="chamber">
-            <div class="chamber__header">
-              <h3 class="chamber__title">Leading now</h3>
-              <span class="chip" data-r="pick-chip">tick 0</span>
-            </div>
-            <div class="pick" data-state="pending">
-              <p class="pick__value" data-r="pick-value">no trail yet</p>
-              <p class="text-sm text-muted" style="margin: 0" data-r="pick-note"></p>
-            </div>
-            <div class="burn-split">
-              <p class="eyebrow" style="margin: 0 0 var(--space-3)">Trail share so far</p>
-              <ul class="share-bars" data-r="bars"></ul>
-              <p style="margin: var(--space-4) 0 0"><a class="what" href="docs.html#trail-share">How to read this</a></p>
-            </div>
-            <p class="text-xs text-muted" style="margin: var(--space-3) 0 0" data-r="chain-note"></p>
-          </div>
-          <div class="chamber" id="follow-box">
-            <div class="chamber__header"><h3 class="chamber__title">Follow an ant</h3><a class="what" href="docs.html#autopsy">Ant autopsy</a></div>
-            <div id="follow" aria-live="polite"></div>
-          </div>
-          <div class="chamber">
-            <div class="chamber__header"><h3 class="chamber__title">Today's staker ants</h3><a class="what" href="docs.html#closing">Frozen at 12:00</a></div>
-            <p class="text-xs text-faint" style="margin: 0 0 var(--space-3)">Hover a wallet to light up its ants on the map, click to keep the light on.</p>
-            <div data-r="stakers"></div>
+            <span class="sim-frame__tick" id="hud-left">sample map</span>
+            <span class="sim-frame__tick" id="hud-right"></span>
           </div>
         </div>
+        <div class="pot-live__bar">
+          <button class="btn btn--sm" type="button" id="live-pause" aria-pressed="false">‖ Pause</button>
+          <div class="day-track" id="live-track" aria-hidden="true" hidden><div class="day-track__rail"><span class="day-track__fill"></span></div><span class="day-track__chain"></span><span class="day-track__label day-track__label--chain" id="live-chain">chain</span></div>
+          <span class="pot-live__speed text-xs text-faint" id="live-speed">1×</span>
+          <div class="seg" role="group" aria-label="Map view"><button type="button" aria-pressed="true" data-view="nest">Nest</button><button type="button" aria-pressed="false" data-view="cells">Cells</button></div>
+          <a class="what" id="live-replay" href="replay.html?colony=burn" hidden>Replay from tick 0 ↗</a>
+        </div>
+      </div>
+      <p class="stage-summary" id="stage-summary" aria-live="polite" aria-atomic="true">The colony runs from 12:00 to 24:00 UTC, one tick a second, from a seed drawn from drand. Before 12:00 the map shows a sample map; its ants wander and collect nothing.</p>
+      <div class="pot-roster">
+        <div class="chamber__header"><h3 class="chamber__title" id="roster-title">Staker ants</h3><span class="chip" id="roster-chip">…</span></div>
+        <!-- Every ant in the colony, one dot each; a wallet's stake tints its ants. -->
+        <div class="nest" id="nest" role="img"></div>
+        <p class="text-xs text-faint pot-roster__hint" id="nest-note">Each dot is one of the colony's ants. A wallet's stake hatches ants in its colour; the grey ones belong to nobody. Hover a wallet to light up its ants here and on the map; click to keep the light on.</p>
+        <div class="staker-grid" id="roster"></div>
+        <!-- Your stakes: what each would share, the lock and Withdraw. -->
+        <div class="pot-yours" id="mine" hidden>
+          <div class="chamber__header"><h4 class="eyebrow" style="margin: 0">Your stakes</h4><span class="wallet" id="mine-who"></span></div>
+          <ul class="mine__stakes" id="mine-stakes"></ul>
+          <p class="mine__note" id="mine-later" hidden></p>
+          <p class="mine__lock" id="mine-lock" hidden></p>
+          <div id="mine-last"></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="pot-side">
+      <section class="stake-card chamber" id="sizes" aria-labelledby="sizes-title">
+        <header class="pot-card__head"><h2 id="sizes-title">Stake on a size</h2><span class="chip" id="sizes-chip">drop sugar</span></header>
+        <!-- Today's pot: the two numbers first, so a screen reader reaches the answer first. -->
+        <div class="pot-card" id="pot" data-tense="rule">
+          <div class="pot-card__head"><h3 id="pot-title">Today's pot</h3><a class="what" href="docs.html#burn">Who decides</a></div>
+          <dl class="pot-card__nums">
+            <div class="pot-card__num" data-part="burn"><dt>Burn</dt><dd><span class="num">0.02–1.84%</span><span class="pot-card__unit"> of the treasury</span></dd></div>
+            <div class="pot-card__num" data-part="share"><dt>Share</dt><dd><span class="num">0.08–0.16%</span><span class="pot-card__unit"> of the treasury</span></dd></div>
+          </dl>
+          <p class="pot-card__lead">The colony picks the size at 24:00 UTC: most of the pot burns, a small part is shared with the stakers on that size.</p>
+        </div>
+        <form id="form" novalidate>
+          <fieldset class="option-cards option-cards--list" id="options">
+            <legend class="visually-hidden">Pot size to stake on</legend>
+            <p class="pot-sizes-head"><span>Size · burn and share if picked, $ANTO</span><span>staked</span></p>
+          <label class="option-card" data-opt="0"><input type="radio" name="size" value="0"><span class="opt-chip"></span><span class="option-card__label">0.10%<span class="pot-tag" data-r="tag"></span></span><span class="option-card__meta" data-r="staked"></span><span class="option-card__facts" data-r="amts">burn 0.02% · share 0.08% of the treasury</span></label>
+          <label class="option-card" data-opt="1"><input type="radio" name="size" value="1"><span class="opt-chip"></span><span class="option-card__label">0.25%<span class="pot-tag" data-r="tag"></span></span><span class="option-card__meta" data-r="staked"></span><span class="option-card__facts" data-r="amts">burn 0.15% · share 0.10% of the treasury</span></label>
+          <label class="option-card" data-opt="2"><input type="radio" name="size" value="2" checked><span class="opt-chip"></span><span class="option-card__label">0.50%<span class="pot-tag" data-r="tag"></span></span><span class="option-card__meta" data-r="staked"></span><span class="option-card__facts" data-r="amts">burn 0.38% · share 0.12% of the treasury</span></label>
+          <label class="option-card" data-opt="3"><input type="radio" name="size" value="3"><span class="opt-chip"></span><span class="option-card__label">1.00%<span class="pot-tag" data-r="tag"></span></span><span class="option-card__meta" data-r="staked"></span><span class="option-card__facts" data-r="amts">burn 0.86% · share 0.14% of the treasury</span></label>
+          <label class="option-card" data-opt="4"><input type="radio" name="size" value="4"><span class="opt-chip"></span><span class="option-card__label">2.00%<span class="pot-tag" data-r="tag"></span></span><span class="option-card__meta" data-r="staked"></span><span class="option-card__facts" data-r="amts">burn 1.84% · share 0.16% of the treasury</span></label>
+            <p class="option-cards__cap">The contract caps the pot at 2.00%. The handicap scales a size's food, stakes included, so bigger pots are harder to pick.</p>
+          </fieldset>
+          <div class="stake" id="stake">
+            <fieldset>
+              <legend class="field__label" style="margin-bottom: var(--space-2)">Amount</legend>
+              <div class="stake__amount">
+                <input class="range" type="range" id="st-range" min="0" max="100" value="0" aria-label="Amount in $ANTO">
+                <div class="input-group"><input class="input num" id="st-num" type="number" min="0" step="1" value="0" inputmode="numeric" aria-describedby="st-err"><span class="input-group__suffix">$ANTO</span></div>
+                <div class="stake__picks"><button type="button" data-v="10">10</button><button type="button" data-v="25">25</button><button type="button" data-v="max">Max</button></div>
+              </div>
+              <p class="field__error" id="st-err" role="alert" hidden></p>
+            </fieldset>
+            <div class="budget" id="budget" hidden>
+              <div class="budget__bar" aria-hidden="true"><span data-part="locked"></span><span data-part="elsewhere"></span><span data-part="this"></span><span data-part="over"></span><span data-part="free"></span></div>
+              <p class="budget__text" id="b-text"></p>
+              <ul class="budget__key"><li data-part="locked">on the pot</li><li data-part="elsewhere">markets, requests</li><li data-part="this">this stake</li><li data-part="free">free</li></ul>
+            </div>
+            <p class="stake__weight" id="st-weight">Weight is the square root of your stake on a size: 25 → 5, 100 → 10.</p>
+            <div class="influence" id="st-infl"><div class="influence__track" aria-hidden="true"></div><p id="st-infl-text"></p></div>
+            <p class="stake__when" id="st-when"></p>
+            <div class="stake__go"><button class="btn btn--primary" type="submit" id="st-go">Connect wallet to stake</button><span class="why" id="st-why" hidden></span></div>
+            <p class="text-xs text-faint stake__note" id="st-note">Staking sends a real testnet transaction with play tokens. Your first visit gets 150 $ANTO, once.</p>
+          </div>
+        </form>
+      </section>
+
+    </div>
+  </div>
+
+  <section class="page-section pot-how-section" aria-labelledby="how-title">
+    <div class="container">
+      <h2 class="visually-hidden" id="how-title">How the pick works</h2>
+      <div class="pot-how">
+        <p><b>Who decides:</b> the colony, from a seed nobody picks. Stakes add food to a size's pile, so its trail grows; the handicap makes bigger pots harder to pick.</p>
+        <p><b>Influence</b> is by the square root of your stake, so four times the stake gives twice the weight. <b>Your share</b>, if your size is picked, is by your plain stake, split with everyone else on that size.</p>
+        <p>A stake counts for every day until you withdraw it, and stays locked until every day it counts for has paid. One cap covers the pot, markets and requests together. <a class="what" href="docs.html#sugar">When a stake counts</a></p>
       </div>
     </div>
   </section>
 
-  <section class="page-section" id="pot" aria-labelledby="pot-title">
-    <div class="container">
-      <div class="section-head"><h2 id="pot-title">Pot sizes</h2></div>
-      <div class="chamber">
-          <div class="chamber__header"><h3 class="chamber__title">The daily pot</h3><span class="chip" id="pot-chip">at today's treasury</span></div>
-          <div class="table-wrap">
-            <table class="table">
-              <caption class="text-xs text-faint" style="text-align: left">What each size does if the colony picks it: the reward part goes to the stakers on that size (split by stake), the rest is burned. Base chance is the pick rate with no stakes; sugar on a size raises it, the handicap lowers it for bigger pots. Hover a heading for more. $ANTO.</caption>
-              <thead><tr>
-                <th scope="col">Pot</th>
-                <th scope="col" class="num" title="How often the colony picked this size when nobody staked (measured over 300 simulated days, give or take 3 points). Stakes on a size raise its chance.">Base chance</th>
-                <th scope="col" class="num" title="Burned for good if this size is picked: the pot minus its reward part.">Burned</th>
-                <th scope="col" class="num" title="Paid to the wallets staking on this size (split by stake) if it is picked. Stays in the treasury if nobody staked on it.">To its stakers</th>
-                <th scope="col" class="num" title="Scales this size's food in the sim, stakes included, so bigger pots are harder to pick.">Handicap</th>
-              </tr></thead>
-              <tbody id="pot-rows"></tbody>
-            </table>
-          </div>
-        </div>
+  <section class="page-section" id="receipts" aria-labelledby="receipts-title">
+    <div class="container pot-two">
+      <div class="day-receipts">
+        <div class="section-head"><h2 id="receipts-title">Receipts</h2><span class="chip" id="rc-chip">…</span><a class="what spacer" href="docs.html#burn-history">Where the numbers come from</a></div>
+        <div id="rc-body"><p class="text-sm text-muted">Reading the contract…</p></div>
+      </div>
+      <div class="my-days" id="my-days-box">
+        <div class="section-head"><h2>Your days</h2><span class="chip">last 14</span></div>
+        <div id="my-days"><p class="text-sm text-muted">Connect a wallet to see the days you staked on.</p></div>
+      </div>
     </div>
   </section>
 
@@ -267,41 +161,42 @@
       <div class="section-head">
         <h2 id="history-title">Past pots</h2>
         <span class="chip" id="history-chip">…</span>
-        <a class="what spacer" href="docs.html#burn-history">Where the numbers come from</a>
+        <a class="what spacer" href="replay.html#pots">All days in History →</a>
       </div>
       <dl class="stats">
-        <div><dt>Burns listed</dt><dd class="num" id="h-days">…</dd></div>
-        <div><dt title="Everything burned since launch: daily burns and randomness fees. Request fees go to the treasury. Read from the token supply.">Total burned</dt><dd class="num" id="h-burned">…</dd></div>
+        <div><dt>Days listed</dt><dd class="num" id="h-days">…</dd></div>
+        <div><dt title="Everything burned since launch: daily pots and randomness fees, read from the token supply.">Total burned</dt><dd class="num" id="h-burned">…</dd></div>
         <div><dt>Treasury now</dt><dd class="num" id="h-treasury">…</dd></div>
         <div><dt>Token supply</dt><dd class="num" id="h-supply">…</dd></div>
       </dl>
       <div class="table-wrap">
         <table class="table">
-          <caption class="text-xs text-faint" style="text-align: left">The list of burns is read from the nearblocks testnet indexer (history only). Each row's seed, stakes and pick are read from the contract at the block before that burn, and what it burned and paid from the supply and the treasury just before and after it; Verify re-runs the 43,200 ticks here and compares the result hash. Days before the daily pot burned the whole pick. $ANTO, whole tokens.</caption>
+          <caption class="text-xs text-faint" style="text-align: left">The last 14 days, read from the contract at past blocks: each day's stakes and treasury at 23:55 UTC, before its pot is paid, and its finished run at 11:30 the next day. Burned and shared are the menu's amounts at that treasury (the payout uses the treasury of the moment it runs, a few tokens apart). Days before day 20,755 ran under the first rules and burned the whole pot. Every day is on <a href="replay.html#pots">History</a>. $ANTO, whole tokens.</caption>
           <thead><tr>
-            <th scope="col">Day (UTC)</th><th scope="col">Pick</th>
-            <th scope="col" class="num">Burned</th><th scope="col" class="num">To stakers</th><th scope="col" class="num">Treasury after</th>
+            <th scope="col">Day</th><th scope="col">Picked</th>
+            <th scope="col" class="num">Burned</th><th scope="col" class="num">Shared</th><th scope="col" class="num">Treasury after</th>
             <th scope="col">Result hash</th><th scope="col">Check</th>
           </tr></thead>
-          <tbody id="history-rows"></tbody>
+          <tbody id="history-rows"><tr><td colspan="7" class="text-sm text-muted">Reading the contract…</td></tr></tbody>
         </table>
       </div>
     </div>
   </section>
+
   <section class="page-section" id="token">
     <div class="container">
       <details class="chamber">
-        <summary class="text-sm">$ANTO facts <span class="chip" id="token-chip">reading the contract…</span></summary>
+        <summary class="text-sm">$ANTO facts and top earners <span class="chip" id="token-chip">reading the contract…</span></summary>
         <dl class="stats" style="margin-top: var(--space-4)">
           <div><dt>Supply</dt><dd class="num" id="t-supply">…</dd></div>
           <div><dt title="The starting supply less the supply now: daily pots, randomness fees and anything else burned.">Burned since launch</dt><dd class="num" id="t-burned">…</dd></div>
           <div><dt>Treasury</dt><dd class="num" id="t-treasury">…</dd></div>
-          <div><dt title="Lifetime rewards from the daily pots, summed over every staker.">Paid to stakers</dt><dd class="num" id="t-paid">…</dd></div>
+          <div><dt title="Lifetime shares from the daily pots, summed over every staker.">Shared with stakers</dt><dd class="num" id="t-paid">…</dd></div>
         </dl>
         <div style="margin-top: var(--space-4)">
           <div class="chamber__header"><h3 class="chamber__title">Top earners</h3><span class="chip" id="board-chip">…</span></div>
-          <ol class="own-stakes" id="board"></ol>
-          <p class="text-xs text-faint" style="margin: var(--space-3) 0 0">Rewards are paid for staking on the size the colony picks, not for any forecast. Testnet play token only.</p>
+          <ol class="mine__stakes" id="board"></ol>
+          <p class="text-xs text-faint" style="margin: var(--space-3) 0 0">Shares are paid for staking on the size the colony picks, not for any forecast. Testnet play token only.</p>
         </div>
       </details>
     </div>
@@ -311,43 +206,46 @@
 <div id="footer"></div>
 
 <script type="module">
-import { trailShares, toHex, BURN_TICKS, N_ANTS } from "../sim/js/antosim.mjs";
+import { BURN_TICKS } from "../sim/js/antosim.mjs";
 import { ColonyView } from "./ds/colony-view.mjs";
-import { stakerAnts, walletHue, stakeWeight } from "./ds/staker-ants.mjs";
+import { walletHue, stakeWeight } from "./ds/staker-ants.mjs";
 import { GLYPHS, BURN_MENU, knownBurnDay, knownBurnDays } from "./round.mjs";
 import {
-  potAmounts, burnRichnessFor, BURN_HANDICAP, BURN_BASE_PICK_PCT, fmtTokens, fmtTokens2, toTokens, dayStart, dayRunAt, dayEndAt, dayDate, shownTick, hexToBytes,
-  snapshotWeights, snapshotWallets, snapshotTotals, DAY_MS,
+  potAmounts, BURN_HANDICAP, HANDICAP_FROM_DAY, fmtTokens, fmtTokens2, toTokens, dayStart, dayRunAt, dayEndAt, clockTick,
+  snapshotWeights, snapshotWallets, snapshotTotals, DAY_MS, ONE,
 } from "./burn.mjs";
+import { loadBurn, burnView, runSpec, verifyRun, chainSkew, stakeSugar, unstakeSugar, crankBurn, executeBurn } from "./burnchain.mjs";
+import { PotWalk } from "./histchain.mjs";
+import { sugarPreview, SUGAR_CAP, N_OPTIONS, YOU, SAMPLE_DAY_SEED } from "./sugar.mjs";
 import {
-  loadBurn, burnView, runSpec, verifyRun, chainSkew, stakeSugar, unstakeSugar, crankBurn, executeBurn, loadHistory,
-} from "./burnchain.mjs";
-import { sugarPreview, othersWallet, SUGAR_CAP, N_OPTIONS, YOU, OTHERS, SAMPLE_DAY_SEED } from "./sugar.mjs";
-import { TripTracker } from "./autopsy.mjs";
+  potStage, stepsHTML, clockOf, dayLine, bannerOf, potCardHTML, mineModel, yoursHTML, lastShareHTML, budget, stageSummary,
+  myDays, myDaysHTML, receiptsHTML, mineIn, sizeHTML, sizeText, dayDrand, utc, shortDate, fmtEst, MY_DAYS,
+} from "./pot.mjs";
 import { wallet, contractId } from "./chain.mjs";
 import { GENESIS_SUPPLY, fmtAnto } from "./token.mjs";
-import { $, esc, pad4, padTick, hms, hashHTML, installCopy, liveShares, shareBars, leaderHTML, topbar, footer, stakerRoster, wireMapPick, followHTML } from "./ui.mjs";
+import { $, esc, padTick, hashHTML, installCopy, liveShares, topbar, footer, stakerRoster, toast } from "./ui.mjs";
 
-$("topbar").outerHTML = topbar("burn", `<span class="chip chip--live" id="live-chip">live</span>`);
+$("topbar").outerHTML = topbar("pot", `<span class="chip chip--live" id="live-chip">live</span>`);
 $("footer").outerHTML = footer();
 installCopy();
 
-const longDate = (ms) => new Date(ms).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
-const optHTML = (o) => `<span class="opt" data-opt="${o}">${esc(BURN_MENU[o])}</span>`;
-const replayHref = (day) => `replay.html?day=${day}&colony=burn`;
-const txHref = (tx) => `https://testnet.nearblocks.io/txns/${tx}`;
+const num = (x) => Number(x).toLocaleString("en");
 const nextFrame = () => new Promise((r) => setTimeout(r, 0));
-const num = (x) => x.toLocaleString("en");
-const zeros = () => new Array(N_OPTIONS).fill(0);
-// "1,234 burned · 80 to its stakers" for a pot at this treasury.
-const potLine = (t, o) => { const p = potAmounts(t, o); return `${fmtTokens(p.burn)} burned · ${fmtTokens(p.reward)} to its stakers`; };
-const CATCH_UP = 3000; // most ticks stepped per frame when the page opens mid-run
+const txHref = (tx) => `https://testnet.nearblocks.io/txns/${tx}`;
+const replayHref = (day) => `replay.html?day=${day}#pots`;
+const reduced = matchMedia("(prefers-reduced-motion: reduce)");
+const CATCH_UP = 3000;   // most ticks stepped per frame when the page opens mid-run
 const POLL_MS = 30_000;
+const CHECKPOINT = 100;  // reduced motion: the live map moves one scoring checkpoint at a time
+const zeros = () => new Array(N_OPTIONS).fill(0);
+const zerosN = () => new Array(N_OPTIONS).fill(0n);
+const isDue = (p) => p.stage === "due" || p.stage === "overdue";
 
-// ---- Chain state -------------------------------------------------------
-// st is the last loadBurn() result; bv is what the page shows for it at chain
-// time (the browser clock plus the offset read from the newest block).
-let st = null, bv = null, skew = 0, skewAt = 0, loadedAt = 0;
+// ---- chain state ----
+// st: the last loadBurn(); bv: burnView at chain time; ps: potStage, which
+// day the page is about and where it is. Chain time is the browser clock
+// plus the newest block's offset.
+let st = null, bv = null, ps = null, skew = 0, skewAt = 0, loadedAt = 0, readError = null, lastGoodAt = 0;
 const nowMs = () => Date.now() + skew;
 
 let refreshing = false, again = false;
@@ -357,45 +255,655 @@ async function refresh() {
   try {
     if (!skewAt || Date.now() - skewAt > 600_000) { skew = await chainSkew(); skewAt = Date.now(); }
     st = await loadBurn({ account: wallet.accountId, skew });
-    loadedAt = Date.now();
-    $("net-error").hidden = true;
+    loadedAt = lastGoodAt = Date.now();
+    readError = null;
   } catch (e) {
-    $("net-error-text").textContent = `Could not read the contract (${e.message ?? e}). Retrying.`;
-    $("net-error").hidden = false;
+    readError = e.message ?? String(e);
+    loadedAt = Date.now();
   }
   refreshing = false;
-  if (st) applyState();
+  if (st) applyState(); else renderBanners();
   if (again) { again = false; refresh(); }
 }
-// After a transaction, or at a phase change, read again a few times: the
-// keeper's crank lands a few seconds after 12:00.
 const refreshSoon = (...ms) => ms.forEach((m) => setTimeout(refresh, m));
 
-// ---- Today: the day card, then the staking half or the live colony ----
-// 00:00 to 12:00 UTC the page shows sugar piling up (no seed, so no map);
-// from 12:00 the colony runs on chain, one tick a second. Until the first
-// crank has drawn the seed there is no map to show.
-const root = $("colony");
-const r = (k) => root.querySelector(`[data-r="${k}"]`);
-const view = new ColonyView($("burn-canvas"), { labels: BURN_MENU, glyphs: GLYPHS });
-view.selected = -1;
-const bars = shareBars(r("bars"), BURN_MENU);
-let col = null, colKey = "", lastCol = null, lastT = -1, visible = true, behind = false, panelKey = "";
-let tracker = null, follow = -1, nestSpot = -1, runSpecNow = null;
-const runRoster = stakerRoster(r("stakers"), (w) => { view.spotlight = w; });
-const stakeRoster = stakerRoster($("stake-stakers"), (w) => { nestSpot = w; nestLight(); });
-new IntersectionObserver(([e]) => { visible = e.isIntersecting; }).observe($("burn-canvas"));
+const stageKey = (p) => `${p.stage}:${p.focus}:${p.run?.seed ?? ""}:${p.paused}:${p.stalled}`;
+let shownKey = "";
 
-const phaseOf = () => bv?.phase ?? "staking";
-
-function status(text, kind = "info") {
-  const el = $("tx-status");
-  el.className = `notice tx-status${kind === "info" ? "" : ` notice--${kind}`}`;
-  $("tx-text").textContent = text;
-  el.hidden = !text;
+function applyState() {
+  bv = burnView(st, nowMs());
+  ps = potStage(st, bv);
+  if (stageKey(ps) !== shownKey) { shownKey = stageKey(ps); enterStage(); }
+  renderDay(true);
+  renderBanners();
+  renderPot(true);
+  renderMine();
+  renderStake();
+  renderSizes();
+  renderReceipts();
+  renderToken();
+  history();
 }
 
-// ---- the pot menu, and (folded away) the token's facts and top earners ----
+// ---- the day: stepper, clock, one line ----
+let lastSec = -1;
+function renderDay(force = false) {
+  const now = nowMs(), sec = Math.floor(now / 1000);
+  if (sec === lastSec && !force) return;
+  lastSec = sec;
+  $("day-id").textContent = `Day ${num(ps.focus)}`;
+  $("day-date").textContent = `${shortDate(ps.focus)} · now ${utc(now)} UTC`;
+  $("steps").innerHTML = stepsHTML(ps);
+  const c = clockOf(ps, now);
+  $("clock-label").textContent = c.label;
+  $("clock").textContent = c.value;
+  if (force) {
+    $("day-line").textContent = dayLine(ps);
+    const crankable = !ps.paused && (ps.stalled || ps.stage === "finishing" || ps.stage === "waiting" || (ps.stage === "running" && ps.lag > 600));
+    $("crank-btn").hidden = !crankable;
+    $("crank-btn").textContent = ps.stage === "waiting" ? "Send the first crank" : "Crank now";
+    $("live-chip").innerHTML = `live<span class="topbar__round"> · day ${num(bv.day)}</span>`;
+  }
+}
+
+// ---- banners: paused, stalled, overdue, chain unreachable, mismatch ----
+function renderBanners() {
+  const out = [];
+  if (readError) {
+    out.push(`<div class="banner banner--fault" role="alert"><span class="banner__g" aria-hidden="true">✗</span><div><b class="banner__title">Can't reach the NEAR testnet RPC</b>` +
+      `<p>${lastGoodAt ? `Showing what we last read at ${utc(lastGoodAt + skew)} UTC.` : "Nothing read yet."} (${esc(readError)})</p></div><button class="btn btn--sm banner__action" type="button" data-act="retry">Retry</button></div>`);
+  }
+  const b = ps && bannerOf(ps);
+  if (b) {
+    out.push(`<div class="banner banner--hold" role="status"><span class="banner__g" aria-hidden="true">${esc(b.g)}</span><div><b class="banner__title">${esc(b.title)}</b><p>${esc(b.text)}</p></div>` +
+      (b.crank && !ps.paused ? `<button class="btn btn--sm banner__action" type="button" data-act="crank">Crank now</button>` : "") + `</div>`);
+  }
+  if (verif.state === "bad" && verif.day != null) {
+    out.push(`<div class="banner banner--fault" role="alert"><span class="banner__g" aria-hidden="true">✗</span><div><b class="banner__title">Mismatch on day ${num(verif.day)}</b>` +
+      `<p>Your browser's re-run differs from the chain: ${esc(verif.why)}.</p></div><a class="btn btn--sm banner__action" href="${replayHref(verif.day)}">See which input differs</a></div>`);
+  }
+  $("banners").innerHTML = out.join("");
+}
+
+// ---- the pot strip, at the top of the stake card ----
+let potKey = "", payoutBusy = false;
+function renderPot(force = false) {
+  let lead = -1, leadPct = 0;
+  if (ps.stage === "running" && liveCol.col) { const s = liveShares(liveCol.col); lead = s.lead; leadPct = lead >= 0 ? s.pct[lead] : 0; }
+  const lastRow = hist.rows.find((r) => r.day === ps.focus - 1) ?? null;
+  const key = JSON.stringify([shownKey, lead, Math.round(leadPct), Math.floor((liveCol.col?.t ?? 0) / 600), String(st.treasury), lastRow?.tx ?? "", payoutBusy, st.lastBurnDay]);
+  if (key === potKey && !force) return;
+  potKey = key;
+  const card = $("pot");
+  card.dataset.tense = lead >= 0 || isDue(ps) ? "estimate" : "range";
+  renderSizes(lead);
+  card.innerHTML = potCardHTML({ ps, treasury: st.treasury, lead, leadPct, leadAt: nowMs(), lastRow, payoutBusy });
+}
+
+// ---- the stage ----
+// One map, one view. Until the seed is drawn: the sample map with today's
+// staker ants, wandering at 1× until 12:00. Nobody collects food before the
+// day's run, so the preview shows no trail and no leader. From the seed: the
+// day's real run, following the clock at one tick a second, run here from
+// the on-chain seed and confirmed by each crank; after 24:00, that run to
+// its last tick (the pick), until the payout.
+const PREVIEW_TPS = 12; // the replay player's 1×
+const liveView = new ColonyView($("live-canvas"), { labels: BURN_MENU, glyphs: GLYPHS });
+liveView.selected = -1;
+const liveCol = { key: "", col: null, spec: null, paused: false, visible: true, lastT: -1, drawnT: -1, error: "" };
+// A wallet in the roster lights its ants in the nest and on the map.
+let nestSpot = -1;
+const roster = stakerRoster($("roster"), (w) => { nestSpot = liveView.spotlight = w; nestLight(); liveView.draw(1); });
+new IntersectionObserver(([e]) => { liveCol.visible = e.isIntersecting; }).observe($("live-canvas"));
+
+let mode = "";
+function enterStage() {
+  const liveStage = ps.stage === "running" || ps.stage === "finishing" || isDue(ps);
+  const snap = ps.stage === "running" ? bv.snap : bv.prev?.snap;
+  const ok = liveStage && ps.run ? buildLive(ps.run, snap) : false;
+  const was = mode;
+  mode = ok ? "live" : "preview";
+  if (mode === "preview") buildPreview(was !== "preview");
+  else if (liveView.col !== liveCol.col) { liveView.attach(liveCol.col); liveView.setStakers(liveCol.spec.stakers); liveCol.drawnT = -1; }
+  $("live-track").hidden = $("live-replay").hidden = mode !== "live";
+  $("live-speed").textContent = mode === "live" ? "live · 1×" : "1× · sample map";
+  $("stage").classList.toggle("is-waiting", ps.stage === "waiting");
+  const R = num(dayDrand(ps.focus));
+  $("stage-what").textContent = mode === "live"
+    ? `day ${num(ps.focus)} · ${ps.stage === "running" ? "on chain, one tick a second, 12:00 to 24:00 UTC" : "ran 12:00 to 24:00 UTC"}`
+    : `day ${num(ps.focus)} · ${ps.stage === "waiting" ? "stakes frozen at 12:00 UTC" : "staking until 12:00 UTC"}`;
+  const label = $("stage-label");
+  label.hidden = mode === "live";
+  label.textContent = liveStage ? `Can't show day ${num(ps.focus)}'s map: ${liveCol.error || "its run isn't readable"}. Showing the sample map.`
+    : ps.stage === "waiting" ? `Waiting for drand #${R}. The first crank brings its signature and draws today's map; nobody can pick it. Until then the ants wait on the sample map.`
+    : `Sample map · the ants wander and collect nothing until the run starts at 12:00 UTC, on a map drawn from drand #${R}`;
+  $("live-replay").href = replayHref(ps.focus);
+  hud();
+  rosterFill();
+  summaryKey = "";
+  renderSummary();
+}
+
+function buildLive(run, snap) {
+  const key = `${run.day}:${run.seed}`;
+  if (key === liveCol.key && liveCol.col) return true;
+  try {
+    liveCol.spec = runSpec(run, snap);
+  } catch (e) {
+    Object.assign(liveCol, { key: "", col: null, error: snap ? e.message : "the stake snapshot couldn't be read" });
+    return false;
+  }
+  Object.assign(liveCol, { key, error: "", col: liveCol.spec.make(), lastT: -1, drawnT: -1 });
+  return true;
+}
+
+// Advance the live map toward its target: the clock tick while running, the
+// last tick after 24:00. Effects only in real time, not while catching up.
+function stepLive(now) {
+  const col = liveCol.col;
+  if (!col || liveCol.paused) return;
+  let target = ps.stage === "running" ? clockTick(ps.focus, now, col.ticks) : col.ticks;
+  if (reduced.matches && target < col.ticks) target = Math.floor(target / CHECKPOINT) * CHECKPOINT;
+  const fx = !reduced.matches && target - col.t <= 2;
+  for (let i = 0; i < CATCH_UP && col.t < target; i++) { col.step(); liveView.afterStep(fx); }
+  const behind = col.t < target;
+  if (col.t !== liveCol.lastT) { liveCol.lastT = col.t; livePanels(); }
+  if (!liveCol.visible) return;
+  if (reduced.matches || col.t >= col.ticks) { if (liveCol.drawnT !== col.t) { liveCol.drawnT = col.t; liveView.draw(1); } return; }
+  // Between ticks the ants walk on toward the next one.
+  const exact = Math.min(col.ticks, Math.max(0, (now - dayRunAt(ps.focus)) / 1000));
+  liveView.draw(behind ? 1 : Math.max(0, Math.min(1, exact - col.t)), now);
+}
+
+function hud() {
+  if (mode === "preview") {
+    $("hud-left").textContent = "sample map";
+    $("hud-right").textContent = ps.stage === "waiting" ? "waiting for the seed" : "nothing collected until 12:00 UTC";
+    return;
+  }
+  const col = liveCol.col, { lead } = liveShares(col), done = col.t >= col.ticks;
+  $("hud-left").innerHTML = `tick <strong>${padTick(col.t, col.ticks)}</strong>/43200`;
+  $("hud-right").innerHTML = done ? `✓ picked: ${sizeHTML(col.result().winner_option)}` : lead < 0 ? "no trail yet" : `leading so far: ${sizeHTML(lead)}`;
+}
+
+function livePanels() {
+  const col = liveCol.col, { pct } = liveShares(col), done = col.t >= col.ticks;
+  hud();
+  const chain = Math.min(ps.run?.t ?? 0, col.ticks), tr = $("live-track");
+  tr.style.setProperty("--shown", ((col.t / col.ticks) * 100).toFixed(2));
+  tr.style.setProperty("--chain", ((chain / col.ticks) * 100).toFixed(2));
+  $("live-chain").textContent = `chain ${num(chain)} / 43,200`;
+  renderPot();
+  renderSummary(pct);
+  if (done && isDue(ps) && verif.key !== `${ps.run.day}:${ps.run.result_hash}`) startVerify();
+}
+
+$("live-pause").addEventListener("click", () => {
+  liveCol.paused = !liveCol.paused;
+  $("live-pause").setAttribute("aria-pressed", String(liveCol.paused));
+  $("live-pause").textContent = liveCol.paused ? (mode === "live" ? "▶ Back to live" : "▶ Play") : "‖ Pause";
+  prev.last = 0;
+});
+document.querySelectorAll("#live [data-view]").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll("#live [data-view]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  liveView.mode = b.dataset.view;
+  liveView.draw(1);
+}));
+
+// The preview: the sample map with today's stakes, and the stake panel's
+// amount on the chosen size, so your ants hatch as you type. Its ants walk
+// past the piles without picking food up, for as long as the preview runs.
+const prev = { col: null, key: "", data: null, acc: 0, last: 0 };
+const previewBase = () => ({ weights: st?.weights ?? zeros(), mine: st?.me ? st.me.stakes.map(toTokens) : zeros(), id: st?.me?.account ?? YOU });
+function buildPreview(fresh = false) {
+  const base = previewBase(), amount = form.tokens;
+  const key = JSON.stringify([base, form.option, amount]);
+  if (key === prev.key && !fresh) return;
+  prev.key = key;
+  prev.data = sugarPreview(SAMPLE_DAY_SEED, form.option, Math.min(amount, Math.max(SUGAR_CAP, amount)), base, Math.max(SUGAR_CAP, amount));
+  const side = amount > 0 ? prev.data.with : prev.data.without;
+  if (!prev.col || fresh) {
+    prev.col = side.make();
+    prev.col.ticks = Infinity; // runs until the day's run starts
+    liveView.attach(prev.col);
+    // Reduced motion: one still frame, the ants already out of the nest.
+    if (reduced.matches) for (let i = 0; i < 160; i++) previewStep(false);
+  }
+  liveView.setStakers(side.stakers);
+  if (amount > 0) liveView.spotlight = side.stakers.rows.findIndex((x) => x.id === prev.data.id && x.ants > 0);
+  liveView.draw(1);
+  rosterFill();
+}
+
+// One preview tick. An ant that reaches a pile would turn and carry food
+// home; here it keeps walking, so nothing is collected and no trail is laid.
+function previewStep(fx) {
+  const c = prev.col;
+  c.step();
+  for (let a = 0; a < c.ants; a++) {
+    if (c.returning[a]) { c.returning[a] = 0; c.strength[a] = 0; c.ah[a] = (c.ah[a] + 8) & 15; }
+  }
+  liveView.afterStep(fx);
+}
+
+function stepPreview(now) {
+  if (!prev.col || liveCol.paused || reduced.matches || !liveCol.visible) { prev.last = 0; return; }
+  prev.acc += prev.last ? (Math.min(100, now - prev.last) / 1000) * PREVIEW_TPS : 0;
+  prev.last = now;
+  while (prev.acc >= 1) { previewStep(true); prev.acc -= 1; }
+  liveView.draw(prev.acc, now);
+}
+
+function rosterFill() {
+  const none = (t) => `<p class="text-sm text-muted" style="margin: 0">${t}</p>`;
+  if (mode === "live" && liveCol.spec) {
+    const s = liveCol.spec.stakers;
+    $("roster-title").textContent = `Staker ants on day ${num(ps.focus)}`;
+    $("roster-chip").textContent = `${num(s.rows.length)} ${s.rows.length === 1 ? "wallet" : "wallets"} · frozen at 12:00 UTC`;
+    nestFill(s);
+    roster(s, BURN_MENU, none(`No stakes on day ${num(ps.focus)}: the colony ran on the flat base and the handicap alone, so smaller pots were more likely. If nobody staked on the size picked, its shared part stays in the treasury.`));
+  } else if (prev.data) {
+    const side = form.tokens > 0 ? prev.data.with : prev.data.without;
+    $("roster-title").textContent = "Staker ants today";
+    $("roster-chip").textContent = form.tokens > 0 ? `so far, with your +${form.tokens} $ANTO` : "so far";
+    nestFill(side.stakers);
+    roster(side.stakers, BURN_MENU, none("No stakes yet today."));
+    $("roster").insertAdjacentHTML("beforeend", `<p class="text-xs text-faint pot-roster__hint">The contract lists other wallets only once the day freezes at 12:00 UTC, so until then they are one grey group; yours are tinted.</p>`);
+  }
+}
+
+// The nest: every ant in the colony as a dot, tinted by the wallet whose
+// stake hatched it. Ants added since the last fill pop in.
+let nestKey = "";
+function nestFill(s) {
+  const nest = $("nest"), key = Array.from(s.owner).join() + s.rows.map((r) => r.hue).join();
+  if (key === nestKey) return;
+  const fresh = nestKey ? +(nest.dataset.n ?? 0) : Infinity; // no pop-in on the first fill
+  nestKey = key;
+  let seen = 0, k = 0;
+  nest.innerHTML = Array.from(s.owner, (o) => {
+    if (o < 0) return `<span class="nest__ant"></span>`;
+    const row = s.rows[o], isNew = seen++ >= fresh;
+    return `<span class="nest__ant nest__ant--staker${isNew ? " is-new" : ""}" data-w="${o}" style="--wallet-hue: ${row.hue}${isNew ? `; --k: ${k++}` : ""}"></span>`;
+  }).join("");
+  nest.dataset.n = seen;
+  nest.setAttribute("aria-label", `${s.owner.length} ants in the colony, ${seen} hatched by stakes`);
+  nestLight();
+}
+
+function nestLight() {
+  const nest = $("nest");
+  if (nestSpot < 0) delete nest.dataset.spot; else nest.dataset.spot = nestSpot;
+  nest.querySelectorAll(".nest__ant--staker").forEach((el) => el.classList.toggle("is-spot", +el.dataset.w === nestSpot));
+}
+
+// The calm summary: a polite live region that speaks only when the leader,
+// the hour or the phase changes.
+let summaryKey = "";
+function renderSummary(shares = null) {
+  if (!ps || !st) return;
+  const entries = (ps.stage === "running" || ps.stage === "waiting" ? bv.snap : ps.stage === "staking" || ps.stage === "closing" ? null : bv.prev?.snap)?.entries;
+  const staked = entries ? snapshotTotals(entries).reduce((a, b) => a + b, 0n) : (st.totals ?? []).reduce((a, b) => a + b, 0n);
+  // While staking is open the contract lists no wallets, only the totals.
+  const wallets = entries ? snapshotWallets(entries).length : staked > 0n ? null : 0;
+  const s = stageSummary({ ps, tick: liveCol.col?.t ?? 0, shares: ps.stage === "running" ? shares : null, wallets, staked });
+  if (s.key === summaryKey) return;
+  summaryKey = s.key;
+  $("stage-summary").textContent = wallets === null ? s.text.replace("No stakes yet.", `${fmtTokens(staked)} $ANTO staked so far.`) : s.text;
+}
+
+// ---- your part ----
+// The stakes, totals and weights that count for the focus day: the frozen
+// snapshot from 12:00, the live stakes before.
+function forFocus() {
+  const me = st.me, acct = me?.account;
+  const frozen = ps.stage === "running" || ps.stage === "waiting" ? bv.snap : ps.stage === "staking" || ps.stage === "closing" ? null : bv.prev?.snap;
+  if (frozen) return { stakes: acct ? mineIn(frozen.entries, acct) : zerosN(), totals: snapshotTotals(frozen.entries), weights: snapshotWeights(frozen.entries), frozen: true };
+  return { stakes: me ? me.stakes : zerosN(), totals: st.totals ?? zerosN(), weights: st.weights ?? zeros(), frozen: false };
+}
+
+function renderMine() {
+  const me = st.me, f = forFocus();
+  $("st-note").hidden = !!me;
+  // Withdraw: one row per size you hold, locked until every day it counts for has paid.
+  const held = me ? me.stakes.map((v, o) => [v, o]).filter(([v]) => v > 0n) : [];
+  const lastRow = hist.rows.find((r) => r.detail && !r.skipped && r.entries) ?? null;
+  const last = me ? lastShareHTML(lastRow, me.account) : "";
+  $("mine").hidden = !held.length && !last;
+  if ($("mine").hidden) return;
+  const who = $("mine-who");
+  who.textContent = me.account;
+  who.style.setProperty("--wallet-hue", walletHue(me.account));
+  const lock = me.lock ?? null, locked = !!lock?.locked && !ps.paused;
+  const m = mineModel({ ps, me, pot: st.pot, stakes: f.stakes, totals: f.totals, weights: f.weights });
+  $("mine-stakes").innerHTML = yoursHTML(m, ps, held, locked);
+  // Stakes placed after 12:00 count from tomorrow.
+  const later = f.frozen ? me.stakes.map((v, o) => [v - f.stakes[o], o]).filter(([v]) => v > 0n) : [];
+  $("mine-later").hidden = !later.length;
+  $("mine-later").textContent = later.length ? `${later.map(([v, o]) => `${fmtTokens2(v)} $ANTO on ${sizeText(o)}`).join(", ")} ${later.length === 1 ? "counts" : "count"} from day ${num(ps.focus + 1)}.` : "";
+  const lk = $("mine-lock");
+  lk.hidden = !held.length;
+  if (held.length) {
+    const d = lock?.day;
+    lk.textContent = ps.paused ? "Paused by the guardian: the lock is lifted, so you can withdraw now."
+      : locked && d != null ? `Locked until day ${num(d)}'s pot is paid, usually a few minutes after 24:00 UTC. At the latest, unlocked at ${utc(dayEndAt(d) + DAY_MS)} UTC on ${shortDate(d + 2)} if that payout never runs.`
+      : locked ? "Locked until the pot it counts for is paid."
+      : "Unlocked: you can withdraw. A stake left in counts for every day until you take it out.";
+  }
+  $("mine-last").innerHTML = last;
+}
+
+// ---- the five sizes: amounts at today's treasury, stake per size, and
+// the size leading so far (running) or picked (payout due) ----
+let sizesLead = -1;
+function renderSizes(lead = sizesLead) {
+  sizesLead = lead;
+  document.querySelectorAll("#options .option-card").forEach((card) => {
+    const o = +card.dataset.opt, p = st.treasury == null ? null : potAmounts(st.treasury, o), total = st.totals?.[o] ?? null;
+    if (p) card.querySelector('[data-r="amts"]').textContent = `burn ≈ ${fmtEst(p.burn)} · share ≈ ${fmtEst(p.reward)}`;
+    card.title = `If ${BURN_MENU[o]} is picked, at today's treasury. Handicap ×${(BURN_HANDICAP[o] / 1000).toFixed(3)}.`;
+    const mine = st.me?.stakes[o] ?? 0n;
+    card.querySelector('[data-r="staked"]').innerHTML = total === null ? "" : fmtTokens(total) + (mine > 0n ? `<span class="pot-mine">yours ${fmtTokens2(mine)}</span>` : "");
+    const picked = isDue(ps) && ps.picked === o;
+    card.querySelector('[data-r="tag"]').textContent = picked ? "picked" : ps.stage === "running" && lead === o ? "leading" : "";
+  });
+  $("sizes-chip").textContent = bv.phase === "staking" ? "counts for today · closes 12:00 UTC" : `counts from day ${num(bv.day + 1)}`;
+}
+
+// ---- the stake panel: one budget, √ weight, influence, when it counts ----
+const form = { option: 2, tokens: 0, busy: false };
+const stNum = $("st-num"), stRange = $("st-range");
+
+// What this wallet can still add under its cap.
+function sugarMax() {
+  const cap = st?.cap ? Math.floor(toTokens(st.cap)) : SUGAR_CAP, me = st?.me;
+  if (!me) return cap;
+  return Math.max(0, cap - (me.staked === null ? 0 : Math.ceil(toTokens(me.staked))));
+}
+
+function renderStake() {
+  const me = st?.me, cap = st?.cap ?? 100n * ONE;
+  const v = form.tokens, o = form.option;
+  stRange.max = Math.max(1, Math.floor(toTokens(cap)));
+  stRange.value = Math.min(v, +stRange.max);
+  stRange.style.setProperty("--progress", (Math.min(v, +stRange.max) / +stRange.max) * 100);
+  // One budget across the pot, markets and requests.
+  let error = "";
+  $("budget").hidden = !me;
+  if (me) {
+    const burn = me.stakes.reduce((a, b) => a + b, 0n);
+    const b = budget({ cap, staked: me.staked ?? burn, burn, amount: v, locked: !!me.lock?.locked, lockDay: me.lock?.day ?? null, balance: me.balance, claimed: me.claimed });
+    const bar = $("budget").querySelector(".budget__bar");
+    const set = (part, x) => { const el = bar.querySelector(`[data-part="${part}"]`); el.style.setProperty("--part", x); el.hidden = !x; };
+    set("locked", b.parts.locked + b.parts.pot); set("elsewhere", b.parts.elsewhere); set("this", b.parts.this); set("over", b.parts.over); set("free", b.parts.free);
+    $("b-text").innerHTML = b.text;
+    error = v > 0 || b.free <= 0 ? b.error : "";
+  }
+  $("st-err").hidden = !error;
+  $("st-err").textContent = error;
+  stNum.setAttribute("aria-invalid", String(!!error));
+  // √ weight, on top of what this wallet already holds on the size.
+  const held = me ? toTokens(me.stakes[o]) : 0;
+  const w0 = stakeWeight(held) / 1000, w1 = stakeWeight(held + v) / 1000;
+  $("st-weight").innerHTML = v
+    ? `<b>${v} $ANTO → weight +${(w1 - w0).toFixed(1)}</b> on ${sizeHTML(o)}${held ? ` (√${num(held + v)} = ${w1.toFixed(1)} with the ${num(held)} you hold)` : ` (√${v})`}. Four times the stake gives twice the weight.`
+    : "Weight is the square root of your stake on a size: 25 → 5, 100 → 10.";
+  // Influence: the size's part of all stake weight now, and with this stake.
+  const W = (st?.weights ?? zeros()).map((x) => x / 1000);
+  const total = W.reduce((a, b) => a + b, 0), add = w1 - w0;
+  const now = total ? (W[o] / total) * 100 : 0, wth = total + add ? ((W[o] + add) / (total + add)) * 100 : 0;
+  const infl = $("st-infl");
+  infl.dataset.opt = o;
+  infl.style.setProperty("--now", now.toFixed(1));
+  infl.style.setProperty("--with", wth.toFixed(1));
+  $("st-infl-text").innerHTML = `${sizeHTML(o)}'s part of all stake weight: <b>${now.toFixed(0)}%</b>${v ? ` → <b>${wth.toFixed(0)}%</b>` : ""}. Then the handicap ×${(BURN_HANDICAP[o] / 1000).toFixed(3)} scales its food.`;
+  // When it counts.
+  const open = !bv || bv.phase === "staking", d = bv?.day;
+  $("st-when").innerHTML = d == null ? "" : open
+    ? `Counts for today, day <b>${num(d)}</b>. Locked until that day's pot is paid, just after 24:00 UTC.`
+    : `Today's stakes froze at 12:00 UTC. Counts from day <b>${num(d + 1)}</b>, and is locked until that day's pot is paid.`;
+  // The button. Run the payout takes the one amber action while it is due.
+  const go = $("st-go"), why = $("st-why");
+  go.classList.toggle("btn--primary", !(ps && isDue(ps)));
+  go.classList.toggle("is-loading", form.busy);
+  go.textContent = !me ? "Connect wallet to stake" : form.busy ? "Waiting for your wallet…" : `Stake ${v} $ANTO on ${sizeText(o)}${open ? "" : " for tomorrow"}`;
+  let reason = "";
+  if (me) {
+    if (ps?.paused) reason = "Paused by the guardian: staking waits until it is lifted.";
+    else if (me.claimed && me.balance === 0n) reason = "Your one faucet claim is used and your balance is 0. Withdraw a stake elsewhere to free tokens.";
+    else if (ps?.stage === "closing") reason = "Staking closes at 12:00 UTC. A stake that lands after 12:00 counts from tomorrow; your wallet's confirmation will say which day.";
+    else if (!v) reason = "Choose an amount above 0.";
+  }
+  go.disabled = !!me && (form.busy || !v || !!error || !!ps?.paused || (me.claimed && me.balance === 0n));
+  why.hidden = !reason;
+  why.textContent = reason;
+  if (mode === "preview" && ps) buildPreview();
+}
+
+function setTokens(x) {
+  form.tokens = Math.max(0, Math.round(+x) || 0);
+  stNum.value = form.tokens;
+  renderStake();
+}
+$("options").addEventListener("change", (e) => { form.option = +e.target.value; renderStake(); });
+stRange.addEventListener("input", (e) => setTokens(e.target.value));
+stNum.addEventListener("input", (e) => setTokens(e.target.value));
+document.querySelectorAll(".stake__picks button").forEach((b) => b.addEventListener("click", () => setTokens(b.dataset.v === "max" ? sugarMax() : b.dataset.v)));
+
+// ---- transactions: stake, withdraw, crank, run the payout ----
+function failure(outcome) {
+  const f = outcome?.status?.Failure ?? outcome?.final_execution_outcome?.status?.Failure;
+  if (!f) return null;
+  const e = f.ActionError?.kind?.FunctionCallError?.ExecutionError ?? JSON.stringify(f);
+  return String(e).replace(/^Smart contract panicked: /, "");
+}
+async function send(pending, fn, { ok, fail = (m) => m } = {}) {
+  const t = toast("pending", pending);
+  try {
+    const out = await fn();
+    const bad = failure(out);
+    if (bad) throw new Error(bad);
+    t("confirmed", ok ?? "Done. Reading the chain again.");
+    refreshSoon(2500, 6000, 15_000);
+    return true;
+  } catch (e) {
+    const m = String(e.message ?? e);
+    if (/AlreadyBurned|AlreadyRewarded/.test(m)) { t("confirmed", "Already paid. Nothing more to do."); refreshSoon(1000); return true; }
+    t("failed", fail(m));
+    return false;
+  }
+}
+async function needWallet() {
+  if (wallet.accountId) return true;
+  try { await wallet.connect(); } catch (err) { toast("failed", `Could not connect: ${err.message ?? err}`); }
+  return !!wallet.accountId;
+}
+
+$("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!wallet.accountId) { await needWallet(); return; }
+  if (!form.tokens || form.busy) return;
+  const o = form.option, n = form.tokens, day = bv.phase === "staking" ? bv.day : bv.day + 1;
+  form.busy = true; renderStake();
+  await send(`Staking ${n} $ANTO on ${sizeText(o)}…`, () => stakeSugar(o, n).then((x) => x.outcome), {
+    ok: `Staked ${n} $ANTO on ${sizeText(o)}. It counts ${day === bv.day ? `for today, day ${num(day)}` : `from day ${num(day)}`}.`,
+    fail: (m) => /WalletCap/.test(m) ? `That stake would go over your cap: ${m}` : `The stake didn't go through: ${m}`,
+  });
+  form.busy = false; renderStake();
+});
+
+$("mine-stakes").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-unstake]");
+  if (!b || !st.me) return;
+  const o = +b.dataset.unstake, v = st.me.stakes[o];
+  send(`Withdrawing ${fmtTokens2(v)} $ANTO from ${sizeText(o)}…`, () => unstakeSugar(o, v), {
+    ok: `Withdrew ${fmtTokens2(v)} $ANTO from ${sizeText(o)}.`,
+    fail: (m) => /Locked/.test(m) ? "Still locked: the pot it counts for hasn't paid yet." : `The withdrawal didn't go through: ${m}`,
+  });
+});
+
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-act]");
+  if (!b) return;
+  const act = b.dataset.act;
+  if (act === "retry") return refresh();
+  if (act === "connect") { e.preventDefault(); return needWallet(); }
+  if (!(await needWallet())) return;
+  if (act === "crank") send("Sending crank_burn…", crankBurn, { ok: "Cranked. The chain has stored more of the colony.", fail: (m) => `The crank didn't go through: ${m}` });
+  if (act === "execute") {
+    const day = +b.dataset.day;
+    payoutBusy = true; renderPot(true);
+    await send("Running the payout… Confirming.", () => executeBurn(day), {
+      ok: `Paid. Day ${num(day)}'s pot burned and shared in one transaction.`,
+      fail: (m) => /BurnDayNotOver/.test(m) ? "The day isn't over until 24:00 UTC."
+        : /BurnNotFinished/.test(m) ? "The run isn't at its last tick yet. Crank it first."
+        : `The payout didn't go through: ${m}. Nothing was burned or paid. Retry.`,
+    });
+    payoutBusy = false; renderPot(true);
+  }
+});
+wallet.onChange(() => { refresh(); });
+
+// ---- receipts: the last paid day, or the picked day waiting for its payout ----
+let verif = { key: "", day: null, state: "idle", pct: 0, why: "" };
+async function startVerify() {
+  const run = ps.run, snap = bv.prev?.snap, key = `${run.day}:${run.result_hash}`;
+  if (!run.done || !snap) return;
+  verif = { key, day: run.day, state: "running", pct: 0, why: "" };
+  renderReceipts();
+  const done = liveCol.col && liveCol.key === `${run.day}:${run.seed}` && liveCol.col.t === liveCol.col.ticks ? liveCol.col : null;
+  try {
+    const res = await verifyRun(run, snap, { col: done, yieldTo: nextFrame, onProgress: (t, n) => { verif.pct = Math.floor((t / n) * 100); } });
+    if (verif.key !== key) return;
+    verif = { key, day: run.day, state: res.ok ? "ok" : "bad", pct: 100, why: res.mismatches.join("; ") };
+  } catch (e) {
+    if (verif.key === key) verif = { key, day: run.day, state: "error", pct: 0, why: e.message ?? String(e) };
+  }
+  renderReceipts();
+  renderBanners();
+}
+
+const rowCheck = new Map(); // day -> { state, pct, why }
+function renderReceipts() {
+  let r = null, v = null;
+  if (isDue(ps) && ps.run) {
+    r = { day: ps.run.day, seed: ps.run.seed, stakeHash: ps.run.stake_hash, hash: ps.run.result_hash, index: ps.run.winner_option, entries: bv.prev?.snap?.entries ?? null };
+    v = verif.key === `${ps.run.day}:${ps.run.result_hash}` ? verif : null;
+    $("rc-chip").textContent = `day ${num(r.day)} · picked, payout not run`;
+  } else {
+    r = hist.rows.find((x) => x.detail && !x.skipped) ?? null;
+    if (r) v = rowCheck.get(r.day) ?? (knownBurnDay(r.day)?.verified ? { state: "ok" } : null);
+    $("rc-chip").textContent = r ? `day ${num(r.day)} · last paid` : hist.loading ? "reading…" : "none read";
+  }
+  $("rc-body").innerHTML = r ? receiptsHTML(r, { verify: v })
+    : `<p class="text-sm text-muted">${hist.loading ? "Reading the last paid day…" : hist.indexer === false ? `The archive could not be read (${esc(hist.error ?? "")}), so the last payout can't be listed. History still re-runs any day the contract holds.` : "No paid day found yet."}</p>`;
+  const me = st.me;
+  $("my-days").innerHTML = !me ? `<p class="text-sm text-muted">Connect a wallet to see the days you staked on.</p>`
+    : hist.loading && !hist.rows.length ? `<p class="text-sm text-muted">Reading past days…</p>`
+    : myDaysHTML(myDays(hist.rows, me.account), me.earned);
+}
+
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-verify-day]");
+  if (!b) return;
+  const day = +b.dataset.verifyDay;
+  if (isDue(ps) && ps.run?.day === day) { startVerify(); return; }
+  const x = hist.rows.find((y) => y.day === day && y.entries);
+  if (!x) return;
+  rowCheck.set(day, { state: "running", pct: 0 });
+  renderReceipts(); historyRows();
+  try {
+    const res = await verifyRun(runOf(x), { hash: x.stakeHash, entries: x.entries }, {
+      yieldTo: nextFrame,
+      onProgress: (t, n) => { const c = rowCheck.get(day), pct = Math.floor((t / n) * 100); if (c && pct - c.pct >= 5) { c.pct = pct; renderReceipts(); historyRows(); } },
+    });
+    rowCheck.set(day, { state: res.ok ? "ok" : "bad", why: res.mismatches.join("; ") });
+  } catch (err) {
+    rowCheck.set(day, { state: "error", why: err.message ?? String(err) });
+  }
+  renderReceipts(); historyRows();
+});
+
+// ---- past pots: the contract's own state at past blocks ----
+// The last MY_DAYS days from History's walk (histchain.mjs): each day's stakes
+// and treasury at 23:55 UTC, its run at 11:30 the next day. All days are on
+// History (replay.html#pots). `indexer` keeps its old name: whether the
+// archive answered.
+let histKey = null, hist = { rows: [], indexer: null, loading: true, error: null };
+const potRow = (r) => ({
+  ...r, tx: `known-${r.day}`, partial: true, approx: true,
+  detail: r.state !== "unread", skipped: r.state === "skipped" || r.state === "lost",
+});
+async function history() {
+  const key = `${st.lastBurnDay}:${st.run?.day ?? ""}`;
+  if (histKey === key) return;
+  histKey = key;
+  hist = { rows: [], indexer: null, loading: true, error: null };
+  historyRows();
+  const walk = new PotWalk();
+  const take = () => walk.rows.filter((r) => !r.live).map(potRow);
+  let error = null;
+  try {
+    await walk.more(MY_DAYS + 1, () => {
+      if (histKey !== key) return;
+      hist.rows = take();
+      hist.progress = [hist.rows.length, MY_DAYS];
+      historyRows();
+      renderReceipts();
+    });
+  } catch (e) { error = String(e.message ?? e); }
+  if (histKey !== key) return;
+  hist = { rows: take().slice(0, MY_DAYS), indexer: !error || walk.rows.length > 0, loading: false, error };
+  if (!hist.rows.length && error) { hist.rows = knownRows(); hist.indexer = false; }
+  historyRows();
+  renderReceipts();
+  renderMine();
+  renderPot(true);
+}
+// If the archive can't be read: the days this browser itself saw finish.
+function knownRows() {
+  return knownBurnDays().map(knownBurnDay)
+    .filter((k) => k.winner !== undefined && k.hash && st.lastBurnDay !== null && k.day <= st.lastBurnDay)
+    .sort((a, b) => b.day - a.day)
+    .map((k) => ({ day: k.day, tx: `known-${k.day}`, ms: dayEndAt(k.day), detail: true, partial: true, index: k.winner, hash: k.hash, seed: k.seed, stakeHash: k.stakeHash, entries: k.entries }));
+}
+const runOf = (x) => ({ day: x.day, seed: x.seed, stake_hash: x.stakeHash, result_hash: x.hash, winner_option: x.index, scores: x.scores, perm: x.perm, done: true, ticks: BURN_TICKS });
+
+function historyRows() {
+  let body = "";
+  if (hist.loading && !hist.rows.length) body = `<tr><td colspan="7" class="text-sm text-muted">Reading past pots…</td></tr>`;
+  else if (!hist.rows.length) body = `<tr><td colspan="7" class="text-sm text-muted">${hist.indexer === false ? `The archive could not be read (${esc(hist.error)}), so past pots can't be listed.` : "No pot has been paid yet."}</td></tr>`;
+  body += hist.rows.map((x) => {
+    const day = `<th scope="row" class="num">${num(x.day)}<span class="why">${esc(shortDate(x.day))}</span></th>`;
+    if (x.state === "lost") return `<tr>${day}<td colspan="4"><span class="pill" data-state="skipped">Lost</span> <span class="text-muted">nobody cranked it; nothing burned or shared</span></td><td></td><td></td></tr>`;
+    if (x.skipped) return `<tr>${day}<td colspan="4"><span class="pill" data-state="skipped">Skipped</span> <span class="text-muted">its run stopped at tick ${num(x.t ?? 0)}; nothing burned or shared</span></td><td></td><td></td></tr>`;
+    if (!x.detail) return `<tr>${day}<td class="text-faint" colspan="4">paid; the details couldn't be read from the archive${x.error ? ` (${esc(x.error)})` : ""}</td><td></td><td><a class="btn btn--sm btn--ghost" href="${txHref(x.tx)}" target="_blank" rel="noopener">Tx ↗</a></td></tr>`;
+    const c = rowCheck.get(x.day) ?? (knownBurnDay(x.day)?.verified ? { state: "ok" } : null);
+    const chk = c?.state === "ok" ? `<span class="pill" data-state="match">Match</span>`
+      : c?.state === "bad" ? `<span class="pill" data-state="mismatch">Mismatch</span>`
+      : c?.state === "running" ? `<span class="pill" data-state="running"><i class="pill__g" aria-hidden="true"></i>${c.pct ?? 0}%</span>`
+      : x.entries ? `<button class="btn btn--sm btn--ghost" type="button" data-verify-day="${x.day}" aria-label="Re-run day ${num(x.day)} here">Verify</button>`
+      : `<span class="text-faint">no stake snapshot</span>`;
+    return `<tr>${day}<td>${sizeHTML(x.index)}</td>` +
+      `<td class="num" data-label="Burned">${x.burned === undefined ? "—" : `${x.approx ? "≈ " : ""}${fmtTokens(x.burned)}`}</td><td class="num" data-label="Shared">${x.reward === undefined ? "—" : `${x.approx ? "≈ " : ""}${fmtTokens(x.reward)}`}${x.day < HANDICAP_FROM_DAY ? `<span class="why">first rules</span>` : ""}</td><td class="num" data-label="Treasury after">${x.after === undefined ? "—" : `${x.approx ? "≈ " : ""}${fmtTokens(x.after)}`}</td>` +
+      `<td>${hashHTML(x.hash, `result hash for day ${x.day}`)}</td>` +
+      `<td class="cluster">${chk}<a class="btn btn--sm btn--ghost" href="${replayHref(x.day)}" aria-label="Replay day ${num(x.day)}">Replay ↗</a>${x.partial ? "" : `<a class="btn btn--sm btn--ghost" href="${txHref(x.tx)}" target="_blank" rel="noopener" aria-label="Payout transaction for day ${num(x.day)}">Tx ↗</a>`}</td></tr>`;
+  }).join("");
+  $("history-rows").innerHTML = body;
+  $("history-chip").textContent = hist.loading ? (hist.progress ? `reading ${hist.progress[0]} of ${hist.progress[1]}` : "reading…") : hist.indexer ? `last ${num(hist.rows.length)} days · contract state` : "archive unreachable";
+  renderHistoryStats();
+}
+
+function renderHistoryStats() {
+  if (!st) return;
+  const genesis = GENESIS_SUPPLY[contractId()] ?? null;
+  $("h-days").textContent = hist.indexer === false && !hist.rows.length ? "?" : num(hist.rows.length);
+  $("h-burned").textContent = genesis !== null && st.supply !== null ? `${fmtAnto(genesis - st.supply)} $ANTO` : "—";
+  $("h-treasury").textContent = st.treasury === null ? "—" : `${fmtTokens(st.treasury)} $ANTO`;
+  $("h-supply").textContent = st.supply === null ? "—" : `${fmtTokens(st.supply)} $ANTO`;
+}
+
+// ---- $ANTO facts and top earners (folded) ----
 function renderToken() {
   const genesis = GENESIS_SUPPLY[contractId()] ?? null;
   $("t-supply").textContent = st.supply === null ? "—" : `${fmtAnto(st.supply)} $ANTO`;
@@ -403,722 +911,37 @@ function renderToken() {
   $("t-treasury").textContent = st.treasury === null ? "—" : `${fmtAnto(st.treasury)} $ANTO`;
   $("t-paid").textContent = st.board === null ? "—" : `${fmtAnto(st.board.reduce((a, [, e]) => a + e, 0n))} $ANTO`;
   $("token-chip").textContent = st.errors.length ? "some reads failed" : "read from the contract";
-  $("pot-rows").innerHTML = st.pot === null
-    ? `<tr><td colspan="5" class="text-sm text-muted">Could not read the pot menu.</td></tr>`
-    : st.pot.map((p, o) => `<tr><th scope="row">${optHTML(o)} <span class="text-faint text-xs">of the treasury</span></th>` +
-      `<td class="num" title="Picked about ${BURN_BASE_PICK_PCT[o]}% of days with no stakes">~${BURN_BASE_PICK_PCT[o]}%</td>` +
-      `<td class="num">${fmtTokens(p.burn)} <span class="text-faint text-xs">${(p.burn_bps / 100).toFixed(2)}%</span></td>` +
-      `<td class="num">${fmtTokens(p.reward)} <span class="text-faint text-xs">${(p.reward_bps / 100).toFixed(2)}%</span></td>` +
-      `<td class="num">×${(BURN_HANDICAP[o] / 1000).toFixed(2)}</td></tr>`).join("");
   const board = st.board ?? [];
-  $("board-chip").textContent = st.board === null ? "could not read" : `${board.length} ${board.length === 1 ? "wallet" : "wallets"} paid`;
+  $("board-chip").textContent = st.board === null ? "could not read" : `${board.length} ${board.length === 1 ? "wallet" : "wallets"} shared in`;
   $("board").innerHTML = board.length
-    ? board.slice(0, 5).map(([who, e], i) => `<li><span class="num text-faint">${i + 1}</span> <span class="wallet" style="--wallet-hue: ${walletHue(who)}">${esc(who)}</span><span class="num">${fmtAnto(e)} $ANTO</span></li>`).join("")
-    : `<li class="text-sm text-muted">${st.board === null ? "—" : "No pot has paid a staker yet."}</li>`;
-}
-
-function applyState() {
-  const v = burnView(st, nowMs());
-  const was = bv;
-  bv = v;
-  const same = was && was.phase === v.phase && was.day === v.day && was.run?.seed === v.run?.seed;
-  if (!same) enterPhase();
-  renderDayCard(true);
-  renderToken();
-  renderStakePanels();
-  renderPrev();
-  renderMe();
+    ? board.slice(0, 5).map(([who, e], i) => `<li><span class="num text-faint">${i + 1}</span> <span class="wallet" style="--wallet-hue: ${walletHue(who)}">${esc(who)}</span><span class="num" style="margin-left: auto">${fmtAnto(e)} $ANTO</span></li>`).join("")
+    : `<li class="text-sm text-muted">${st.board === null ? "—" : "No pot has shared with a staker yet."}</li>`;
   renderHistoryStats();
-  history();
-  refreshPreviewInputs();
-}
-
-function enterPhase() {
-  const p = bv.phase, running = p === "running";
-  $("stake-view").hidden = running;
-  $("run-view").hidden = !running;
-  $("wait-actions").hidden = p !== "waiting";
-  $("colony-title").textContent = p === "staking" ? "Today's sugar so far" : p === "waiting" ? "Today's colony: waiting for the first crank" : "Today's colony";
-  $("colony-chip").textContent = p === "staking" ? "staking open until 12:00 UTC · map at the first crank after 12:00"
-    : p === "waiting" ? "stakes frozen at 12:00 UTC · no seed drawn yet"
-    : "on chain, one tick a second, 12:00 to 24:00 UTC · pot capped at 2%";
-  $("dc-phase").textContent = p === "staking" ? "◌ staking" : p === "waiting" ? "◌ waiting for the crank" : "◌ foraging";
-  $("dc-left-label").textContent = p === "staking" ? "Stakes close in" : "Pot pays in";
-  $("dc-date").textContent = longDate(dayStart(bv.day));
-  [...$("dc-steps").children].forEach((li, i) => {
-    const at = p === "staking" ? 0 : 1;
-    li.dataset.state = i === at ? "now" : i < at ? "done" : "";
-  });
-  $("live-chip").innerHTML = `live<span class="topbar__round"> · ${esc(longDate(dayStart(bv.day)))}</span>`;
-  $("stakers-title").textContent = p === "staking" ? "Wallets in so far" : "Today's frozen stakes";
-  $("scent-title").textContent = p === "staking" ? "Scent so far" : "Scent today";
-  $("nest-note").innerHTML = p === "staking"
-    ? `Sugar hatches ants. They wait here until 12:00 UTC, when the stakes freeze and the first crank draws the seed. The contract lists other wallets only once the day freezes, so until then they are one grey group; yours are tinted. <a class="what" href="docs.html#staker-ants">Staker ants</a>`
-    : `Each wallet's sugar hatches ants in its colour. They wait here for the first crank, which draws the seed on chain and starts the colony; then the map appears and they leave the nest. Hover a wallet below to find its ants. <a class="what" href="docs.html#staker-ants">Staker ants</a>`;
-  panelKey = "";
-  if (running) buildColony(); else { col = null; colKey = ""; }
-  $("sugar-chip").textContent = p === "staking" ? "counts today · closes 12:00 UTC" : `counts ${longDate(dayEndAt(bv.day))}`;
-  renderRule();
-  lastDay = -1;
-}
-
-function buildColony() {
-  const run = bv.run, key = `${run.day}:${run.seed}`;
-  if (key === colKey && col) return;
-  colKey = key;
-  $("run-error")?.remove();
-  try {
-    runSpecNow = runSpec(run, bv.snap);
-  } catch (e) {
-    col = null;
-    $("run-view").insertAdjacentHTML("afterbegin", `<div class="notice notice--danger" id="run-error" role="alert"><p>Could not build today's colony from the chain's data: ${esc(e.message)}</p></div>`);
-    return;
-  }
-  col = runSpecNow.make();
-  tracker = new TripTracker(col);
-  view.setStakers(runSpecNow.stakers);
-  view.attach(col);
-  lastT = -1;
-  r("ticks").textContent = col.ticks;
-  runRoster(runSpecNow.stakers, BURN_MENU);
-  followAnt(-1);
-  $("dc-seed").dataset.k = "";
-}
-
-// ---- the staking half (and the wait for the first crank) ----
-function renderStakePanels() {
-  if (phaseOf() === "running") return;
-  const waiting = phaseOf() === "waiting";
-  let weights, totals, stakers, wallets, mine = st.me?.account ?? null;
-  if (waiting && bv.snap) {
-    weights = snapshotWeights(bv.snap.entries);
-    totals = snapshotTotals(bv.snap.entries);
-    wallets = snapshotWallets(bv.snap.entries);
-  } else {
-    weights = st.weights ?? zeros();
-    totals = st.totals ?? new Array(N_OPTIONS).fill(0n);
-    const myTok = st.me ? st.me.stakes.map(toTokens) : zeros();
-    const myW = myTok.map((t) => stakeWeight(t));
-    const others = weights.map((w, o) => Math.max(0, w - myW[o]));
-    wallets = [othersWallet(others), ...(myTok.some((t) => t > 0) ? [{ id: st.me.account, stakes: myTok }] : [])]
-      .filter((w) => w.stakes.some((t) => t > 0));
-  }
-  const key = JSON.stringify([waiting, weights, totals.map(String), wallets.map((w) => [w.id, w.stakes])]);
-  if (key === panelKey) return;
-  panelKey = key;
-  stakers = stakerAnts(wallets, N_ANTS);
-  const rich = burnRichnessFor(bv.day, weights);
-  const tinted = stakers.rows.reduce((a, x) => a + x.ants, 0);
-  const fresh = $("nest").dataset.n === undefined ? 0 : +$("nest").dataset.n;
-  let k = 0;
-  $("nest").dataset.n = stakers.owner.filter((o) => o >= 0).length;
-  const seen = (o) => stakers.owner.slice(0, o).filter((x) => x >= 0).length; // index among staker ants
-  $("nest").innerHTML = Array.from(stakers.owner, (o, i) => {
-    if (o < 0) return `<span class="nest__ant"></span>`;
-    const row = stakers.rows[o], isNew = seen(i) >= fresh;
-    return `<span class="nest__ant nest__ant--staker${row.id === OTHERS ? " nest__ant--others" : ""}${isNew ? " is-new" : ""}" data-w="${o}" style="--wallet-hue: ${row.hue}${isNew ? `; --k: ${k++}` : ""}"></span>`;
-  }).join("");
-  nestLight();
-  $("nest").setAttribute("aria-label", `${N_ANTS} ants waiting at the nest, ${tinted} tinted by stakers`);
-  $("nest-chip").textContent = `${tinted} of ${N_ANTS} ants tinted`;
-  $("stake-scent").innerHTML = BURN_MENU.map((_, o) =>
-    `<tr><th scope="row">${optHTML(o)}</th><td class="num">${fmtTokens2(totals[o])}</td>` +
-    `<td class="num">${(weights[o] / 1000).toFixed(1)}</td><td class="num">${(rich[o] / 256).toFixed(2)}</td></tr>`).join("");
-  const empty = `<p class="text-sm text-muted" style="margin: 0">No sugar yet${waiting ? " frozen for today" : ""}.</p>`;
-  if (waiting) {
-    stakeRoster(stakers, BURN_MENU, empty);
-  } else {
-    // Only the connected wallet is listed; everyone else is one group of ants.
-    const mineOnly = { total: stakers.total, rows: stakers.rows.filter((x) => x.id !== OTHERS) };
-    const o = stakers.rows.find((x) => x.id === OTHERS);
-    stakeRoster(mineOnly, BURN_MENU, "");
-    $("stake-stakers").insertAdjacentHTML("beforeend", o
-      ? `<p class="text-sm text-muted" style="margin: var(--space-3) 0 0">${o.ants} ant${o.ants === 1 ? "" : "s"} for all other wallets. They are listed when the day freezes at 12:00 UTC.</p>`
-      : (mineOnly.rows.length ? "" : empty));
-  }
-}
-
-// The roster's spotlight in the nest: every other ant fades.
-function nestLight() {
-  const nest = $("nest");
-  if (nestSpot < 0) delete nest.dataset.spot; else nest.dataset.spot = nestSpot;
-  nest.querySelectorAll(".nest__ant--staker").forEach((el) => el.classList.toggle("is-spot", +el.dataset.w === nestSpot));
-}
-
-// ---- following an ant on the live map ----
-function followAnt(a) {
-  follow = view.selected = a;
-  $("follow-hint").hidden = a >= 0;
-  followPanel();
-}
-
-function followPanel() {
-  if (follow < 0 || !col) {
-    $("follow").innerHTML = `<p class="text-sm text-muted" style="margin: 0 0 var(--space-3)">Click any ant on the map to see where it has been, what it carries and every crumb it has brought home.</p>` +
-      `<button class="btn btn--sm" type="button" data-follow="staker">Follow a staker ant</button>`;
-    return;
-  }
-  $("follow").innerHTML = followHTML({
-    a: follow, col, trips: tracker.lives[follow], labels: BURN_MENU, stakers: runSpecNow.stakers,
-    href: `${replayHref(bv.day)}&ant=${follow}&t=${col.t}`,
-  });
-}
-
-wireMapPick($("burn-canvas"), view, { onPick: followAnt, redraw: () => {} }); // the live map redraws every frame
-$("follow-box").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-follow]");
-  if (!b || !col) return;
-  if (b.dataset.follow === "close") return followAnt(-1);
-  const st2 = runSpecNow.stakers;
-  if (!st2.rows.length || !st2.total) return;
-  const big = st2.rows.reduce((x, y) => (y.ants > x.ants ? y : x));
-  followAnt(Math.max(0, st2.owner.indexOf(big.i)));
-});
-
-function colonyPanels(tk) {
-  const { pct, lead } = liveShares(col);
-  r("tick").textContent = padTick(col.t, col.ticks);
-  r("leader").innerHTML = leaderHTML(BURN_MENU, lead, false);
-  r("pick-chip").textContent = behind ? `catching up · tick ${num(col.t)}` : `tick ${num(col.t)} / ${num(col.ticks)}`;
-  if (follow >= 0) followPanel();
-  r("pick-value").innerHTML = lead < 0 ? "no trail yet" : optHTML(lead);
-  r("pick-note").textContent = lead < 0 || st.treasury === null ? "Can still change until 24:00 UTC."
-    : `≈ ${potLine(st.treasury, lead)} if it ended now ($ANTO). Can still change until 24:00 UTC.`;
-  bars(pct);
-  chainNote(tk);
-  todayRow(lead);
-}
-
-// How far the stored run is behind the clock. The page runs the same colony on
-// from the on-chain seed, so the map doesn't wait for a crank.
-function chainNote(tk) {
-  const el = r("chain-note");
-  el.innerHTML = tk.lag > 30
-    ? `On chain: tick ${num(tk.chain)} (last crank). This map is ${num(tk.lag)} ticks ahead, run here from the same seed; the next <code>crank_burn</code> stores it. <button class="btn btn--sm btn--ghost" type="button" data-act="crank">Crank now</button>`
-    : `On chain: tick ${num(tk.chain)}, in step with the clock.`;
-}
-
-// ---- the day card ----
-let lastSec = -1, lastDay = -1;
-function renderDayCard(force = false) {
-  const now = nowMs(), sec = Math.floor(now / 1000);
-  if (sec === lastSec && !force) return;
-  lastSec = sec;
-  const done = ((now - dayStart(bv.day)) / DAY_MS) * 100;
-  $("dc-left").textContent = hms((phaseOf() === "staking" ? dayRunAt(bv.day) : dayEndAt(bv.day)) - now);
-  $("dc-progress").style.setProperty("--done", Math.min(100, Math.max(0, done)).toFixed(2));
-  $("dc-progress").setAttribute("aria-valuenow", Math.floor(done));
-  if (st) {
-    $("dc-treasury").textContent = st.treasury === null ? "—" : fmtTokens(st.treasury);
-    const seedKey = `${phaseOf()}:${bv.run?.seed ?? ""}`;
-    if ($("dc-seed").dataset.k !== seedKey) {
-      $("dc-seed").dataset.k = seedKey;
-      $("dc-seed").innerHTML = phaseOf() === "staking" ? `<span class="text-faint">drawn on chain by the first crank after 12:00 UTC</span>`
-        : phaseOf() === "waiting" ? `<span class="text-faint">not drawn yet: waiting for the first crank</span>`
-        : `${hashHTML(bv.run.seed, "day seed")}<a href="${replayHref(bv.day)}">Replay ↗</a>` +
-          `<span class="text-xs text-faint">The block's random seed at the first crank: a stand-in for the drand round.</span>`;
-    }
-  }
-}
-
-// ---- the previous run: its result, checked here, and the burn ----
-let verif = { key: "", state: "idle", pct: 0, res: null };
-function renderPrev() {
-  const p = bv.prev;
-  $("prev").hidden = !p;
-  if (!p) return;
-  const run = p.run, date = dayDate(run.day);
-  const key = `${run.day}:${run.result_hash ?? "open"}`;
-  if (p.state === "done" && verif.key !== key) startVerify(p, key);
-  const f = $("prev-facts");
-  if (p.state === "unfinished") {
-    $("prev-chip").textContent = "final ticks not stored yet";
-    $("prev-title").textContent = `The ${date} colony`;
-    $("prev-body").innerHTML = `<p style="margin: 0 0 var(--space-3)">The ${esc(date)} colony has been stored up to tick ${num(run.t)} of ${num(run.ticks)}. The last crank, after 24:00 UTC, stores its result, and only then can the burn go out. Anyone can send it.</p>` +
-      `<div class="cluster"><button class="btn btn--primary" type="button" data-act="crank">Send crank_burn</button></div>`;
-    f.innerHTML = `<dt>Day</dt><dd>${esc(date)}</dd><dt>Stored tick</dt><dd class="num">${num(run.t)} / ${num(run.ticks)}</dd>` +
-      `<dt>Day seed</dt><dd>${hashHTML(run.seed, "day seed")}</dd><dt>Stakes</dt><dd>${hashHTML(run.stake_hash, "stake snapshot hash")}</dd>`;
-    return;
-  }
-  const idx = run.winner_option;
-  $("prev-title").textContent = `The ${date} colony picked`;
-  $("prev-chip").textContent = verif.state === "ok" ? "✓ matches the chain" : verif.state === "bad" ? "✗ differs from the chain"
-    : verif.state === "running" ? `checking ${verif.pct}%` : verif.state === "error" ? "could not check" : "…";
-  $("prev-chip").dataset.state = verif.state === "ok" ? "match" : verif.state === "bad" ? "mismatch" : "";
-  const vtext = verif.state === "ok" ? `Re-run here from the day seed and its ${num(run.ticks)} ticks: same result hash, same pick, same scores.`
-    : verif.state === "bad" ? `Re-run here, the result differs from the chain's: ${esc(verif.res.mismatches.join("; "))}.`
-    : verif.state === "error" ? `Could not re-run: ${esc(verif.err)}.`
-    : `Re-running ${num(run.ticks)} ticks here from the day seed…`;
-  $("prev-body").innerHTML = `<p style="margin: 0 0 var(--space-3); font-size: var(--text-lg)">A ${optHTML(idx)} pot${st.treasury === null ? "" : `: about <span class="num">${potLine(st.treasury, idx)}</span> ($ANTO, at today's treasury)`}.</p>` +
-    `<p class="text-sm text-muted" style="margin: 0 0 var(--space-3)">${vtext}</p>` +
-    `<div class="cluster"><button class="btn btn--primary" type="button" data-act="execute" data-day="${run.day}">Pay the pot</button>` +
-    `<a class="btn btn--ghost" href="${replayHref(run.day)}">Replay ↗</a></div>` +
-    `<p class="text-xs text-faint" style="margin: var(--space-3) 0 0">The pot has not been paid yet. <code>execute_burn</code> is open to anyone once the day is over: it burns the pot's burn part and pays its reward part to the stakers on the winning size. Their stakes unlock once it has.</p>`;
-  f.innerHTML = `<dt>Day</dt><dd>${esc(date)}</dd><dt>Pick</dt><dd>${optHTML(idx)}</dd>` +
-    `<dt>Result hash</dt><dd>${hashHTML(run.result_hash, "result hash")}</dd><dt>Day seed</dt><dd>${hashHTML(run.seed, "day seed")}</dd>` +
-    `<dt>Stakes</dt><dd>${hashHTML(run.stake_hash, "stake snapshot hash")}</dd>`;
-}
-
-async function startVerify(p, key) {
-  verif = { key, state: "running", pct: 0, res: null };
-  const done = lastCol && lastCol.day === p.run.day ? lastCol.col : null;
-  try {
-    const res = await verifyRun(p.run, p.snap, {
-      col: done, yieldTo: nextFrame,
-      onProgress: (t, n) => { if (verif.key === key) { const pct = Math.floor((t / n) * 100); if (pct !== verif.pct) { verif.pct = pct; $("prev-chip").textContent = `checking ${pct}%`; } } },
-    });
-    if (verif.key !== key) return;
-    verif = { key, state: res.ok ? "ok" : "bad", pct: 100, res };
-  } catch (e) {
-    if (verif.key !== key) return;
-    verif = { key, state: "error", pct: 0, res: null, err: e.message ?? String(e) };
-  }
-  if (bv.prev) renderPrev();
 }
 
 // ---- the frame loop ----
-function frame(perf) {
+function frame() {
   if (st) {
-    const now = nowMs();
-    const v = burnView(st, now);
-    if (!bv || v.phase !== bv.phase || v.day !== bv.day || v.run?.seed !== bv.run?.seed) {
-      if (col && col.t === col.ticks) lastCol = { day: bv.day, col };
-      bv = v;
-      enterPhase();
+    const now = nowMs(), v = burnView(st, now), p = potStage(st, v, now);
+    if (stageKey(p) !== shownKey) {
       applyState();
       refreshSoon(3000, 10_000);
-      $("announce").textContent = v.phase === "staking" ? `The ${dayDate(v.day - 1)} colony is done. Staking for ${dayDate(v.day)} is open until 12:00 UTC.`
-        : v.phase === "waiting" ? "Stakes closed. Waiting for the first crank to draw the seed."
-        : "The seed is drawn and today's colony is running.";
     } else {
       bv = v;
+      ps = p;
     }
-    renderDayCard();
-    if (phaseOf() === "running" && col) {
-      const tk = shownTick(bv.run, now);
-      const exact = Math.min(col.ticks, Math.max(0, (now - dayRunAt(bv.day)) / 1000)), target = Math.floor(exact);
-      const fx = target - col.t <= 2; // effects only in real time, not when catching up
-      for (let i = 0; i < CATCH_UP && col.t < target; i++) { col.step(); tracker.observe(col); view.afterStep(fx); }
-      behind = col.t < target;
-      if (col.t !== lastT) { lastT = col.t; colonyPanels(tk); }
-      // Between ticks the ants walk on toward the next one, so they never stand still.
-      if (visible) view.draw(behind ? 1 : exact - target, perf);
-    }
+    renderDay();
+    if (mode === "live") stepLive(now); else if (mode === "preview") stepPreview(now);
   }
   requestAnimationFrame(frame);
 }
 
-// ---- wallet, stakes and the real transactions ----
-function failure(outcome) {
-  const f = outcome?.status?.Failure ?? outcome?.final_execution_outcome?.status?.Failure;
-  if (!f) return null;
-  const e = f.ActionError?.kind?.FunctionCallError?.ExecutionError ?? JSON.stringify(f);
-  return String(e).replace(/^Smart contract panicked: /, "");
-}
-async function send(label, fn) {
-  status(`${label}: waiting for your wallet…`);
-  try {
-    const out = await fn();
-    const bad = failure(out);
-    if (bad) throw new Error(bad);
-    status(`${label}: sent. The page reads the chain again in a moment.`, "success");
-    refreshSoon(2500, 6000, 15_000);
-    return out;
-  } catch (e) {
-    status(`${label} failed: ${e.message ?? e}`, "danger");
-    return null;
-  }
-}
-
-function sugarMax() {
-  const me = st?.me, cap = st?.cap ? Math.floor(toTokens(st.cap)) : SUGAR_CAP;
-  if (!me) return cap;
-  let m = cap - (me.staked === null ? 0 : Math.ceil(toTokens(me.staked)));
-  if (me.claimed && me.balance !== null) m = Math.min(m, Math.floor(toTokens(me.balance)));
-  return Math.max(0, m);
-}
-
-function renderMe() {
-  const me = st.me, lock = me?.lock ?? null, locked = !!lock?.locked;
-  const until = lock?.day != null ? dayDate(Math.max(lock.day, st.schedule.drawn_day ?? 0)) : null;
-  $("me-chip").textContent = me ? me.account : "no wallet";
-  const cap = st.cap === null ? null : fmtTokens(st.cap);
-  $("me-line").textContent = !me ? "Connect a NEAR testnet wallet to stake. A new wallet claims free play tokens first."
-    : !me.claimed ? `${me.account} has not claimed play tokens yet: your first stake claims them (one extra approval), then stakes.`
-    : `Balance ${me.balance === null ? "…" : fmtTokens2(me.balance)} $ANTO · locked in stakes ${me.staked === null ? "…" : fmtTokens2(me.staked)}${cap ? ` of the ${cap} cap` : ""}${me.earned ? ` · rewards earned ${fmtTokens2(me.earned)}` : ""}.`;
-  const own = $("own-stakes"), mine = me ? me.stakes : [];
-  own.hidden = !mine.some((v) => v > 0n);
-  own.innerHTML = mine.map((v, o) => v <= 0n ? "" :
-    `<li>${optHTML(o)} <span class="num">${fmtTokens2(v)} $ANTO</span>` +
-    `<button class="btn btn--sm btn--ghost" type="button" data-unstake="${o}" ${locked ? 'disabled title="Burn stakes are locked until the pot they count for has paid."' : ""}>Unstake</button></li>`).join("");
-  if (!own.hidden && locked) own.insertAdjacentHTML("beforeend", `<li class="text-xs text-faint">Locked until the ${esc(until ?? "next")} pot has paid, just after 24:00 UTC that day. A stake counts for every day until you take it out.</li>`);
-  $("stake-btn").textContent = !me ? "Connect wallet to stake" : "Stake sugar";
-  const max = sugarMax();
-  stakeNum.max = stakeRange.max = max;
-  if (state.tokens > max) setTokens(max);
-  $("cap-hint").textContent = `Weight = √ sugar. You can add up to ${max} $ANTO (the cap is ${cap ?? "…"} per wallet across all colonies).`;
-  $("stake-btn").disabled = !!me && (state.tokens === 0 || max === 0);
-  $("r-cap").textContent = st.cap ? `${Math.min(100, Math.round(((me?.staked ? toTokens(me.staked) : 0) + state.tokens) / toTokens(st.cap) * 100))}%` : "—";
-}
-
-function renderRule() {
-  const p = phaseOf(), d = bv.day;
-  $("rule-line").textContent = p === "staking"
-    ? `Sugar staked now counts for today's pot (${dayDate(d)}) and is locked until that pot pays, just after 24:00 UTC.`
-    : `Today's stakes froze at 12:00 UTC. Sugar staked now counts from ${dayDate(d + 1)} and is locked until that day's pot pays.`;
-}
-
-$("form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  if (!wallet.accountId) {
-    status("Opening your wallet…");
-    try { await wallet.connect(); status(""); } catch (err) { status(`Could not connect: ${err.message ?? err}`, "danger"); }
-    return;
-  }
-  if (!state.tokens) return;
-  const o = state.option, n = state.tokens;
-  const out = await send(`Stake ${n} $ANTO on ${BURN_MENU[o]}`, () => stakeSugar(o, n).then((x) => x.outcome));
-  if (out) status(`Staked ${n} $ANTO on ${BURN_MENU[o]}. It counts for ${phaseOf() === "staking" ? "today's" : `the ${dayDate(bv.day + 1)}`} colony. Reading the chain again.`, "success");
-});
-$("own-stakes").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-unstake]");
-  if (!b || !st.me) return;
-  const o = +b.dataset.unstake;
-  send(`Unstake ${fmtTokens2(st.me.stakes[o])} $ANTO from ${BURN_MENU[o]}`, () => unstakeSugar(o, st.me.stakes[o]));
-});
-// crank_burn and execute_burn buttons anywhere on the page.
-document.addEventListener("click", async (e) => {
-  const b = e.target.closest("[data-act]");
-  if (!b) return;
-  if (!wallet.accountId) {
-    try { await wallet.connect(); } catch (err) { status(`Could not connect: ${err.message ?? err}`, "danger"); }
-    if (!wallet.accountId) return;
-  }
-  if (b.dataset.act === "crank") send("crank_burn", crankBurn);
-  if (b.dataset.act === "execute") send(`execute_burn for ${dayDate(+b.dataset.day)}`, () => executeBurn(+b.dataset.day));
-});
-wallet.onChange(() => { refresh(); });
-
-// ---- History: past burns, from the indexer list and the contract's own state ----
-let histKey = null, hist = { rows: [], indexer: null, loading: true, error: null };
-const rowCheck = new Map(); // tx -> { state, pct, msg }
-
-async function history(force = false) {
-  const key = `${st.lastBurnDay}`;
-  if (histKey === key && !force) return;
-  histKey = key;
-  hist = { rows: [], indexer: null, loading: true, error: null };
-  historyRows();
-  const h = await loadHistory({
-    onRow: (row, i, n) => { if (histKey === key) { hist.rows = [...hist.rows, row]; hist.progress = [i + 1, n]; historyRows(); } },
-  });
-  if (histKey !== key) return;
-  hist = { rows: h.rows, indexer: h.indexer, loading: false, error: h.error ?? null };
-  if (!h.indexer) hist.rows = knownRows();
-  historyRows();
-}
-
-// If the indexer can't be reached: the burns this browser itself saw finish.
-function knownRows() {
-  return knownBurnDays().map(knownBurnDay)
-    .filter((k) => k.winner !== undefined && k.hash && st.lastBurnDay !== null && k.day <= st.lastBurnDay)
-    .sort((a, b) => b.day - a.day)
-    .map((k) => ({ day: k.day, tx: `known-${k.day}`, ms: dayEndAt(k.day), detail: true, partial: true, index: k.winner, hash: k.hash, seed: k.seed, stakeHash: k.stakeHash, entries: k.entries }));
-}
-
-function runOf(x) {
-  return { day: x.day, seed: x.seed, stake_hash: x.stakeHash, result_hash: x.hash, winner_option: x.index, scores: x.scores, perm: x.perm, done: true, ticks: BURN_TICKS };
-}
-
-function historyRows() {
-  const p = phaseOf(), run = bv.run;
-  const today = `<tr data-today><th scope="row">${esc(dayDate(bv.day))} <span class="chip">${p === "staking" ? "staking" : p === "waiting" ? "waiting" : "running"}</span></th>` +
-    (p === "staking" ? `<td class="text-faint">seed after 12:00</td>` : p === "waiting" ? `<td class="text-faint">seed not drawn</td>` : `<td></td>`) +
-    `<td class="num text-faint">after 24:00</td><td class="num text-faint">—</td><td class="num text-faint">—</td><td class="text-faint">at tick ${num(BURN_TICKS)}</td>` +
-    (run ? `<td><a class="btn btn--sm btn--ghost" href="${replayHref(bv.day)}" aria-label="Replay today's colony">Replay ↗</a></td>` : `<td></td>`) + `</tr>`;
-  let body = today;
-  if (hist.loading && !hist.rows.length) body += `<tr><td colspan="7" class="text-sm text-muted">Reading past pots…</td></tr>`;
-  else if (!hist.rows.length) body += `<tr><td colspan="7" class="text-sm text-muted">${hist.indexer === false ? `The indexer could not be reached (${esc(hist.error)}), so past pots cannot be listed.` : st?.lastBurnDay != null ? `The indexer lists no burns, but the contract has executed up to ${esc(dayDate(st.lastBurnDay))}. Those rows come back when the indexer catches up.` : "No pot has been paid yet. The first one goes out after 24:00 UTC of the first full day."}</td></tr>`;
-  body += hist.rows.map((x) => {
-    const date = dayDate(x.day);
-    if (!x.detail) {
-      return `<tr><th scope="row">${esc(date)}</th><td class="text-faint" colspan="4">pot paid; its details could not be read from the archive${x.error ? ` (${esc(x.error)})` : ""}</td><td></td><td><a class="btn btn--sm btn--ghost" href="${txHref(x.tx)}" target="_blank" rel="noopener">Tx ↗</a></td></tr>`;
-    }
-    const c = rowCheck.get(x.tx) ?? (knownBurnDay(x.day)?.verified ? { state: "ok" } : null);
-    const chk = c?.state === "ok" ? `<span class="chip" data-state="match">✓ re-run here</span>`
-      : c?.state === "bad" ? `<span class="chip" data-state="mismatch">✗ differs</span>`
-      : c?.state === "running" ? `<span class="chip">checking ${c.pct ?? 0}%</span>`
-      : x.entries ? `<button class="btn btn--sm btn--ghost" type="button" data-verify="${esc(x.tx)}" aria-label="Verify the ${esc(date)} burn here">Verify</button>`
-      : `<span class="text-faint">no stake snapshot</span>`;
-    return `<tr><th scope="row">${esc(date)}</th><td>${optHTML(x.index)}</td>` +
-      `<td class="num">${x.burned === undefined ? "—" : fmtTokens(x.burned)}</td><td class="num">${x.reward === undefined ? "—" : fmtTokens(x.reward)}</td><td class="num">${x.after === undefined ? "—" : fmtTokens(x.after)}</td>` +
-      `<td>${hashHTML(x.hash, `result hash for ${date}`)}</td>` +
-      `<td class="cluster">${chk}${x.entries ? `<a class="btn btn--sm btn--ghost" href="${replayHref(x.day)}" aria-label="Replay ${esc(date)}">Replay ↗</a>` : ""}${x.partial ? "" : `<a class="btn btn--sm btn--ghost" href="${txHref(x.tx)}" target="_blank" rel="noopener" aria-label="Transaction for ${esc(date)}">Tx ↗</a>`}</td></tr>`;
-  }).join("");
-  $("history-rows").innerHTML = body;
-  $("history-chip").textContent = hist.loading ? (hist.progress ? `reading ${hist.progress[0]} of ${hist.progress[1]}` : "reading…")
-    : hist.indexer ? "nearblocks index · contract state" : "indexer unreachable";
-  // The last finished burn, in the day card.
-  const y = hist.rows.find((x) => x.detail);
-  $("dc-last").innerHTML = !y ? `<span class="text-faint">${hist.loading ? "loading…" : "none yet"}</span>`
-    : `<span>${optHTML(y.index)} <span class="text-faint">· ${y.burned === undefined ? "" : `${fmtTokens(y.burned)} burned${y.reward ? `, ${fmtTokens(y.reward)} paid` : ""}`}</span></span><a href="#history" aria-label="Past pots">Verify ↓</a>`;
-  renderHistoryStats();
-  lastT = -1; // refill the today row and the projection
-}
-
-function renderHistoryStats() {
-  if (!st) return;
-  const done = hist.rows.filter((x) => x.burned !== undefined);
-  $("h-days").textContent = hist.indexer === false && !hist.rows.length ? "?" : hist.rows.length.toLocaleString("en");
-  // The token supply is the chain's own record of what has burned; the
-  // indexer's list only covers daily burns and can be empty or behind.
-  const genesis = GENESIS_SUPPLY[contractId()] ?? null;
-  $("h-burned").textContent = genesis !== null && st.supply !== null ? `${fmtAnto(genesis - st.supply)} $ANTO`
-    : done.length ? `${fmtTokens(done.reduce((a, x) => a + x.burned, 0n))} $ANTO` : hist.loading ? "…" : "—";
-  $("h-treasury").textContent = st.treasury === null ? "—" : `${fmtTokens(st.treasury)} $ANTO`;
-  $("h-supply").textContent = st.supply === null ? "—" : `${fmtTokens(st.supply)} $ANTO`;
-}
-
-$("history-rows").addEventListener("click", async (e) => {
-  const b = e.target.closest("[data-verify]");
-  if (!b) return;
-  const x = hist.rows.find((y) => y.tx === b.dataset.verify);
-  if (!x?.entries) return;
-  rowCheck.set(x.tx, { state: "running", pct: 0 });
-  historyRows();
-  try {
-    const res = await verifyRun(runOf(x), { hash: x.stakeHash, entries: x.entries }, {
-      yieldTo: nextFrame,
-      onProgress: (t, n) => { const c = rowCheck.get(x.tx); const pct = Math.floor((t / n) * 100); if (c && pct - (c.pct ?? 0) >= 10) { c.pct = pct; historyRows(); } },
-    });
-    rowCheck.set(x.tx, { state: res.ok ? "ok" : "bad" });
-  } catch (err) {
-    rowCheck.set(x.tx, { state: "bad" });
-  }
-  historyRows();
-});
-
-function todayRow(lead) {
-  const tr = $("history-rows").querySelector("[data-today]");
-  if (!tr || phaseOf() !== "running") return;
-  tr.children[1].innerHTML = lead < 0 ? `<span class="text-faint">no trail yet</span>` : `${optHTML(lead)} <span class="text-faint">leading</span>`;
-}
-
-// ---- Stake sugar: a preview of the map with and without one more stake ----
-// While staking is open the preview runs the newest drawn map (or a labelled
-// sample map before any colony has run) with today's sugar so far. After
-// 12:00 it runs today's map with today's frozen stakes. Nothing is sent.
-function previewInputs() {
-  const p = phaseOf(), me = st?.me;
-  let weights, mine = zeros();
-  if (p !== "staking" && bv.snap) {
-    weights = snapshotWeights(bv.snap.entries);
-    if (me) for (const [a, c, o, v] of bv.snap.entries) if (a === me.account && c === 0 && o < N_OPTIONS) mine[o] += toTokens(v);
-  } else {
-    weights = st?.weights ?? zeros();
-    if (me) mine = me.stakes.map(toTokens);
-  }
-  let seed, map;
-  if (p === "running" && bv.run) { seed = hexToBytes(bv.run.seed); map = "today's map"; }
-  else if (st?.run) { seed = hexToBytes(st.run.seed); map = st.run.day === bv.day - 1 ? "yesterday's map" : `the map of ${dayDate(st.run.day)}`; }
-  else { seed = SAMPLE_DAY_SEED; map = "a sample map (no colony has run on chain yet)"; }
-  return { seed, map, base: { weights, mine, id: me?.account ?? YOU } };
-}
-let previewMap = "a sample map";
-const TPS = 48; // ticks per second while a preview runs
-const state = { option: 2, tokens: 0 };
-const stakeNum = $("stake-num"), stakeRange = $("stake-range");
-
-$("options").insertAdjacentHTML("beforeend", BURN_MENU.map((label, o) =>
-  `<label class="option-card" data-opt="${o}"><input type="radio" name="burn" value="${o}"${o === state.option ? " checked" : ""}>` +
-  `<span class="option-card__value opt">${label}</span>` +
-  `<span class="option-card__meta">${o === N_OPTIONS - 1 ? "of treasury · the cap" : "of treasury"}</span></label>`).join(""));
-
-function makeSide(el) {
-  const r = (k) => el.querySelector(`[data-r="${k}"]`);
-  const view = new ColonyView(el.querySelector("canvas"), { labels: BURN_MENU, glyphs: GLYPHS });
-  view.selected = -1;
-  return { el, r, view, bars: shareBars(r("bars"), BURN_MENU), col: null, result: null, busy: true };
-}
-const sides = { without: makeSide($("side-without")), with: makeSide($("side-with")) };
-let preview = null, running = false, acc = 0, lastNow = 0, raf = 0, previewKey = "";
-
-function sidePanels(s) {
-  const { col, r } = s, done = col.t === col.ticks;
-  const { pct, lead } = liveShares(col);
-  r("tick").textContent = pad4(col.t);
-  r("share-tick").textContent = `tick ${col.t}`;
-  r("leader").innerHTML = leaderHTML(BURN_MENU, lead, done);
-  if (done) {
-    s.result = col.result();
-    const o = s.result.winner_option;
-    s.bars(trailShares(s.result).map((x) => x / 100), o);
-    r("result").innerHTML = `<p class="text-sm" style="margin: 0 0 var(--space-2)">Picked ${optHTML(o)} of the treasury.</p>` +
-      `<dl class="kv text-xs"><dt>Result hash</dt><dd>${hashHTML(s.result.hash, "result hash")}</dd></dl>`;
-  } else {
-    s.bars(pct);
-  }
-}
-
-function verdict() {
-  const a = sides.without.result, b = sides.with.result;
-  const oa = a.winner_option, ob = b.winner_option;
-  const sa = trailShares(a)[state.option] / 100, sb = trailShares(b)[state.option] / 100;
-  const head = oa === ob
-    ? `Same pick: ${optHTML(ob)}. Your sugar didn't change the pick on ${previewMap}.`
-    : `Your sugar changed the pick, from ${optHTML(oa)} to ${optHTML(ob)}.`;
-  const d = sb - sa;
-  $("verdict").innerHTML = `<p style="margin: 0 0 var(--space-2)">${head}</p>` +
-    `<p class="text-sm text-muted" style="margin: 0">Trail share on ${optHTML(state.option)}: ${sa.toFixed(1)}% without, ${sb.toFixed(1)}% with (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} points). ` +
-    `The two result hashes differ because the stakes differ. This is a short ${800}-tick preview, not the day's run.</p>`;
-}
-
-// Both sides back at tick 0 for the current choice.
-function reset() {
-  running = false;
-  acc = 0;
-  const inp = previewInputs();
-  previewMap = inp.map;
-  preview = sugarPreview(inp.seed, state.option, state.tokens, inp.base, Math.max(sugarMax(), state.tokens));
-  for (const k of ["without", "with"]) {
-    const s = sides[k], p = preview[k];
-    s.col = p.make();
-    s.result = null;
-    s.view.setStakers(p.stakers);
-    // Your ants glow on the "with" side; the rest stay as they are.
-    s.view.spotlight = k === "with" ? p.stakers.rows.findIndex((x) => x.id === preview.id && x.ants > 0) : -1;
-    s.view.dimOthers = false;
-    s.view.attach(s.col);
-    s.r("result").innerHTML = "";
-    sidePanels(s);
-    s.busy = true;
-  }
-  $("verdict").innerHTML = `<p class="text-sm text-muted" style="margin: 0">${state.tokens ? "Press Preview to run both colonies." : "Choose an amount above 0 to compare."}</p>`;
-  $("run-chip").textContent = "ready";
-  $("map-title").textContent = `Preview on ${previewMap}`;
-  $("skip").disabled = true;
-  $("drop").disabled = state.tokens === 0;
-  kick();
-}
-
-function scentTable() {
-  const { without: a, with: b } = preview;
-  const w = (x) => (x / 1000).toFixed(1), rich = (x) => (x / 256).toFixed(2);
-  $("scent").innerHTML = BURN_MENU.map((label, o) => {
-    const up = b.richness[o] !== a.richness[o];
-    return `<tr><th scope="row">${optHTML(o)}</th>` +
-      `<td class="num">${w(a.weights[o])}</td><td class="num${b.weights[o] !== a.weights[o] ? " is-accent" : ""}">${w(b.weights[o])}</td>` +
-      `<td class="num">${rich(a.richness[o])}</td><td class="num${up ? " is-accent" : ""}">${rich(b.richness[o])}</td></tr>`;
-  }).join("");
-  $("sqrt-note").textContent = state.tokens
-    ? `${state.tokens} $ANTO adds √ = ${(preview.weight / 1000).toFixed(1)} to ${BURN_MENU[state.option]}.`
-    : "4× the sugar, 2× the weight.";
-}
-
-function update() {
-  $("r-stake").textContent = state.tokens.toLocaleString("en");
-  $("r-weight").textContent = (Math.floor(Math.sqrt(state.tokens * 1e6)) / 1000).toFixed(1);
-  stakeRange.style.setProperty("--progress", (state.tokens / Math.max(1, +stakeRange.max || 1)) * 100);
-  reset();
-  scentTable();
-  $("side-with").querySelector(".chamber__title").textContent =
-    state.tokens ? `With your ${state.tokens} $ANTO on ${BURN_MENU[state.option]}` : "With your sugar";
-  if (st) {
-    const max = sugarMax();
-    $("stake-btn").disabled = !!st.me && (state.tokens === 0 || max === 0);
-    $("r-cap").textContent = st.cap ? `${Math.min(100, Math.round((((st.me?.staked ? toTokens(st.me.staked) : 0) + state.tokens) / toTokens(st.cap)) * 100))}%` : "—";
-  }
-}
-
-// A new chain read changes the preview's inputs; rebuild only when they did.
-function refreshPreviewInputs() {
-  const inp = previewInputs();
-  const key = JSON.stringify([inp.base, toHex(inp.seed)]);
-  if (key === previewKey) return;
-  previewKey = key;
-  $("you-tint").textContent = inp.base.id;
-  $("you-tint").style.setProperty("--wallet-hue", walletHue(inp.base.id));
-  if (!running) update();
-}
-
-function setTokens(v) {
-  const max = st ? sugarMax() : SUGAR_CAP;
-  const n = Math.min(max, Math.max(0, Math.round(+v) || 0));
-  stakeNum.value = stakeRange.value = state.tokens = n;
-  update();
-}
-
-stakeNum.max = stakeRange.max = SUGAR_CAP;
-$("options").addEventListener("change", (e) => { state.option = +e.target.value; update(); });
-stakeRange.addEventListener("input", (e) => setTokens(e.target.value));
-stakeNum.addEventListener("change", (e) => setTokens(e.target.value));
-
-$("drop").addEventListener("click", () => {
-  if (!state.tokens) return;
-  reset();
-  running = true;
-  $("run-chip").textContent = "running";
-  $("skip").disabled = false;
-  kick();
-});
-
-$("skip").addEventListener("click", () => {
-  for (const s of Object.values(sides)) { while (s.col.t < s.col.ticks) { s.col.step(); s.view.afterStep(false); } sidePanels(s); s.busy = true; }
-  finish();
-  kick();
-});
-
-function finish() {
-  running = false;
-  $("run-chip").textContent = "done";
-  $("skip").disabled = true;
-  verdict();
-}
-
-function sugarFrame(now) {
-  raf = 0;
-  const list = Object.values(sides);
-  let keep = false;
-  if (running) {
-    acc += (Math.min(100, now - lastNow) / 1000) * TPS;
-    const n = Math.floor(acc);
-    acc -= n;
-    for (const s of list) {
-      let stepped = false;
-      for (let i = 0; i < n && s.col.t < s.col.ticks; i++) { s.col.step(); s.view.afterStep(n <= 2); stepped = true; }
-      if (stepped) sidePanels(s);
-    }
-    if (list.every((s) => s.col.t === s.col.ticks)) finish();
-  }
-  lastNow = now;
-  for (const s of list) {
-    if (running || s.busy) s.busy = s.view.draw(running ? acc : 1, now);
-    keep ||= running || s.busy;
-  }
-  if (keep) raf = requestAnimationFrame(sugarFrame);
-}
-function kick() {
-  if (raf) return;
-  lastNow = performance.now();
-  raf = requestAnimationFrame(sugarFrame);
-}
-
 // ---- start ----
-// The page needs the chain's state before it knows its phase; until then the
-// clock alone decides which half to show.
-$("wait-actions").hidden = true;
-$("run-view").hidden = true;
-$("stake-view").hidden = false;
-$("stake-scent").innerHTML = `<tr><td colspan="4" class="text-sm text-muted">Reading the contract…</td></tr>`;
-$("history-rows").innerHTML = `<tr><td colspan="7" class="text-sm text-muted">Reading the contract…</td></tr>`;
-$("pot-rows").innerHTML = `<tr><td colspan="5" class="text-sm text-muted">Reading the contract…</td></tr>`;
-$("you-tint").style.setProperty("--wallet-hue", walletHue(YOU));
-stakeNum.value = stakeRange.value = 0;
+setTokens(0);
 setInterval(() => { if (!refreshing && Date.now() - loadedAt > POLL_MS) refresh(); }, 5000);
 await refresh();
 requestAnimationFrame(frame);
-// Pile labels are canvas text, so redraw the previews once the web font arrives.
-document.fonts.ready.then(() => { for (const s of Object.values(sides)) s.busy = true; kick(); });
+document.fonts.ready.then(() => { if (mode === "live") liveView.draw(1); });
 </script>
 </body>
 </html>

@@ -31,8 +31,9 @@ export function walletHue(id) {
   return ((h[0] << 8) | h[1]) % 360;
 }
 
-// oklch(0.72 0.07 h): same lightness and chroma as the .wallet CSS class.
-export const walletColor = (hue, alpha = 1) => `oklch(0.72 0.07 ${hue} / ${alpha})`;
+// oklch(0.74 0.045 h): the --wallet-l and --wallet-c tokens, as the .wallet CSS
+// class uses them. Low chroma, so a staker ant never outshines a trail or a pile.
+export const walletColor = (hue, alpha = 1) => `oklch(0.74 0.045 ${hue} / ${alpha})`;
 
 // Per-option weights the sim reads (milli sqrt-tokens), from wallet stakes.
 export function walletWeights(wallets, nOptions) {

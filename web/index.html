@@ -1,0 +1,854 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Antonomy · the trending market, forecast by ants</title>
+<meta name="description" content="Antonomy ($ANTO): ant colonies forecast Polymarket's trending markets inside a NEAR testnet contract, from a drand seed checked on-chain. Every result has a hash anyone can check.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Antonomy ($ANTO): the trending market, forecast by ants">
+<meta property="og:description" content="Ant colonies forecast Polymarket on NEAR from one public seed. Every run has a hash you can check in your browser.">
+<meta property="og:image" content="brand/social-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="brand/favicon.ico" sizes="32x32">
+<link rel="icon" href="brand/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
+<meta name="theme-color" content="#14100c">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="nest.css">
+</head>
+<body>
+<div id="topbar"></div>
+
+<main>
+  <!-- The scene (docs/LANDING_PAGE.md): the pitch beside one map, which
+       replays the latest finished market from its seed and checks the hash
+       at the last tick. Scrolling on, the pitch leaves and the map grows to
+       fill the screen and stays pinned while the four steps scroll over it,
+       scrubbing its ticks; then the result card. Without JS the pitch, the
+       steps and round 4's recorded card (the README's example) read on
+       their own; the script replays it, then swaps in the chain's latest. -->
+  <div class="scene-band">
+  <div class="scene" id="scene">
+    <div class="scene__hero">
+      <section class="scene__intro" aria-labelledby="hero-title">
+        <p class="eyebrow"><span class="anto-mark">$ANTO</span> · Ant Colony Oracle · NEAR testnet</p>
+        <h1 id="hero-title">Ants vs. <span class="hero__accent">the market.</span></h1>
+        <p class="lede scene__line">Ant colonies forecast Polymarket's trending markets inside a NEAR contract. Whichever outcome draws the most trail sets the swarm belief, a public drand seed drives every ant, and your browser re-runs them to check the hash.</p>
+      </section>
+
+      <div class="scene__actions">
+        <div class="cluster hero__actions">
+          <a class="btn btn--primary btn--lg" href="replay.html" id="go-verify" aria-controls="vf">Verify this colony</a>
+          <a class="btn btn--lg" href="live.html" id="go-live">Watch the round live</a>
+        </div>
+        <p class="scene__showing"><span class="eyebrow" id="rs-topic">Polymarket event · 2 outcomes</span><b id="rs-title">What price will bitcoin hit in October 2026</b></p>
+      </div>
+    </div>
+
+    <div class="scene__stage" id="stage" hidden>
+      <div class="scene__view">
+        <div class="sim-frame scene__frame">
+          <canvas id="rs-map" width="1440" height="960" role="img" aria-label="A colony replayed from the chain's seed"></canvas>
+          <div class="sim-frame__hud">
+            <span class="sim-frame__tick"><span id="rs-where">Recorded · round 4</span> <span class="scene__hud-name">· <span id="rs-name">Momentum</span></span> · tick <strong id="rs-tick">0000</strong>/<span id="rs-ticks">0300</span></span>
+            <span id="rs-pill"></span>
+          </div>
+        </div>
+        <div class="scene__hud">
+          <span class="sim-frame__tick scene__shares" id="rs-shares">trail share · no trail yet</span>
+          <span class="sim-frame__tick scene__proof" id="rs-proof" role="status"></span>
+          <span class="tag-forecast">Forecast · not advice</span>
+          <span class="seg scene__scrub" role="group" aria-label="Time in How the ants forecast"><button type="button" id="rs-scrub" aria-pressed="true">Scroll drives time</button></span>
+        </div>
+      </div>
+      <div class="scene__under" id="rs-under">
+        <div class="result__tabs" id="rs-tabs" role="group" aria-label="Each forecaster's trail share"></div>
+        <p class="scene__summary" id="rs-summary" hidden></p>
+      </div>
+    </div>
+
+    <section class="scene__how" id="how" aria-labelledby="how-title">
+      <div class="section-head">
+        <h2 id="how-title">How the ants forecast</h2>
+        <a class="what spacer" href="docs.html#forecasts">The full round</a>
+      </div>
+      <ol class="how how--story" id="story">
+        <li><div class="how__step"><span class="how__at">tick 0000</span><h3>A seed nobody picks</h3><p>Inputs close, then the next drand beacon is the seed. The contract checks its signature, so nobody on the team picks it.</p></div></li>
+        <li><div class="how__step"><span class="how__at">60 ants · 300 ticks</span><h3>Three colonies forage</h3><p>Each on its own map, one food pile per outcome. What sizes the food:</p>
+          <ul class="how__noses"><li><b>Momentum</b> odds + 2× their 6 h move</li><li><b>Community</b> $ANTO stakes, √-weighted</li><li><b>Agents</b> median of agents' odds</li></ul>
+          <p class="how__note">No input, no colony: it sits out.</p></div></li>
+        <li><div class="how__step"><span class="how__at">scored at 100 · 200 · 300</span><h3>Trails become the forecast</h3><p>The trail within 6 cells of each pile is summed at every checkpoint. The colonies' shares, averaged, are the swarm belief.</p></div></li>
+        <li><div class="how__step"><span class="how__at">Rust = JS = Python</span><h3>You check it</h3><p>Your browser just re-ran every ant from the chain's inputs. Same hash, same forecast.</p><p><a href="#vf" data-act="verify">Verify this colony →</a></p></div></li>
+      </ol>
+    </section>
+  </div>
+  <section class="scene-result" aria-labelledby="result-title">
+    <h2 class="scene-result__title" id="result-title">The result</h2>
+    <figure class="panel result scene__ledger" id="result" aria-labelledby="rs-title">
+      <div id="rs-banner"></div>
+      <div class="result__head">
+        <span class="result__pills"><span id="rs-vpill"><span class="pill" data-state="match">Match · replayed offline</span></span></span>
+        <span class="result__where num" id="rs-round">Round 4 · testnet</span>
+      </div>
+      <p class="result__now" id="rs-now" hidden></p>
+      <section class="verify scene__verify" id="vf" data-state="idle" aria-labelledby="vf-title" hidden tabindex="-1">
+        <h2 class="scene__verify-title" id="vf-title">Checked in your browser</h2>
+        <p class="verify__result" id="vf-line"></p>
+        <div class="scene__verify-rows" id="vf-rows"></div>
+        <a class="what" id="vf-replay" href="replay.html">Open in History →</a>
+      </section>
+        <div class="table-wrap">
+          <table class="table table--compact vs-table vs-table--compact">
+            <caption class="visually-hidden">Swarm belief per outcome next to the market odds</caption>
+            <thead><tr><th scope="col">Outcome</th><th scope="col" class="num">Market</th><th scope="col" class="num">Swarm belief</th><th scope="col" class="num">Gap</th><th scope="col"><span class="visually-hidden">Belief bar, market odds as a tick</span></th></tr></thead>
+            <tbody id="rs-rows">
+              <tr class="vs-row" data-opt="0"><th scope="row"><span class="opt">Yes</span></th><td class="num">18.5%</td><td class="num">43.8%</td><td class="num"><span class="delta delta--up">25.3 pp<span class="visually-hidden"> above the market</span></span></td><td><span class="vs-bar" style="--share: 43.77; --market: 18.5"></span></td></tr>
+              <tr class="vs-row is-lead" data-opt="1"><th scope="row"><span class="opt">No</span><span class="vs-row__leads">Leads</span></th><td class="num">81.5%</td><td class="num">56.2%</td><td class="num"><span class="delta delta--down">25.3 pp<span class="visually-hidden"> below the market</span></span></td><td><span class="vs-bar" style="--share: 56.23; --market: 81.5"></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="result__verify" id="rs-verify">
+          <span class="hash"><span class="hash__label">Market hash</span><span class="hash__value" title="cb34d8d2a1d10b2699ffdc5af8e1f5da245810ede0b8281d683fce3c316d9c3e" data-hex="cb34d8d2a1d10b2699ffdc5af8e1f5da245810ede0b8281d683fce3c316d9c3e"><span class="hash__grp">cb34</span><span class="hash__grp">d8d2</span><span class="hash__gap">…</span><span class="hash__grp">316d</span><span class="hash__grp">9c3e</span></span><button class="hash__expand" type="button" aria-expanded="false" aria-label="Show the full market hash">Expand</button><button class="hash__copy" type="button" aria-label="Copy market hash" data-copy="cb34d8d2a1d10b2699ffdc5af8e1f5da245810ede0b8281d683fce3c316d9c3e"></button></span>
+        </div>
+        <figcaption class="result__foot">
+          <span class="tag-forecast">Forecast · not advice</span>
+          <span class="text-xs text-faint">Swarm belief is a trail share, not a probability.</span>
+          <a class="result__go" id="rs-open" href="live.html">Open the live round →</a>
+        </figcaption>
+      </figure>
+  </section>
+  </div>
+
+  <!-- The nest (docs/NEST_PAGE.md): the same canvas as the app's home, the
+       whole project as one ant base, read live from the chain once it
+       scrolls into view. The chamber tags link to the app's home. -->
+  <section class="page-section" id="the-nest" aria-labelledby="nest-title">
+    <div class="container">
+      <div class="section-head">
+        <h2 id="nest-title">The whole project, as one nest</h2>
+        <a class="what spacer" href="app.html">Open the nest</a>
+      </div>
+      <p class="section-sub">Every part of the oracle is a chamber: the guard that filters markets, the queen's chamber that is the contract, the granary of stakes, the burn pit, the gallery of forecasts, the well of drand seeds. Ants carry stakes, requests, seeds and results through the tunnels.</p>
+      <div class="nest-stage">
+        <div class="nest-frame" id="nest-frame">
+          <canvas id="nest" width="1200" height="800" role="img" aria-label="The Antonomy nest: a cutaway ant base whose chambers are the contract's parts"></canvas>
+          <div class="nest-hits" id="nest-hits" hidden></div>
+        </div>
+        <p class="nest-legend text-xs text-faint"><span>Each chamber opens in the app, with its live numbers.</span> <span class="tag-forecast">Forecast · not advice</span></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- $ANTO today and a round in numbers: the token's state, right after the scene. -->
+  <section class="page-section" aria-labelledby="ha-title">
+    <div class="container today">
+      <section class="hero__anto today__anto" aria-labelledby="ha-title">
+        <h2 id="ha-title" class="hero__anto-title"><span class="anto-mark">$ANTO</span> today <span class="chip">play token · testnet</span></h2>
+        <dl class="hero__stats">
+          <div><dt>Burned since launch</dt><dd class="num" id="ha-burned" aria-busy="true">…</dd></div>
+          <div><dt>Today's pot</dt><dd class="num" id="ha-pot" aria-busy="true">…</dd></div>
+          <div><dt id="ha-day-label">Burn day</dt><dd class="num" id="ha-day">staking till 12:00 UTC</dd></div>
+        </dl>
+        <a class="hero__anto-go" href="pot.html#sugar">The ants pick today's burn. Stake on it →</a>
+      </section>
+      <section class="hero__anto today__anto" aria-labelledby="hn-title">
+        <h2 id="hn-title" class="hero__anto-title">A round in numbers</h2>
+        <dl class="hero__stats hero__stats--round">
+          <div><dt>Round</dt><dd class="num">~25 min</dd></div>
+          <div><dt>Markets</dt><dd class="num">up to 12</dd></div>
+          <div><dt>Colonies each</dt><dd class="num">3</dd></div>
+          <div><dt>Ants × ticks</dt><dd class="num">60 × 300</dd></div>
+          <div><dt>Seed</dt><dd class="num">drand <small>BLS checked on-chain</small></dd></div>
+          <div><dt>Same hash</dt><dd class="num">Rust·JS·Py <small>on 10,000 seeds</small></dd></div>
+        </dl>
+      </section>
+    </div>
+  </section>
+
+  <section class="page-section" id="pot" aria-labelledby="pot-title">
+    <div class="container">
+      <div class="section-head">
+        <h2 id="pot-title">The daily pot: ants decide what burns</h2>
+        <span class="chip">play token · NEAR testnet</span>
+        <a class="what spacer" href="pot.html#pot">The Burn page</a>
+      </div>
+      <p class="section-sub">Every day a colony picks how much of the treasury leaves it, one of five sizes capped at 2%. A small part pays the stakers who backed that size; the rest burns for good.</p>
+      <div class="pot">
+        <ol class="pot__day">
+          <li><span class="how__at">00:00–12:00 UTC</span><h3>Drop sugar on a size</h3><p>Stake $ANTO on the pot you want, √-weighted. Stakes made after 12:00 count from tomorrow.</p></li>
+          <li><span class="how__at">12:00–24:00 UTC · 43,200 ticks</span><h3>The Burn colony runs</h3><p>One tick a second, on-chain, from a drand seed. Bigger pots get less food, so they need more sugar to win.</p></li>
+          <li><span class="how__at">24:00 UTC</span><h3>Pay, then burn</h3><p>The size with the most trail wins. Its stakers split the reward part by stake and the rest is burned. A stake keeps counting for later days until withdrawn.</p></li>
+        </ol>
+        <figure class="panel pot__menu">
+          <div class="table-wrap">
+            <table class="table table--compact">
+              <caption class="pot__cap"><span id="pot-at">Share of the treasury</span> if the colony picks each size</caption>
+              <thead><tr><th scope="col">Pot</th><th scope="col" class="num">Burned</th><th scope="col" class="num">To its stakers</th><th scope="col" class="num" title="How often the colony picked this size with no stakes, over 300 simulated days">Base chance</th><th scope="col" class="num" title="Scales this size's food in the sim, stakes included">Handicap</th></tr></thead>
+              <tbody id="pot-rows">
+                <tr><th scope="row"><span class="opt" data-opt="0">0.10%</span></th><td class="num">0.02%</td><td class="num">0.08%</td><td class="num">~24%</td><td class="num">×1.00</td></tr>
+                <tr><th scope="row"><span class="opt" data-opt="1">0.25%</span></th><td class="num">0.15%</td><td class="num">0.10%</td><td class="num">~22%</td><td class="num">×0.88</td></tr>
+                <tr><th scope="row"><span class="opt" data-opt="2">0.50%</span></th><td class="num">0.38%</td><td class="num">0.12%</td><td class="num">~22%</td><td class="num">×0.75</td></tr>
+                <tr><th scope="row"><span class="opt" data-opt="3">1.00%</span></th><td class="num">0.86%</td><td class="num">0.14%</td><td class="num">~15%</td><td class="num">×0.62</td></tr>
+                <tr><th scope="row"><span class="opt" data-opt="4">2.00%</span></th><td class="num">1.84%</td><td class="num">0.16%</td><td class="num">~17%</td><td class="num">×0.50</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <figcaption class="pot__foot"><span class="text-xs text-faint">Base chance: picked with no stakes. Sugar on a size raises it.</span><a class="btn btn--sm" href="pot.html#sugar">Stake on today's burn</a></figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="page-section" id="anto" aria-labelledby="anto-title">
+    <div class="container">
+      <div class="section-head">
+        <h2 id="anto-title">Drop sugar, steer the swarm</h2>
+        <span class="chip">play token · NEAR testnet</span>
+        <a class="what spacer" href="docs.html#stakes">How stakes work</a>
+      </div>
+      <p class="section-sub"><span class="anto-mark">$ANTO</span> is sugar for the ants. 1,000,000 minted, none since, and some burns every day. One wallet stakes up to 100 across markets, the Burn and requests.</p>
+      <div class="anto">
+        <ol class="anto__uses">
+          <li><h3>Steer a forecast</h3><p>Stake on an outcome. The Community colony follows the sugar.</p><p class="anto__fact">√ weight: 25 → 5, 100 → 10 · refunded next round</p><a href="live.html">Pick a market →</a></li>
+          <li><h3>Steer the burn</h3><p>Stake on a pot size. If the ants pick it, you share a cut and the rest burns.</p><p class="anto__fact" id="au-burn-range">pot 0.10%–2.00% of the treasury · picked 24:00 UTC</p><a href="pot.html#sugar">Stake on the burn →</a></li>
+          <li><h3>Recruit the swarm</h3><p>Pay <b class="num" id="au-fee">100 $ANTO</b> for a forecast on any open market, or 1 $ANTO, burned, for a random value nobody could pick.</p><p class="anto__fact" id="au-split">paid to keepers, agents and crankers for work, never for being right</p><span class="anto__go"><a href="live.html#add">Recruit →</a><a href="recruit.html#random">Randomness →</a></span></li>
+          <li><h3>Forecast as an agent</h3><p>Lock <b class="num" id="au-deposit">10 $ANTO</b>, post your odds, get paid for the work.</p><p class="anto__fact">refundable deposit · CLI + MCP: ask_swarm, post_forecast, verify</p><a href="recruit.html#agents">Answer as an agent →</a></li>
+        </ol>
+        <div class="panel anto__me" id="anto-me">
+          <p class="eyebrow">Your $ANTO</p>
+          <p class="anto__me-big num">150 <small>$ANTO</small></p>
+          <p class="text-sm text-muted">free from the faucet, once per testnet account. Connect a NEAR testnet wallet from the top bar to claim it.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="page-section" id="check" aria-labelledby="check-title">
+    <div class="container">
+      <div class="proof">
+        <div class="proof__copy">
+          <h2 id="check-title">Don't trust the ants. Check them.</h2>
+          <p class="section-sub">One integer simulation, <code>ANTO-SIM-v1</code>, in Rust on-chain, JavaScript here and Python. Same hash on 10,000 seeds. Clone the repo; no wallet, no build.</p>
+          <div class="cluster proof__links"><a class="btn btn--sm" href="replay.html">Open History</a><a class="btn btn--sm btn--ghost" href="replay.html#check">Check a whole round</a><a class="what" href="docs.html#verify">How verifying works</a></div>
+        </div>
+        <div class="proof__do">
+          <p class="proof__what">Round 4's market, re-run offline from the inputs the contract held:</p>
+          <pre class="cmd"><code>node docs/example_market.mjs</code><button class="hash__copy" type="button" aria-label="Copy the command" data-copy="node docs/example_market.mjs"></button></pre>
+          <p class="proof__see"><span>prints</span> <code>market hash cb34d8d2a1d10b2699ffdc5af8e1f5da245810ede0b8281d683fce3c316d9c3e</code></p>
+          <details class="proof__more">
+            <summary>Two more checks</summary>
+            <p class="proof__what">Seed 42 in the Python reference (<code>node sim/tests/dump.mjs 42 1</code> and Rust print the same):</p>
+            <pre class="cmd"><code>python3 -I sim/python/antosim.py 42</code><button class="hash__copy" type="button" aria-label="Copy the command" data-copy="python3 -I sim/python/antosim.py 42"></button></pre>
+            <p class="proof__see"><span>prints</span> <code>5861454949eef27fe595372e590ab5625e65c7e324d16db8d4806b39ac1c4375</code></p>
+            <p class="proof__what">A request on the live contract, re-run in Python:</p>
+            <pre class="cmd"><code>python3 -I bots/recruit.py verify --contract antonomy-oracle.testnet --request 0</code><button class="hash__copy" type="button" aria-label="Copy the command" data-copy="python3 -I bots/recruit.py verify --contract antonomy-oracle.testnet --request 0"></button></pre>
+            <p class="proof__see"><span>prints</span> <code>"ok": true</code>, then <code>"match": true</code> per colony</p>
+          </details>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="page-section" aria-label="What this is not">
+    <div class="container">
+      <div class="banner">
+        <span class="banner__g" aria-hidden="true">i</span>
+        <div>
+          <b class="banner__title">Forecasts, not bets.</b>
+          <p>Nobody is paid for being right and $ANTO is a testnet play token. Limits: a seed waits while drand is unreachable, and a Burn day is lost if nobody cranks it for about a day.</p>
+        </div>
+        <a class="what banner__action" href="docs.html#demo">All limits</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="footer"></div>
+
+<script type="module">
+import { ColonyView } from "./ds/colony-view.mjs";
+import { GLYPHS, KIND_NAMES, DAY_MS, STAKING_MS } from "./round.mjs";
+import { loadRound, verifyMarket } from "./roundchain.mjs";
+import { $, esc, pad4, installCopy, liveShares, hashHTML, hashCompareHTML, pillHTML, topbar, footer, refreshTokenChip } from "./ui.mjs";
+import { pct, utc, argmax, deltaCls, marketHref, liveHref, makeVerifier, sigOf } from "./lv.mjs";
+import { chain, wallet } from "./chain.mjs";
+import { loadToken, fmtAnto, burnedPct, nextStep } from "./token.mjs";
+import { potAmounts } from "./burn.mjs";
+import { HERO_TPS, RECORDED, recordedMarket, storyTick, stepTick, heroCell, summaryText } from "./landing.mjs";
+
+$("topbar").outerHTML = topbar("landing");
+$("footer").outerHTML = footer();
+installCopy();
+$("go-live").href = liveHref();
+
+const NAMES = KIND_NAMES;
+const READS = ["odds +6h move", "$ANTO stakes", "agents' odds"];
+const OUT = ["no odds", "no stakes", "no posts"]; // why a colony sits out (.is-out adds "sits out · ")
+const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const optHTML = (o, label) => `<span class="opt" data-opt="${o}">${esc(label)}</span>`;
+const contractQ = () => { const c = new URLSearchParams(location.search).get("contract"); return c ? `&contract=${encodeURIComponent(c)}` : ""; };
+
+// ---- The scene (docs/LANDING_PAGE.md). One map, sticky beside the hero and
+// How the ants forecast, replays a finished market from its seed: the first
+// finished market of the round the chain shows (or the previous round), and
+// round 4's recording until the chain answers or while it has nothing run.
+// All three colonies step together so every tab's trail share is live; the
+// shown one is drawn. At the last tick its hash is compared with the chain's.
+// Scrolling through the four steps drives the ticks (seeking by re-running
+// from tick 0 when time goes back: 300 ticks of 60 ants take a few ms).
+
+const REC = { m: recordedMarket(), src: { id: RECORDED.round }, recorded: true, prev: true };
+REC.src.markets = [REC.m];
+const view = new ColonyView($("rs-map"), { labels: [], glyphs: GLYPHS });
+view.selected = -1; // nobody followed here; Market and Replay do that
+
+let shown = null;     // what the scene shows: { m, src, recorded, prev }
+let roundNow = null;  // the chain's round, once read
+let cols = [], starts = [], mine = [], pick = 0, visible = true, busy = true, lastT = -1, sig = "rec";
+let pending = null;   // a newer market to show at a calm moment
+let story = null;     // the tick the How steps ask for, null while How is out of the reading line
+let storied = false;  // the How steps have moved the map since it last left them
+let scrub = localStorage.getItem("anto-scrub") ? localStorage.getItem("anto-scrub") === "on" : !still;
+
+const verify = makeVerifier((mk, v) => { if (shown && sigOf(mk) === sigOf(shown.m)) paintVerify(v); });
+
+// The chain's market to show: a finished one, else one with a cranked colony,
+// in the round the pages draw, then the previous round. null: keep the recording.
+function displayOf(r) {
+  for (const src of [r.shown, r.previous]) {
+    const m = src?.markets.find((x) => x.done) ?? src?.markets.find((x) => x.forecasters?.some((f) => f.cranked));
+    if (m) return { m, src, recorded: false, prev: src !== r };
+  }
+  return null;
+}
+
+// Why the current round shows nothing of its own yet, by its phase.
+function waitNote(r) {
+  const at = (ms) => (Number.isFinite(ms) ? utc(ms) : "soon");
+  return {
+    posting: `Staking is open and the keepers' odds are on-chain. The seed is drawn after staking closes and the agents' window ends at ${at(r.publishMs)}.`,
+    agents: `Agents are posting their odds until ${at(r.publishMs)}. Then the seed is drawn and the colonies run.`,
+    ready: `Inputs are closed. The seed waits for the first drand round after ${at(r.publishMs)}; the first crank carries its signature.`,
+    running: "The seed is drawn. The colonies run one crank at a time.",
+    skipped: "This round was skipped: no two keepers agreed on a market. Stakes are refunded and the next round starts on its own.",
+  }[r.phase] ?? "";
+}
+const PHASE = { posting: "staking", agents: "taking agents' odds", ready: "waiting for its seed", running: "running", done: "finished", skipped: "skipped" };
+
+function note() {
+  const r = roundNow;
+  let text = "";
+  if (r && shown.recorded) {
+    const none = !r.markets.length && r.phase !== "skipped" ? "Keepers have not posted this round's markets on-chain yet." : waitNote(r);
+    text = `Round ${r.id}: ${none} Until a colony has run, this is round ${RECORDED.round}'s recorded result, re-run here from the inputs the contract held.`;
+  } else if (r && shown.prev) {
+    text = `Round ${r.id} is ${PHASE[r.phase] ?? r.phase}, so this is round ${shown.src.id}'s result.`;
+  }
+  $("rs-now").hidden = !text;
+  $("rs-now").textContent = text;
+}
+
+function rowsHTML(mk) {
+  const top = mk.swarm ? argmax(mk.swarm) : -1;
+  return mk.outcomes.map((label, o) => {
+    const odds = mk.odds[o], s = mk.swarm?.[o] ?? null, d = s === null ? 0 : s - odds;
+    return `<tr class="vs-row${o === top ? " is-lead" : ""}" data-opt="${o}"><th scope="row">${optHTML(o, label)}${o === top ? `<span class="vs-row__leads">Leads</span>` : ""}</th>` +
+      `<td class="num">${pct(odds)}%</td>` +
+      (s === null ? `<td class="num text-faint">after the run</td><td class="num text-faint">—</td>`
+        : `<td class="num">${pct(s)}%</td><td class="num"><span class="delta ${deltaCls(d)}">${pct(Math.abs(d))} pp<span class="visually-hidden"> ${d > 0 ? "above" : d < 0 ? "below" : "level with"} the market</span></span></td>`) +
+      `<td><span class="vs-bar" style="--share: ${s === null ? 0 : s / 100}; --market: ${odds / 100}"></span></td></tr>`;
+  }).join("");
+}
+
+function tabsHTML(m) {
+  return m.forecasters.map((f, k) => {
+    const what = !f.cranked ? `<span class="forecaster__reads">queued</span>`
+      : !f.counted ? `<span class="forecaster__reads">${OUT[k]}</span>`
+      : `<span class="forecaster__lead" data-r="lead">no trail yet</span>`;
+    return `<button class="forecaster${f.counted ? "" : " is-out"}" type="button" data-k="${k}" aria-pressed="${k === pick}"${f.cranked ? "" : " disabled"}><b>${NAMES[k]}</b>${what}</button>`;
+  }).join("");
+}
+
+// The ledger card's pill and market hash, from the background verification.
+function paintVerify(v) {
+  const m = shown.m;
+  if (!v) {
+    $("rs-vpill").innerHTML = `<span class="pill" data-state="running"><i class="pill__g" aria-hidden="true"></i>Checking in your browser</span>`;
+    $("rs-verify").innerHTML = m.marketHash ? hashHTML(m.marketHash, "market hash", { name: "Market hash" }) : "";
+    return;
+  }
+  const bad = v.colonies.filter((c) => c.state === "mismatch").map((c) => NAMES[c.spec.kind]);
+  const marketBad = v.market?.state === "mismatch";
+  const matched = v.colonies.filter((c) => c.state === "match").length;
+  const pending = v.colonies.length - matched - bad.length;
+  const line = bad.length || marketBad
+    ? `${bad.length ? `${bad.join(" and ")} gave a different hash in your browser.` : "The market hash or swarm belief differs from the chain's."} <a href="#vf" data-act="verify">See which hash differs</a>.`
+    : pending ? `${pending} not cranked yet.` : "";
+  $("rs-vpill").innerHTML = bad.length || marketBad ? pillHTML("mismatch", "Mismatch in your browser")
+    : pillHTML("match", `Match · ${matched} of ${NAMES.length} in your browser`);
+  $("rs-verify").innerHTML = (line ? `<p class="result__check">${line}</p>` : "") + (m.marketHash ? hashHTML(m.marketHash, "market hash", { name: "Market hash" }) : "");
+}
+
+// The shown colony's own hash, once it has run to its last tick.
+function hashOf(k) {
+  const col = cols[k];
+  if (col.t < col.ticks) return null;
+  return (mine[k] ??= col.result().hash);
+}
+
+function proofHTML() {
+  const { m } = shown, f = m.forecasters[pick], col = cols[pick], seed = m.run.seed;
+  const drand = !shown.recorded && !shown.prev && roundNow?.drandRound ? ` · drand #${roundNow.drandRound}` : "";
+  let check;
+  if (!f.chainHash) check = "not cranked yet";
+  else if (col.t < col.ticks) check = `checks the hash at tick ${pad4(col.ticks)}`;
+  else check = hashOf(pick) === f.chainHash ? `<span class="scene__ok">✓ hash matches the chain</span>`
+    : `<span class="scene__bad">≠ hash differs</span> · <a href="#vf" data-act="verify">see which</a>`;
+  return `<span title="${esc(seed)}">seed ${seed.slice(0, 4)}…${seed.slice(-4)}</span>${drand} · ${check}`;
+}
+
+function show(k) {
+  pick = k;
+  view.setStakers(shown.m.forecasters[k].stakers);
+  view.focusSource = -1;
+  view.attach(cols[k]);
+  $("rs-name").textContent = NAMES[k];
+  $("rs-ticks").textContent = pad4(cols[k].ticks);
+  $("rs-tabs").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.k === k)));
+  lastT = -1; busy = true;
+}
+
+function build(d) {
+  shown = d;
+  const { m, src } = d;
+  cols = m.forecasters.map((f) => f.make());
+  mine = [];
+  const t0 = still || storied ? -Infinity : performance.now(); // reduced motion: open on the final frame
+  starts = cols.map(() => t0);
+  if (!m.forecasters[pick]?.cranked) pick = Math.max(0, m.forecasters.findIndex((f) => f.cranked));
+  view.labels = m.outcomes;
+
+  $("rs-topic").textContent = `Polymarket event · ${m.outcomes.length} outcomes`;
+  $("rs-title").textContent = m.title;
+  $("rs-where").textContent = d.recorded ? `Recorded · round ${RECORDED.round}` : `Round ${src.id}`;
+  $("rs-round").textContent = d.recorded ? `Round ${RECORDED.round} · recorded`
+    : `${d.prev ? "Previous round" : "Round"} ${src.id} · market ${m.index + 1} of ${src.markets.length}`;
+  $("rs-pill").innerHTML = d.recorded ? pillHTML("done", "Recorded result")
+    : m.done ? pillHTML("done", "Result final") : pillHTML("running", `Running · ${m.cranked} of ${NAMES.length} cranked`);
+  $("rs-rows").innerHTML = rowsHTML(m);
+  $("rs-open").href = d.recorded ? liveHref() : marketHref(m.key);
+  $("rs-open").textContent = d.recorded ? "Open the live round →" : "Open this market →";
+  $("rs-shares").innerHTML = `trail share ${m.outcomes.map((o, i) =>
+    `<span class="scene__share" data-opt="${i}" tabindex="0">${optHTML(i, o)} <strong data-r="share">—</strong></span>`).join("")}`;
+  $("rs-tabs").innerHTML = tabsHTML(m);
+  $("vf").hidden = true;
+  show(pick);
+  paintVerify(verify(m)?.v ?? null);
+  note();
+}
+
+// Seek colony k to tick t: step forward, or start again from tick 0.
+function seek(k, t, fx) {
+  let col = cols[k];
+  if (t < col.t) {
+    col = cols[k] = shown.m.forecasters[k].make();
+    if (k === pick) view.attach(col);
+  }
+  const effects = fx && t - col.t <= 2;
+  while (col.t < t) {
+    col.step();
+    if (k === pick) view.afterStep(effects);
+  }
+}
+
+// The HUD, the summary and each tab's leader, once per tick change.
+function panels() {
+  const col = cols[pick], { m } = shown;
+  const { pct: p } = liveShares(col), any = p.some((x) => x > 0);
+  $("rs-tick").textContent = pad4(col.t);
+  $("rs-shares").querySelectorAll('[data-r="share"]').forEach((el, o) => { el.textContent = any ? `${p[o].toFixed(1)}%` : "—"; });
+  $("rs-proof").innerHTML = proofHTML();
+  const h = col.t === col.ticks ? hashOf(pick) : null;
+  const summary = summaryText({
+    where: shown.recorded ? `Round ${RECORDED.round}, recorded` : `Round ${shown.src.id}`, name: NAMES[pick],
+    t: col.t, ticks: col.ticks, outcomes: m.outcomes, shares: p, swarm: m.swarm,
+    check: h && m.forecasters[pick].chainHash ? (h === m.forecasters[pick].chainHash ? "match" : "mismatch") : null,
+  });
+  $("rs-map").setAttribute("aria-label", summary);
+  if (still) { $("rs-summary").hidden = false; $("rs-summary").textContent = summary; }
+  $("rs-tabs").querySelectorAll("button[data-k]").forEach((b) => {
+    const k = +b.dataset.k, el = b.querySelector('[data-r="lead"]');
+    if (!el) return;
+    const { pct: q, lead } = liveShares(cols[k]);
+    el.innerHTML = lead < 0 ? "no trail yet" : `<span class="opt" data-opt="${lead}" title="${esc(m.outcomes[lead])}"><span class="forecaster__opt">${esc(m.outcomes[lead])}</span></span><span class="forecaster__pct">${q[lead].toFixed(1)}%</span>`;
+  });
+}
+
+// A newer market swaps in only when it won't jump under the reader: before
+// tick 30, or once the replay has finished, and never while the steps scrub.
+const calm = () => story === null && (cols[pick].t < 30 || cols.every((c, k) => !shown.m.forecasters[k].cranked || c.t >= c.ticks));
+
+function frame(perf) {
+  if (pending && calm()) { const d = pending; pending = null; build(d); }
+  const now = performance.now();
+  let running = false;
+  shown.m.forecasters.forEach((f, k) => {
+    if (!f.cranked) return;
+    const ticks = cols[k].ticks;
+    let target, frac = 1;
+    if (story !== null) target = Math.min(story, ticks);
+    else {
+      const exact = Math.min(ticks, ((now - starts[k]) / 1000) * HERO_TPS);
+      target = Math.floor(exact);
+      frac = target < ticks ? exact - target : 1;
+      if (target < ticks) running = true;
+    }
+    seek(k, target, story === null);
+    cols[k].frac = frac;
+  });
+  const col = cols[pick];
+  if (col.t !== lastT) { lastT = col.t; busy = true; panels(); }
+  if (visible && (running || busy)) busy = view.draw(col.frac ?? 1, perf);
+  requestAnimationFrame(frame);
+}
+
+// ---- Scroll drives time: the reading line through the four steps.
+
+const steps = [...$("story").children];
+const wide = matchMedia("(min-width: 1000px)");
+let sticky = false;
+
+function storyAt() {
+  if (!sticky) return null;
+  const stage = $("stage").getBoundingClientRect();
+  const line = wide.matches ? innerHeight * 0.55 : stage.bottom + (innerHeight - stage.bottom) * 0.5;
+  const first = steps[0].getBoundingClientRect(), last = steps[steps.length - 1].getBoundingClientRect();
+  if (line < first.top || line > last.bottom) return null;
+  let i = 0;
+  steps.forEach((li, j) => { if (li.getBoundingClientRect().top <= line) i = j; });
+  const r = steps[i].getBoundingClientRect(), q = Math.min(1, Math.max(0, (line - r.top) / r.height));
+  steps.forEach((li, j) => li.classList.toggle("is-now", j === i));
+  const T = cols[pick].ticks;
+  return scrub ? storyTick((i + q) / steps.length, T) : stepTick(i, T);
+}
+
+function onScroll() {
+  zoom();
+  const t = storyAt();
+  if (t !== null) { story = t; storied = true; return; }
+  steps.forEach((li) => li.classList.remove("is-now"));
+  if (story !== null) {
+    story = null;
+    // Leaving the steps: the map shows the run's end again.
+    starts = cols.map(() => -Infinity);
+  }
+}
+
+// ---- The zoom (wide screens): as the pitch scrolls away the map's box grows
+// from its place beside the pitch (z = 0) to the pinned stage's full height,
+// from part way under the steps' column to the right edge (z = 1), done
+// before the first step reaches the reading line. Under reduced motion
+// it switches at half way instead of growing.
+
+let home = null, zoomEnd = 1;
+const pinTop = () => parseFloat(getComputedStyle($("stage")).top) || 0;
+
+function measure() {
+  const scene = $("scene"), stage = $("stage"), view = stage.querySelector(".scene__view"), under = $("rs-under");
+  if (!(wide.matches && sticky)) {
+    home = null;
+    scene.style.removeProperty("--z");
+    view.removeAttribute("style");
+    under.removeAttribute("style");
+    under.inert = scene.querySelector(".scene__hero").inert = false;
+    return;
+  }
+  const w = stage.clientWidth, h = stage.clientHeight, mw = parseFloat(scene.style.getPropertyValue("--map-w")), mh = (mw * 2) / 3;
+  const pad = parseFloat(getComputedStyle(scene).paddingRight), gap = 12;
+  under.style.width = `${mw}px`;
+  const block = mh + gap + under.offsetHeight;
+  const x = w - pad - mw, x0 = Math.round(x * 0.45);
+  home = { x, y: Math.max(pad, (h - block) / 2), w: mw, h: mh, X: x0, W: w - x0, H: h };
+  scene.style.setProperty("--lip", `${x - x0}px`);
+  under.style.left = `${home.x}px`;
+  under.style.top = `${home.y + mh + gap}px`;
+  // Scrolled s px into the scene, the first step's top is at pinTop + first - s.
+  const first = steps[0].getBoundingClientRect().top - scene.getBoundingClientRect().top;
+  zoomEnd = Math.max(1, (pinTop() + first - innerHeight * 0.55) * 0.85);
+}
+
+function zoom() {
+  if (!home) return;
+  const scene = $("scene");
+  const p = Math.min(1, Math.max(0, (pinTop() - scene.getBoundingClientRect().top) / zoomEnd));
+  const z = still ? (p >= 0.5 ? 1 : 0) : p * p * (3 - 2 * p);
+  const v = $("stage").querySelector(".scene__view").style, at = (a, b) => `${a + (b - a) * z}px`;
+  v.left = at(home.x, home.X); v.top = at(home.y, 0); v.width = at(home.w, home.W); v.height = at(home.h, home.H);
+  scene.style.setProperty("--z", z.toFixed(3));
+  $("rs-under").inert = z > 0.3;
+  scene.querySelector(".scene__hero").inert = z > 0.6;
+}
+
+function size() {
+  const top = wide.matches ? parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--topbar-h")) || 56 : 0;
+  const k = heroCell({ vw: document.documentElement.clientWidth, vh: innerHeight, top });
+  $("scene").style.setProperty("--map-w", `${k * 72}px`);
+  sticky = getComputedStyle($("stage")).position === "sticky";
+  measure();
+  onScroll();
+}
+
+function paintScrub() {
+  $("rs-scrub").setAttribute("aria-pressed", String(scrub));
+  $("rs-scrub").title = scrub ? "Scrolling through How the ants forecast moves the colony's ticks" : "Each step shows one frame";
+}
+$("rs-scrub").addEventListener("click", () => {
+  scrub = !scrub;
+  localStorage.setItem("anto-scrub", scrub ? "on" : "off");
+  paintScrub();
+  onScroll();
+});
+
+// ---- Verify this colony: re-run the market's colonies here and show the
+// chain's hash beside the one your browser got.
+
+async function openVerify() {
+  const vf = $("vf"), { m, src, recorded } = shown;
+  vf.hidden = false;
+  vf.dataset.state = "running";
+  $("vf-line").textContent = "Re-running the colonies from the chain's inputs…";
+  $("vf-rows").innerHTML = "";
+  vf.scrollIntoView({ block: "start", behavior: still ? "auto" : "smooth" });
+  vf.focus({ preventScroll: true });
+  const t0 = performance.now();
+  const v = await verifyMarket(m);
+  const ms = Math.max(1, Math.round(performance.now() - t0));
+  const row = (name, state, chainHex, mineHex) => `<div class="scene__vrow"><p>${name} ${state === "match" ? pillHTML("match", "Match")
+    : state === "mismatch" ? pillHTML("mismatch", "Mismatch") : pillHTML("pending", "Not cranked yet")}</p>${chainHex && mineHex ? hashCompareHTML(chainHex, mineHex) : ""}</div>`;
+  const order = [pick, ...v.colonies.map((_, k) => k).filter((k) => k !== pick)];
+  $("vf-rows").innerHTML = order.map((k) => { const c = v.colonies[k]; return row(`<b>${NAMES[k]}</b>`, c.state, c.expected, c.actual); }).join("")
+    + (v.market ? row("<b>Market hash</b> <span class=\"text-faint\">· all three plus the swarm belief</span>", v.market.state, v.market.expected, v.market.actual) : "");
+  const bad = v.colonies.filter((c) => c.state === "mismatch").map((c) => NAMES[c.spec.kind]);
+  const ran = v.colonies.filter((c) => c.state !== "pending").length;
+  const from = recorded ? `the inputs the contract held in round ${RECORDED.round}` : "the chain's seed and inputs";
+  if (bad.length || v.market?.state === "mismatch") {
+    vf.dataset.state = "mismatch";
+    $("vf-line").textContent = `Your browser got a different hash for ${bad.length ? bad.join(" and ") : "the market"}. The differing groups are marked ≠. Re-run it in History or report it.`;
+  } else {
+    vf.dataset.state = ran < NAMES.length ? "partial" : "match";
+    $("vf-line").textContent = `${ran} of ${NAMES.length} colonies re-ran here in ${ms} ms from ${from}. ${ran < NAMES.length ? "The rest are not cranked yet." : "Every hash matches."}`;
+  }
+  const a = $("vf-replay");
+  if (recorded) { a.href = "#check"; a.textContent = "Re-run round 4 offline →"; }
+  else { a.href = `replay.html?colony=${encodeURIComponent(m.forecasters[pick].key)}&round=${src.id}${contractQ()}`; a.textContent = "Open in History →"; }
+}
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest('#go-verify, [data-act="verify"]') || $("stage").hidden) return;
+  e.preventDefault();
+  openVerify();
+});
+
+// ---- Spotlight: an outcome hovered or focused anywhere in the scene lights
+// its pile's scoring ring on the map.
+function spot(el) {
+  const o = el ? +el.dataset.opt : -1;
+  const s = o < 0 ? -1 : cols[pick].perm[o] ?? -1;
+  if (view.focusSource !== s) { view.focusSource = s; busy = true; }
+}
+const spotOf = (t) => t.closest?.(".vs-row[data-opt], .scene__share[data-opt]") ?? null;
+$("scene").addEventListener("pointerover", (e) => spot(spotOf(e.target)));
+$("scene").addEventListener("pointerleave", () => spot(null));
+$("scene").addEventListener("focusin", (e) => spot(spotOf(e.target)));
+$("scene").addEventListener("focusout", () => spot(null));
+
+$("rs-tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-k]");
+  if (b && cols.length) show(+b.dataset.k);
+});
+
+// Watch the sticky stage, not the canvas.
+new IntersectionObserver(([e]) => { visible = e.isIntersecting; if (visible) busy = true; }).observe($("stage"));
+
+// What on the round changes what the scene shows.
+async function poll() {
+  try {
+    const r = await loadRound();
+    roundNow = r;
+    const d = displayOf(r);
+    const s = d ? JSON.stringify([d.src.id, sigOf(d.m)]) : "rec";
+    if (s !== sig) { sig = s; pending = d ?? REC; }
+    else note();
+    $("rs-banner").innerHTML = "";
+  } catch {
+    if (roundNow) return; // keep the last good read; the next poll retries
+    $("rs-banner").innerHTML = `<div class="banner banner--fault" role="alert"><span class="banner__g" aria-hidden="true">✗</span>` +
+      `<div><b class="banner__title">Couldn't read the contract</b><p>The testnet RPC didn't answer; the public endpoints share one rate limit. The map replays round ${RECORDED.round}'s recorded result.</p></div>` +
+      `<button class="btn btn--sm banner__action" type="button" data-act="retry">Retry</button></div>`;
+  }
+}
+$("rs-banner").addEventListener("click", (e) => { if (e.target.closest("[data-act=retry]")) { $("rs-banner").innerHTML = ""; poll(); } });
+
+$("stage").hidden = false;
+$("scene").classList.add("has-stage");
+paintScrub();
+build(REC);
+size();
+addEventListener("resize", size);
+wide.addEventListener("change", size);
+new ResizeObserver(() => { if (home) { measure(); zoom(); } }).observe($("rs-under"));
+addEventListener("scroll", onScroll, { passive: true });
+poll();
+setInterval(() => { if (!document.hidden) poll(); }, 30_000);
+requestAnimationFrame(frame);
+document.fonts.ready.then(() => { busy = true; size(); }); // pile labels are canvas text
+
+// ---- $ANTO today: the Burn day's clock (no chain needed) and the token's
+// facts from the contract.
+
+const inHM = (ms) => { const mins = Math.max(0, Math.ceil(ms / 60_000)); return mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} h ${String(mins % 60).padStart(2, "0")} min`; };
+function burnClock() {
+  const now = Date.now(), start = Math.floor(now / DAY_MS) * DAY_MS, run = start + STAKING_MS, end = start + DAY_MS;
+  const staking = now < run;
+  $("ha-day-label").textContent = staking ? "Burn staking open" : "Burn colony running";
+  $("ha-day").innerHTML = staking ? `till 12:00 UTC <small>closes in ${inHM(run - now)}</small>` : `till 24:00 UTC <small>pot picked in ${inHM(end - now)}</small>`;
+}
+burnClock();
+setInterval(burnClock, 30_000);
+
+const fact = (id, html) => { const el = $(id); el.innerHTML = html; el.removeAttribute("aria-busy"); };
+
+let tokenBusy = false;
+async function token() {
+  let t, cfg = null;
+  try {
+    [t, cfg] = await Promise.all([loadToken({ account: wallet.accountId }), chain.requestConfig().catch(() => null)]);
+  } catch {
+    for (const id of ["ha-burned", "ha-pot"]) if ($(id).hasAttribute("aria-busy")) fact(id, "—");
+    return;
+  }
+  const f = (x) => fmtAnto(x, { compact: true });
+  if (t.burned != null) fact("ha-burned", `${fmtAnto(t.burned)} <small>${burnedPct(t.burned, t.genesis)}</small>`);
+  if (t.treasury != null) {
+    const [lo, hi] = [potAmounts(t.treasury, 0), potAmounts(t.treasury, 4)];
+    fact("ha-pot", `${f(lo.pot)}–${f(hi.pot)}`);
+    $("pot-at").textContent = "Today's amounts in $ANTO, and the share of the treasury,";
+    $("pot-rows").querySelectorAll("tr").forEach((tr, o) => {
+      const p = potAmounts(t.treasury, o), td = tr.querySelectorAll("td");
+      td[0].innerHTML = `${fmtAnto(p.burn)} <small>${td[0].dataset.pct ??= td[0].textContent}</small>`;
+      td[1].innerHTML = `${fmtAnto(p.reward)} <small>${td[1].dataset.pct ??= td[1].textContent}</small>`;
+    });
+    $("au-burn-range").textContent = `pot ${f(lo.pot)}–${f(hi.pot)} $ANTO today (0.10%–2.00% of the treasury) · picked 24:00 UTC`;
+  }
+  if (cfg) {
+    $("au-fee").textContent = `${fmtAnto(cfg.fee)} $ANTO`;
+    const bps = [["keepers", cfg.keeper_bps], ["agents", cfg.agent_bps], ["crankers", cfg.crank_bps], ["treasury", 10_000 - cfg.keeper_bps - cfg.agent_bps - cfg.crank_bps]];
+    $("au-split").textContent = `${bps.filter(([, b]) => b > 0).map(([who, b]) => `${who} ${b / 100}%`).join(" · ")} · paid for work, never for being right`;
+    $("au-deposit").textContent = `${fmtAnto(cfg.agent_deposit)} $ANTO`;
+  }
+  const faucet = t.faucet != null ? `${fmtAnto(t.faucet)} $ANTO` : "play $ANTO";
+  const step = nextStep(t);
+  const me = $("anto-me");
+  if (step === "connect") {
+    me.innerHTML = `<p class="eyebrow">Your $ANTO</p>
+      <p class="anto__me-big num">${t.faucet != null ? `${fmtAnto(t.faucet)} <small>$ANTO</small>` : faucet}</p>
+      <p class="text-sm text-muted">free from the faucet, once per testnet account: enough to stake, request a forecast or register as an agent.</p>
+      <button class="btn" type="button" data-act="connect">Connect a wallet to claim</button>
+      <p class="text-xs text-faint" data-r="msg" role="status"></p>`;
+  } else {
+    const mine = t.me;
+    me.innerHTML = `<p class="eyebrow">Your $ANTO · <code>${esc(mine.account)}</code></p>
+      <p class="anto__me-big num">${mine.balance != null ? fmtAnto(mine.balance) : "…"} <small>$ANTO</small></p>
+      <p class="text-sm text-muted">${mine.staked ? `${fmtAnto(mine.staked)} $ANTO staked across markets, the Burn and requests, out of 100 per wallet.` : "Nothing staked yet."}${step === "claim" ? ` The faucet still owes this account ${faucet}.` : ""}</p>
+      ${step === "claim" ? `<button class="btn" type="button" data-act="claim">Claim ${faucet}</button>`
+        : `<div class="cluster"><a class="btn btn--sm" href="${liveHref()}">Stake on a market</a><a class="btn btn--sm btn--ghost" href="pot.html#sugar">Stake on the burn</a></div>`}
+      <p class="text-xs text-faint" data-r="msg" role="status"></p>`;
+  }
+}
+
+$("anto-me").addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-act]");
+  if (!btn || tokenBusy) return;
+  tokenBusy = true;
+  btn.disabled = true;
+  try {
+    if (btn.dataset.act === "connect") await wallet.connect();
+    else {
+      await wallet.call("claim_play_tokens");
+      refreshTokenChip();
+    }
+    await token();
+  } catch (err) {
+    const msg = $("anto-me").querySelector('[data-r="msg"]');
+    if (msg) msg.textContent = `Not sent: ${String(err.message || err).slice(0, 140)}`;
+    btn.disabled = false;
+  } finally {
+    tokenBusy = false;
+  }
+});
+wallet.onChange(() => token());
+token();
+setInterval(() => { if (!document.hidden) token(); }, 60_000);
+</script>
+<script type="module">
+// The nest section: draws the app home's cutaway on the same NestView, once,
+// when it scrolls near; reads the chain then and every 90 s while in view.
+import { NestView } from "./ds/nest-view.mjs";
+import { CHAMBERS, LAYOUTS, layoutFor, nestScale, deriveNest, nestSummary } from "./nest.mjs";
+import { loadNest } from "./nestchain.mjs";
+import { contractId, wallet } from "./chain.mjs";
+import { $, esc } from "./ui.mjs";
+
+const cid = contractId();
+const q = cid !== "antonomy-oracle.testnet" ? `?contract=${encodeURIComponent(cid)}` : "";
+const view = new NestView($("nest"));
+const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let model = null, visible = false, started = false, last = 0;
+
+function layout() {
+  const frame = $("nest-frame"), w = frame.clientWidth * Math.min(2, devicePixelRatio || 1);
+  const name = layoutFor(frame.clientWidth);
+  if (!view.setLayout(name, nestScale(w, name))) return;
+  frame.dataset.layout = name;
+  const L = LAYOUTS[name];
+  frame.style.aspectRatio = `${L.w} / ${L.h}`;
+  $("nest-hits").innerHTML = CHAMBERS.map((c) => {
+    const h = L.chambers[c.id], pad = c.id === "entrance" ? 0 : 0.6;
+    const st = `left:${((h.x - h.rx - pad) / L.w) * 100}%;top:${((h.y - h.ry - pad) / L.h) * 100}%;width:${((2 * h.rx + 2 * pad) / L.w) * 100}%;height:${((2 * h.ry + 2 * pad) / L.h) * 100}%`;
+    return `<a class="nest-hit" href="app.html${q}#${c.id}"${c.id === "queen" ? ' data-tag="below"' : ""} style="${st}" data-id="${c.id}">` +
+      `<span class="nest-tag"><b>${esc(c.name)}</b><span class="nest-tag__v num" data-r="${c.id}">${esc(model?.[c.id]?.headline ?? "")}</span></span></a>`;
+  }).join("");
+  $("nest-hits").hidden = false;
+  if (model) view.setModel(model);
+}
+
+async function read() {
+  let reads = null;
+  try { reads = await loadNest({ contract: cid, account: wallet.accountId }); } catch { /* chambers stay without numbers */ }
+  if (!reads || [reads.token, reads.round, reads.requests].every((x) => x == null)) return;
+  model = deriveNest(reads, { contract: cid });
+  view.setModel(model);
+  for (const c of CHAMBERS) document.querySelectorAll(`#nest-hits [data-r="${c.id}"]`).forEach((el) => { el.textContent = model[c.id]?.headline ?? ""; });
+  $("nest").setAttribute("aria-label", `The Antonomy nest, read from the contract. ${nestSummary(model)}`);
+  if (still) view.draw();
+}
+
+function frame(now) {
+  if (visible && !document.hidden) view.draw(now);
+  requestAnimationFrame(frame);
+}
+
+new ResizeObserver(() => { layout(); if (still) view.draw(); }).observe($("nest-frame"));
+new IntersectionObserver(([e]) => {
+  visible = e.isIntersecting;
+  if (!visible) return;
+  if (!started) { started = true; layout(); read(); last = Date.now(); if (!still) requestAnimationFrame(frame); else view.draw(); }
+  else if (Date.now() - last > 90_000) { last = Date.now(); read(); }
+}, { rootMargin: "300px 0px" }).observe($("nest-frame"));
+document.fonts.ready.then(() => { view.contentsKey = ""; view.paintContents(); });
+</script>
+</body>
+</html>

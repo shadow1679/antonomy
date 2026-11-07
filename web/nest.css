@@ -1,0 +1,85 @@
+/* The nest page (app.html, docs/NEST_PAGE.md; also drawn on the landing page, index.html). The stage is the colony
+   map's kind of place: painted, rounded, organic. Everything around it is
+   the ledger: hairlines, mono numbers. Scoped to body.nest-page. */
+
+.nest-page .nest-head { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4) var(--space-7); align-items: end; padding-block: var(--space-6) var(--space-5); }
+.nest-page .nest-head .eyebrow { margin: 0 0 var(--space-3); }
+.nest-page .nest-head h1 { margin: 0; font-size: var(--text-3xl); line-height: var(--lh-3xl); }
+@media (min-width: 900px) { .nest-page .nest-head { grid-template-columns: minmax(0, 1fr) minmax(0, 46ch); } }
+@media (max-width: 599px) { .nest-page .nest-head h1 { font-size: var(--text-2xl); line-height: var(--lh-2xl); } }
+
+/* ---- Stage and panel */
+.nest-main { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+@media (min-width: 1000px) { .nest-main { grid-template-columns: minmax(0, 1fr) 340px; } }
+.nest-stage { display: grid; gap: var(--space-2); min-width: 0; }
+.nest-frame { position: relative; aspect-ratio: 120 / 80; border: 1px solid var(--border); border-radius: var(--radius-stage); overflow: hidden; background: var(--earth-900); }
+.nest-frame canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.nest-legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); justify-content: space-between; align-items: center; margin: 0; }
+
+/* One button per chamber over the canvas. Transparent: the canvas draws the
+   chamber and its ring; the button carries the name tag, focus and clicks. */
+.nest-hits { position: absolute; inset: 0; }
+.nest-hit { position: absolute; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; color: inherit; font: inherit; }
+.nest-hit:focus-visible { outline: none; box-shadow: none; }
+.nest-tag { position: absolute; left: 50%; top: 0; transform: translate(-50%, -62%); display: inline-flex; align-items: baseline; gap: var(--space-2); padding: 2px var(--space-2); border: 1px solid rgb(239 230 216 / 0.18); border-radius: var(--radius-pill); background: rgb(13 10 7 / 0.84); color: var(--text); font-size: var(--text-xs); line-height: var(--lh-xs); white-space: nowrap; pointer-events: none; transition: border-color var(--dur-fast); }
+.nest-tag b { font-weight: 600; }
+.nest-tag__v { color: var(--text-muted); font-size: var(--text-2xs); }
+.nest-tag__v:empty { display: none; }
+.nest-hit:hover .nest-tag, .nest-hit[aria-pressed="true"] .nest-tag { border-color: var(--bone-300); }
+.nest-hit:focus-visible .nest-tag { box-shadow: var(--focus-ring); }
+/* The entrance sits on the surface: its tag goes over the mound's crest. */
+.nest-hit[data-id="entrance"] .nest-tag { transform: translate(-50%, -110%); }
+.nest-hit[data-tag="below"] .nest-tag { top: 100%; transform: translate(-50%, -30%); }
+/* Narrow stages show names only; the numbers are in the list below. */
+.nest-frame[data-layout="tall"] .nest-tag__v { display: none; }
+@media (max-width: 1199px) { .nest-frame[data-layout="wide"] .nest-tag__v { display: none; } }
+
+.nest-panel { position: relative; padding: var(--space-5); outline: none; }
+@media (min-width: 1000px) { .nest-panel { position: sticky; top: calc(var(--topbar-h) + var(--space-4)); max-height: calc(100vh - var(--topbar-h) - var(--space-6)); overflow: auto; } }
+.nest-panel .eyebrow { margin: 0 0 var(--space-2); }
+.nest-panel__title { margin: 0 0 var(--space-2); font-size: var(--text-xl); line-height: var(--lh-xl); }
+.nest-panel__head { margin: 0 0 var(--space-3); font-size: var(--text-md); color: var(--text); }
+.nest-panel__rows { display: grid; gap: 0; margin: var(--space-4) 0; border-top: 1px solid var(--border); }
+.nest-panel__rows div { display: grid; grid-template-columns: minmax(0, 9.5rem) minmax(0, 1fr); gap: var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid var(--border); }
+.nest-panel__rows dt { color: var(--text-faint); font-size: var(--text-xs); }
+.nest-panel__rows dd { margin: 0; font-size: var(--text-sm); overflow-wrap: anywhere; }
+.nest-panel__go { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin: var(--space-4) 0; }
+.nest-panel__check { display: grid; gap: var(--space-2); margin: var(--space-3) 0; }
+.nest-panel__check p { margin: 0; }
+.nest-panel__from { margin: var(--space-3) 0 var(--space-2); }
+
+.nest-cells { list-style: none; margin: 0 0 var(--space-3); padding: 0; border-top: 1px solid var(--border); }
+.nest-cells li { display: grid; gap: 2px; padding: var(--space-2) 0; border-bottom: 1px solid var(--border); font-size: var(--text-sm); }
+.nest-cells li a { color: var(--text); }
+.nest-cells__v { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); font-size: var(--text-xs); }
+.nest-cells__vs { color: var(--text-faint); }
+.nest-cells li.is-differs .nest-cells__vs { color: var(--text); font-weight: 600; }
+
+/* ---- Below the stage: the chamber list and the log */
+.nest-below { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-6); padding-block: var(--space-6); }
+@media (min-width: 900px) { .nest-below { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.nest-sub { margin: 0 0 var(--space-3); font-size: var(--text-lg); line-height: var(--lh-lg); }
+.nest-ledger { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
+.nest-ledger li { border-bottom: 1px solid var(--border); }
+.nest-ledger li > b { display: inline-block; min-width: 10rem; padding: var(--space-2) 0; }
+.nest-ledger button { display: grid; grid-template-columns: minmax(0, 10rem) minmax(0, 1fr); gap: var(--space-3); width: 100%; min-height: var(--row); padding: var(--space-2) var(--space-2); border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--text-sm); text-align: left; cursor: pointer; transition: background var(--dur-fast); }
+.nest-ledger button:hover { background: var(--surface-raised); }
+.nest-ledger button[aria-pressed="true"] { background: var(--surface); box-shadow: inset 0 0 0 1px var(--bone-300); }
+.nest-ledger b { font-weight: 600; }
+.nest-ledger__v { color: var(--text-muted); font-size: var(--text-xs); }
+
+.nest-logbox__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.nest-logbox__head .nest-sub { margin: 0; }
+#receipts-note { margin: var(--space-2) 0 var(--space-3); }
+.nest-log { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); max-height: 26rem; overflow: auto; }
+.nest-log li { display: grid; grid-template-columns: 3rem 7.5rem minmax(0, 1fr) auto; gap: var(--space-3); align-items: baseline; padding: var(--space-2) 0; border-bottom: 1px solid var(--border); font-size: var(--text-sm); }
+.nest-log li.text-faint { display: block; }
+.nest-log time { color: var(--text-faint); font-size: var(--text-xs); }
+.nest-log__where { color: var(--text-faint); font-size: var(--text-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nest-log__tx { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-faint); }
+.nest-log .pill { margin-right: var(--space-1); }
+@media (max-width: 599px) {
+  .nest-log li { grid-template-columns: 3rem minmax(0, 1fr) auto; }
+  .nest-log__where { display: none; }
+  .nest-ledger button { grid-template-columns: minmax(0, 1fr); gap: 0; }
+}

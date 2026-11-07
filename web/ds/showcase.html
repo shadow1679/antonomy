@@ -3,194 +3,149 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Antonomy design system</title>
+<title>Antonomy design system · v1</title>
+<link rel="icon" href="../brand/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="antonomy.css">
 <style>
   /* Showcase-only layout. Not part of the system. */
-  .topbar { position: sticky; top: 0; z-index: 10; background: rgb(20 16 12 / 0.85); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
-  .topbar .container { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); min-height: 60px; }
-  .brand { font-family: var(--font-display); font-size: var(--text-lg); font-weight: 650; font-variation-settings: "opsz" 48, "SOFT" 100; letter-spacing: -0.01em; }
-  .brand span { color: var(--accent); }
-  .toc { display: flex; gap: var(--space-4); font-size: var(--text-xs); }
-  .toc a { color: var(--text-muted); text-decoration: none; }
-  .toc a:hover { color: var(--accent); }
-  section.ds { padding-block: var(--space-7); border-bottom: 1px solid var(--border); scroll-margin-top: 60px; }
-  section.ds > .container > h2 { margin-bottom: var(--space-2); }
-  .lede { color: var(--text-muted); max-width: 64ch; margin-bottom: var(--space-6); }
-  .demo-label { margin: var(--space-6) 0 var(--space-3); }
-  .two { display: grid; gap: var(--space-5); grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
-  .swatch { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: var(--surface); }
-  .swatch__chip { height: 64px; display: grid; place-items: center; font-size: var(--text-xl); }
+  .sc-top { position: sticky; top: 0; z-index: 10; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .sc-top .container { display: flex; align-items: center; gap: var(--space-5); min-height: 56px; }
+  .sc-brand { font-weight: 600; }
+  .sc-brand span { color: var(--accent); font-family: var(--font-mono); font-weight: 500; }
+  .sc-toc { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); font-size: var(--text-xs); }
+  .sc-toc a { color: var(--text-muted); text-decoration: none; }
+  .sc-toc a:hover { color: var(--text); }
+  .sc-top .pill { margin-left: auto; }
+  section.sc { padding-block: var(--space-7); border-bottom: 1px solid var(--border); scroll-margin-top: 56px; }
+  section.sc > .container > h2 { margin-bottom: var(--space-2); }
+  .sc-lede { color: var(--text-muted); max-width: 72ch; margin-bottom: var(--space-6); }
+  .sc-label { margin: var(--space-6) 0 var(--space-3); }
+  .sc-two { display: grid; gap: var(--space-5); grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+  .sc-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+  .sc-note { margin: var(--space-2) 0 0; font-size: var(--text-xs); color: var(--text-faint); max-width: 72ch; }
+  .swatches { display: grid; gap: var(--space-2); grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .swatch { border: 1px solid var(--border); border-radius: var(--radius-data); overflow: hidden; background: var(--surface); }
+  .swatch__chip { height: 52px; display: grid; place-items: center; font-family: var(--font-mono); font-size: var(--text-lg); color: var(--soil-900); }
   .swatch__meta { padding: var(--space-2) var(--space-3); font-size: var(--text-xs); line-height: 1.5; }
-  .swatch__meta b { display: block; color: var(--text); font-weight: 500; }
-  .swatch__meta span { color: var(--text-faint); }
-  .type-row { display: grid; grid-template-columns: 9rem 1fr; gap: var(--space-4); align-items: baseline; padding-block: var(--space-3); border-bottom: 1px dashed var(--border); }
+  .swatch__meta b { display: block; color: var(--text); font-weight: 500; font-family: var(--font-mono); }
+  .swatch__meta span { color: var(--text-faint); font-family: var(--font-mono); }
+  .pher-ramp { display: grid; grid-template-columns: repeat(4, 1fr); height: 40px; border-radius: var(--radius-data); overflow: hidden; background: var(--soil-950); border: 1px solid var(--border); }
+  .pher-ramp i:nth-child(1) { background: var(--pher-1); } .pher-ramp i:nth-child(2) { background: var(--pher-2); }
+  .pher-ramp i:nth-child(3) { background: var(--pher-3); } .pher-ramp i:nth-child(4) { background: var(--pher-4); }
+  .type-row { display: grid; grid-template-columns: 11rem 1fr; gap: var(--space-4); align-items: baseline; padding-block: var(--space-3); border-bottom: 1px solid var(--border); }
   .type-row:last-child { border-bottom: 0; }
-  .space-bar { height: 12px; background: var(--accent); border-radius: 2px; opacity: 0.8; }
-  .radius-box { width: 88px; height: 64px; background: var(--surface-raised); border: 1px solid var(--border-strong); display: grid; place-items: center; font-size: var(--text-xs); color: var(--text-muted); }
-  .hero { padding-block: var(--space-8) var(--space-7); border-bottom: 1px solid var(--border); background: radial-gradient(ellipse 60% 80% at 80% 0%, rgb(242 165 65 / 0.08), transparent 70%); }
-  .hero h1 { max-width: 16ch; }
-  .hero h1 em { font-style: italic; color: var(--accent); font-variation-settings: "opsz" 144, "SOFT" 100; }
+  .type-row > span:first-child { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-faint); }
+  .space-row { display: grid; grid-template-columns: 7rem 1fr; gap: var(--space-3); align-items: center; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-faint); }
+  .space-bar { height: 8px; background: var(--bone-300); }
+  .radius-box { width: 96px; height: 64px; background: var(--surface-raised); border: 1px solid var(--border-strong); display: grid; place-items: center; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); }
+  .row-box { display: flex; align-items: center; padding-inline: var(--space-3); border: 1px solid var(--border); background: var(--surface); font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); }
+  .sc-hero { padding-block: var(--space-8) var(--space-7); border-bottom: 1px solid var(--border); }
+  .sc-hero h1 { max-width: 16ch; }
+  .sc-hero h1 em { font-style: italic; color: var(--accent); }
+  .sc-cards { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
+  .sc-states { margin-bottom: var(--space-4); }
 </style>
 </head>
 <body>
 
-<header class="topbar">
+<header class="sc-top">
   <div class="container">
-    <div class="brand">Anto<span>nomy</span></div>
-    <nav class="toc" aria-label="Sections">
-      <a href="#foundations">Foundations</a>
-      <a href="#verification">Verification</a>
-      <a href="#sim">Sim &amp; replay</a>
-      <a href="#forms">Forms &amp; data</a>
+    <div class="sc-brand">Antonomy <span>$ANTO</span></div>
+    <nav class="sc-toc" aria-label="Sections">
+      <a href="#colour">Colour</a><a href="#type">Type</a><a href="#space">Space</a><a href="#motion">Motion</a><a href="#voice">Voice</a>
+      <a href="#status">Status</a><a href="#options">Options &amp; stake</a><a href="#forecast">Forecast</a><a href="#stage">Stage</a><a href="#verify">Verify</a><a href="#people">Boards &amp; bots</a>
     </nav>
-    <span class="chip chip--live">live · round 1042</span>
+    <span class="pill" data-state="running"><i class="pill__g" aria-hidden="true"></i>Running · tick <span class="num">0180</span></span>
   </div>
 </header>
 
-<div class="hero">
+<div class="sc-hero">
   <div class="container">
-    <p class="eyebrow">Design system · Underground nest · v0</p>
-    <h1>Autonomy, but <em>ants</em>.</h1>
-    <div class="prose">
-      <p>The colony decides, you replay the math. Everything here is dark soil, bone text and one reserved colour: pheromone amber. Five earth tones mark the options, and each one always carries its glyph.</p>
-    </div>
+    <p class="eyebrow">Design system · Nest and ledger · v1</p>
+    <h1 class="display--hero">Autonomy, but <em>ants</em>.</h1>
+    <p class="lede">The stage (map, ants, scenery) is the one place with organic shapes, gait and charm. Everything outside it is a ledger: hairlines, small radii, tabular mono numbers, no animated numbers, no emoji. Every colour does one job. See <code>docs/REDESIGN_FOUNDATIONS.md</code> and <code>docs/DESIGN_SYSTEM.md</code>.</p>
   </div>
 </div>
 
 <!-- =================================================================== -->
-<section class="ds" id="foundations">
+<section class="sc" id="colour">
   <div class="container">
-    <h2>Foundations</h2>
-    <p class="lede">Raw tokens live in <code>tokens.css</code>. Components only use the semantic aliases (<code>--bg</code>, <code>--surface</code>, <code>--accent</code> and so on).</p>
+    <h2>Colour</h2>
+    <p class="sc-lede">Amber is pheromone and brand. Green and red are status only. The five options take the hues left over, and never green, red or amber, so a forecast never reads as a verdict. Every other status is neutral grey with a glyph. Colour is never the only signal.</p>
 
-    <h3 class="demo-label">Soil &amp; bone</h3>
-    <div class="grid-auto" style="--grid-min: 140px" data-swatches="--soil-950 --soil-900 --soil-800 --soil-700 --soil-600 --soil-500 --bone-500 --bone-300 --bone-100"></div>
-
-    <h3 class="demo-label">Pheromone (reserved)</h3>
-    <div class="grid-auto" style="--grid-min: 140px" data-swatches="--amber-300 --amber-400 --amber-600 --amber-ink"></div>
-    <p class="text-sm text-muted" style="margin-top: var(--space-3)">Amber means pheromone, brand and the primary action. Do not use it for options or for status.</p>
-
-    <h3 class="demo-label">Status</h3>
-    <div class="grid-auto" style="--grid-min: 140px" data-swatches="--lichen-400 --ember-400 --pollen-400 --water-400"></div>
-
-    <h3 class="demo-label">Options / food sources</h3>
-    <div class="grid-auto" style="--grid-min: 140px">
-      <div class="swatch" data-opt="0"><div class="swatch__chip" style="background: var(--opt-color); color: var(--soil-950)">▲</div><div class="swatch__meta"><b>--opt-0 moss</b><span>#9bb860 · ▲</span></div></div>
-      <div class="swatch" data-opt="1"><div class="swatch__chip" style="background: var(--opt-color); color: var(--soil-950)">■</div><div class="swatch__meta"><b>--opt-1 clay</b><span>#cf6e4e · ■</span></div></div>
-      <div class="swatch" data-opt="2"><div class="swatch__chip" style="background: var(--opt-color); color: var(--soil-950)">◆</div><div class="swatch__meta"><b>--opt-2 slate</b><span>#5d8dc8 · ◆</span></div></div>
-      <div class="swatch" data-opt="3"><div class="swatch__chip" style="background: var(--opt-color); color: var(--soil-950)">●</div><div class="swatch__meta"><b>--opt-3 heather</b><span>#e0a9c4 · ●</span></div></div>
-      <div class="swatch" data-opt="4"><div class="swatch__chip" style="background: var(--opt-color); color: var(--soil-950)">★</div><div class="swatch__meta"><b>--opt-4 sand</b><span>#efe2b6 · ★</span></div></div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Job</th><th>Colour</th><th>Non-colour backup</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Options 0 to 4</th><td><span class="cluster" style="--cluster-gap: 4px"><span class="opt-chip" data-opt="0"></span><span class="opt-chip" data-opt="1"></span><span class="opt-chip" data-opt="2"></span><span class="opt-chip" data-opt="3"></span><span class="opt-chip" data-opt="4"></span></span></td><td>Glyph ▲ ■ ◆ ● ★ and the option's name, always; a glyph label on each pile</td></tr>
+          <tr><th scope="row">Staker ants</th><td><span class="wallet" style="--wallet-hue: 30"><span class="wallet__id">alice.testnet</span></span></td><td>Ant swatch beside the account id; never fills a bar</td></tr>
+          <tr><th scope="row">Pheromone</th><td><div class="pher-ramp" style="width: 140px; height: 20px"><i></i><i></i><i></i><i></i></div></td><td>A field on the map, never a mark; Cells view shows values</td></tr>
+          <tr><th scope="row">Match</th><td><span class="pill" data-state="match">Match</span></td><td>✓ and the word, solid outline</td></tr>
+          <tr><th scope="row">Mismatch, error</th><td><span class="pill" data-state="mismatch">Mismatch</span></td><td>✗ and the word, hatch, differing groups underlined</td></tr>
+          <tr><th scope="row">Paused · Stalled · Default</th><td><span class="cluster" style="--cluster-gap: 4px"><span class="pill" data-state="paused">Paused</span><span class="pill" data-state="stalled">Stalled</span><span class="pill" data-state="default">Default</span></span></td><td>‖ inverted · ! dashed with hatch · ↷ dotted</td></tr>
+          <tr><th scope="row">Primary action</th><td><button class="btn btn--primary btn--sm" type="button">Stake</button></td><td>The only filled amber control in a view, with a verb</td></tr>
+        </tbody>
+      </table>
     </div>
 
-    <h3 class="demo-label">Wallet ant tints</h3>
-    <div class="cluster text-sm">
-      <span class="wallet" style="--wallet-hue: 20">alice.testnet</span>
-      <span class="wallet" style="--wallet-hue: 95">bob.testnet</span>
-      <span class="wallet" style="--wallet-hue: 170">carol.testnet</span>
-      <span class="wallet" style="--wallet-hue: 245">dao-bot.testnet</span>
-      <span class="wallet" style="--wallet-hue: 320">erin.testnet</span>
-    </div>
-    <p class="text-sm text-muted" style="margin-top: var(--space-3)">Hue = first 2 bytes of sha256(account id) mod 360. Lightness and chroma are fixed at <code>oklch(0.72 0.07 h)</code> so staker ants stay quieter than food sources and trails.</p>
-
-    <h3 class="demo-label">Type</h3>
-    <div class="chamber">
-      <div class="type-row"><span class="eyebrow">3xl · display</span><span class="display" style="font-size: var(--text-3xl); font-variation-settings: 'opsz' 144, 'SOFT' 50">The colony decides</span></div>
-      <div class="type-row"><span class="eyebrow">2xl · h2</span><span class="display" style="font-size: var(--text-2xl)">Burn round 1042</span></div>
-      <div class="type-row"><span class="eyebrow">xl · h3</span><span class="display" style="font-size: var(--text-xl)">Swarm versus market</span></div>
-      <div class="type-row"><span class="eyebrow">prose · 17</span><span class="prose">Shorter paths complete more round trips and build stronger trails.</span></div>
-      <div class="type-row"><span class="eyebrow">base · mono 15</span><span>seed 0x9f3a…e21c · tick 0800/0800</span></div>
-      <div class="type-row"><span class="eyebrow">sm · mono 13</span><span class="text-sm">Staking closes before the drand round is published.</span></div>
-      <div class="type-row"><span class="eyebrow">xs · eyebrow</span><span class="eyebrow">Trail share over the run</span></div>
-    </div>
-
-    <div class="two" style="margin-top: var(--space-6)">
-      <div>
-        <h3 class="demo-label" style="margin-top: 0">Space (4px base)</h3>
-        <div class="stack" style="--stack-gap: var(--space-2)">
-          <div class="cluster text-xs text-muted"><span style="width: 4rem">space-1</span><div class="space-bar" style="width: 4px"></div>4</div>
-          <div class="cluster text-xs text-muted"><span style="width: 4rem">space-2</span><div class="space-bar" style="width: 8px"></div>8</div>
-          <div class="cluster text-xs text-muted"><span style="width: 4rem">space-3</span><div class="space-bar" style="width: 12px"></div>12</div>
-          <div class="cluster text-xs text-muted"><span style="width: 4rem">space-4</span><div class="space-bar" style="width: 16px"></div>16</div>
-          <div class="cluster text-xs text-muted"><span style="width: 4rem">space-5</span><div class="space-bar" style="width: 24px"></div>24</div>
-          <div class="cluster text-xs text-muted"><span style="width: 4rem">space-6</span><div class="space-bar" style="width: 32px"></div>32</div>
-          <div class="cluster text-xs text-muted"><span style="width: 4rem">space-7</span><div class="space-bar" style="width: 48px"></div>48</div>
-          <div class="cluster text-xs text-muted"><span style="width: 4rem">space-8</span><div class="space-bar" style="width: 64px"></div>64</div>
-        </div>
-      </div>
-      <div>
-        <h3 class="demo-label" style="margin-top: 0">Radius &amp; depth</h3>
-        <div class="cluster">
-          <div class="radius-box" style="border-radius: var(--radius-sm)">sm 6</div>
-          <div class="radius-box" style="border-radius: var(--radius-md)">md 10</div>
-          <div class="radius-box" style="border-radius: var(--radius-lg); box-shadow: var(--shadow-chamber)">lg 16</div>
-          <div class="radius-box" style="border-radius: var(--radius-lg); box-shadow: var(--glow-accent); border-color: transparent">glow</div>
-        </div>
-      </div>
-    </div>
+    <h3 class="sc-label">Soil, bone, amber</h3>
+    <div class="swatches" data-swatches="--soil-950 --soil-900 --soil-800 --soil-700 --soil-600 --soil-500 --bone-100 --bone-300 --bone-500 --amber-400 --amber-300 --amber-ink"></div>
+    <h3 class="sc-label">Earth and ants (the map and the nest only)</h3>
+    <div class="swatches" data-swatches="--earth-950 --earth-900 --earth-800 --earth-700 --earth-600 --earth-500 --ant-body --ant-leg"></div>
+    <p class="sc-note">The map's ground is a mid loam; ants are brown, with their wallet tint or a carried crumb on top.</p>
+    <h3 class="sc-label">Pheromone ramp (the map only)</h3>
+    <div class="pher-ramp"><i></i><i></i><i></i><i></i></div>
+    <p class="sc-note">--pher-1 to --pher-4: lighter and more opaque means stronger; --pher-4 is the cap of 20. The canvas reads --pher-lo and --pher-hi.</p>
+    <h3 class="sc-label">Options</h3>
+    <div class="swatches" data-swatches="--opt-0 --opt-1 --opt-2 --opt-3 --opt-4" data-glyphs="▲ ■ ◆ ● ★" data-names="aqua magenta blue olive lilac"></div>
+    <p class="sc-note">Worst pair under colour-blindness simulation: ▲ aqua vs ★ lilac at OKLab ΔE 0.090 (deutan). Two-outcome markets (▲ aqua vs ■ magenta) sit at 0.173. Contrast on --surface-raised 5.1 to 10.9.</p>
+    <h3 class="sc-label">Status</h3>
+    <div class="swatches" data-swatches="--ok --fault --hold"></div>
+    <h3 class="sc-label">Wallet tints, oklch(0.74 0.045 h)</h3>
+    <div class="sc-row" id="wallets"></div>
   </div>
 </section>
 
 <!-- =================================================================== -->
-<section class="ds" id="verification">
+<section class="sc" id="type">
   <div class="container">
-    <h2>Verification</h2>
-    <p class="lede">These components show the proof: the seed, the drand round, the on-chain hash and the hash the browser computed. Every hash is mono, copyable, and shows its full value on hover.</p>
+    <h2>Type</h2>
+    <p class="sc-lede">Fraunces for the page and market title only. IBM Plex Sans for UI, labels and prose. IBM Plex Mono for hashes, seeds, account ids, every number, ticks, clocks and status glyphs, with tabular figures, a slashed zero and no ligatures.</p>
+    <div class="type-row"><span>--text-3xl 46/52</span><span class="display display--hero">Landing headline</span></div>
+    <div class="type-row"><span>--text-2xl 34/40</span><span class="display">Will the Fed cut in December?</span></div>
+    <div class="type-row"><span>--text-xl 26/32 · h2</span><span style="font-size: var(--text-xl); line-height: var(--lh-xl); font-weight: 600">Markets this round</span></div>
+    <div class="type-row"><span>--text-lg 20/28 · h3</span><span style="font-size: var(--text-lg); line-height: var(--lh-lg); font-weight: 600">Your sugar</span></div>
+    <div class="type-row"><span>--text-md 17/26 · lede</span><p class="lede">Three colonies forage on one market; their trail is the swarm belief.</p></div>
+    <div class="type-row"><span>--text-base 15/24</span><span>UI and body. Stake 25 $ANTO on ■ No.</span></div>
+    <div class="type-row"><span>--text-sm 13/20</span><span class="text-sm">Secondary text, hashes in tables.</span></div>
+    <div class="type-row"><span>--text-xs 12/16</span><span class="text-xs">Hints and pill text.</span></div>
+    <div class="type-row"><span>--text-2xs 11/16</span><span class="eyebrow">Eyebrow · column head</span></div>
+    <div class="type-row"><span>--num-lg 32/36 mono</span><span class="num-lg">56.2<small class="text-muted" style="font-size: 0.5em">%</small> · 0:04:12</span></div>
+    <div class="type-row"><span>Hash, 4-char groups</span><span id="type-hash"></span></div>
+    <div class="type-row"><span>Status glyphs</span><span class="g" style="font-size: var(--text-lg); letter-spacing: 0.4em">✓ ✗ ‖ ↷ ◌ ○ ≠ ▲ ■ ◆ ● ★</span></div>
+    <div class="type-row"><span>Slashed zero</span><span class="num">0800 · 1,000,000 $ANTO · 0x00f0</span></div>
+  </div>
+</section>
 
-    <div class="two">
-      <div class="chamber verify-panel">
-        <div class="chamber__header" style="margin: 0">
-          <h3 class="chamber__title">Verify round 1042</h3>
-          <span class="chip">ANTO-SIM-v1</span>
-        </div>
-        <dl class="kv">
-          <dt>Colony</dt><dd>Burn · 5 options · 150 ants · 800 ticks</dd>
-          <dt>Seed</dt>
-          <dd><span class="hash"><span class="hash__value" id="v-seed"></span><button class="hash__copy" type="button" aria-label="Copy seed" id="v-seed-copy"></button></span></dd>
-          <dt>Expected</dt>
-          <dd><span class="hash"><span class="hash__value" title="f1726c83cc21afaf1aa5e29a328897508297adac7915995e397de752de24cb93">f1726c83…de24cb93</span><button class="hash__copy" type="button" aria-label="Copy expected hash" data-copy="f1726c83cc21afaf1aa5e29a328897508297adac7915995e397de752de24cb93"></button></span></dd>
-          <dt>Replayed</dt>
-          <dd><span class="hash"><span class="hash__value" id="replayed-hash">not run yet</span><button class="hash__copy" type="button" aria-label="Copy replayed hash" id="replayed-copy" hidden></button></span></dd>
-        </dl>
-        <p class="text-xs text-faint" style="margin: 0">Seed = sha256("seed-1042"). The expected hash comes from the Python reference (<code>sim/python/antosim.py 1042</code>), since there is no contract yet. Verifying runs the real JS sim in this tab.</p>
-        <div class="verify-panel__result">
-          <span class="verify-badge" data-state="idle" id="verify-badge" role="status" aria-live="polite">Not verified</span>
-          <div class="cluster" style="--cluster-gap: var(--space-2)">
-            <button class="btn btn--ghost btn--sm" type="button" id="verify-tamper" aria-pressed="false">Tamper seed</button>
-            <button class="btn btn--primary" type="button" id="verify-btn">Verify from seed</button>
-          </div>
-        </div>
-      </div>
-
+<!-- =================================================================== -->
+<section class="sc" id="space">
+  <div class="container">
+    <h2>Space, grid, radii, rows</h2>
+    <p class="sc-lede">A 4px base. 12 columns, content max 1240px, gutter 24 (16 under 600px), breakpoints 600, 900 and 1200. The map stays 3:2 and scales by whole pixels per cell (720×480 full, 216×144 thumbnails).</p>
+    <div class="sc-two">
+      <div class="stack" style="--stack-gap: var(--space-2)" id="spaces"></div>
       <div class="stack">
-        <div>
-          <p class="eyebrow">Verify badge states</p>
-          <div class="cluster">
-            <span class="verify-badge" data-state="idle">Not verified</span>
-            <span class="verify-badge" data-state="pending">Replaying 800 ticks</span>
-            <span class="verify-badge" data-state="match">Hash match</span>
-            <span class="verify-badge" data-state="mismatch">Hash mismatch</span>
-          </div>
+        <div class="sc-row">
+          <div class="radius-box" style="border-radius: var(--radius-data)">4 data</div>
+          <div class="radius-box" style="border-radius: var(--radius-panel)">8 panel</div>
+          <div class="radius-box" style="border-radius: var(--radius-stage)">16 stage</div>
+          <div class="radius-box" style="border-radius: var(--radius-pill); height: 32px">pill</div>
         </div>
-        <div>
-          <p class="eyebrow">drand round chip</p>
-          <div class="cluster">
-            <span class="chip chip--drand" data-state="committed">drand <strong>#5,123,456</strong> · committed</span>
-            <span class="chip chip--drand" data-state="published">drand <strong>#5,123,456</strong> · published</span>
-            <span class="chip chip--drand" data-state="late">drand <strong>#5,123,456</strong> · deadline passed</span>
-          </div>
-        </div>
-        <div>
-          <p class="eyebrow">Other chips</p>
-          <div class="cluster">
-            <span class="chip chip--live">live</span>
-            <span class="chip">tick <strong>412</strong>/800</span>
-            <span class="chip">ANTO-SIM-v1</span>
-            <span class="tag-forecast">Forecast · not advice</span>
-          </div>
-        </div>
-        <div class="notice notice--danger">
-          <div><span class="notice__title">Replay does not match the chain</span><p>The replayed hash differs from the one stored on-chain. Check that the sim version is ANTO-SIM-v1 and that the stake snapshot matches.</p></div>
+        <p class="sc-note">4px for data (rows, inputs, buttons, option cards), 8px for panels and cards, 16px for the stage frame only, 999px for status pills only.</p>
+        <div class="stack" style="--stack-gap: var(--space-2)">
+          <div class="row-box" style="height: var(--row-compact)">32 compact</div>
+          <div class="row-box" style="height: var(--row)">40 default</div>
+          <div class="row-box" style="height: var(--row-touch)">48 touch</div>
         </div>
       </div>
     </div>
@@ -198,83 +153,276 @@
 </section>
 
 <!-- =================================================================== -->
-<section class="ds" id="sim">
+<section class="sc" id="motion">
   <div class="container">
-    <h2>Sim &amp; replay</h2>
-    <p class="lede">This is the real simulation: <code>sim/js/antosim.mjs</code> running in your browser, the same integer code the crosscheck tests against Python. Ants leave the anthill, find a food pile, and carry a crumb home, laying amber pheromone as they go (brighter means stronger). The dashed ring around each pile is the area that gets scored. The scenery is decoration drawn from the seed and never touches the result. Switch to <em>Cells</em> to see the raw grid, and click any ant to follow it.</p>
+    <h2>Motion</h2>
+    <p class="sc-lede">Charm lives in the stage: six-leg gait, marching score rings, crumbs and the ripple on the winning pile. Outside it, 120, 200 and 360ms with ease-out, and numbers never move: no count-up, no scrambling hashes, no bounce on a match. The one live signal is the running pill's 2s pulse.</p>
+    <div class="sc-two">
+      <div class="table-wrap">
+        <table class="table table--compact">
+          <thead><tr><th>Speed</th><th class="num">Ticks / s</th><th class="num">Forecast run (300)</th><th class="num">Burn day (43,200)</th></tr></thead>
+          <tbody>
+            <tr><th scope="row" class="num">1×</th><td class="num">12</td><td class="num">25 s</td><td class="num">60 min</td></tr>
+            <tr><th scope="row" class="num">4× default</th><td class="num">48</td><td class="num">6 s</td><td class="num">15 min</td></tr>
+            <tr><th scope="row" class="num">16×</th><td class="num">192</td><td class="num">1.6 s</td><td class="num">3.8 min</td></tr>
+            <tr><th scope="row" class="num">128×</th><td class="num">1,536</td><td class="num">0.2 s</td><td class="num">28 s</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul class="stack text-sm" style="--stack-gap: var(--space-2); margin: 0; padding-left: 1.2em; color: var(--text-muted)">
+        <li>Autoplay once, only while on screen, only for runs under 1,000 ticks. Burn days never autoplay.</li>
+        <li>A live run never plays past the tick the chain has reached.</li>
+        <li>Reduced motion: no autoplay; the stage opens on the final frame or the chain's tick; Play steps one scoring checkpoint (100 ticks) a second; ants snap to cells; toasts appear without sliding; the live pulse stops.</li>
+        <li>A bar may ease to a new value over 200ms. Nothing else outside the stage moves.</li>
+      </ul>
+    </div>
+  </div>
+</section>
 
+<!-- =================================================================== -->
+<section class="sc" id="voice">
+  <div class="container">
+    <h2>Voice and naming</h2>
+    <p class="sc-lede">The ants can be charming. Numbers, hashes and money are stated plainly. "Drop sugar" is the brand verb and may head a section; buttons and amounts say "Stake".</p>
+    <div class="sc-two">
+      <div class="table-wrap">
+        <table class="table table--compact">
+          <thead><tr><th>Do</th><th>Don't</th></tr></thead>
+          <tbody>
+            <tr><td>✓ Match. Your browser computed the same hash as the contract.</td><td class="text-faint">🎉 The ants agree! Verified!</td></tr>
+            <tr><td>Swarm belief: ■ No 56.2%. Market odds 81.5%. Forecast, not advice.</td><td class="text-faint">The ants think No is 56% likely.</td></tr>
+            <tr><td>Stalled: no crank since 14:02 UTC. Anyone can crank; it pays 3.33 $ANTO.</td><td class="text-faint">The colony is taking a nap 😴</td></tr>
+            <tr><td>Ant 42 found ◆ C at tick 118 and carried 3 crumbs home.</td><td class="text-faint">(charm is fine here: the ant's own story)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-wrap">
+        <table class="table table--compact">
+          <thead><tr><th>Word</th><th>Means</th><th>Don't say</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Round</th><td>~25 min cycle of up to 12 markets, one seed</td><td class="text-faint">epoch, batch</td></tr>
+            <tr><th scope="row">Request</th><td>A paid forecast on one chosen market</td><td class="text-faint">order, bet</td></tr>
+            <tr><th scope="row">Run</th><td>One colony, seed to final tick, one hash</td><td class="text-faint">simulation, game</td></tr>
+            <tr><th scope="row">Colony</th><td>One map: nest, food, ants</td><td class="text-faint">hive, swarm</td></tr>
+            <tr><th scope="row">Forecaster</th><td>Momentum, Community or Agents</td><td class="text-faint">lens, model</td></tr>
+            <tr><th scope="row">Agent</th><td>An account posting its own odds</td><td class="text-faint">forecaster agent</td></tr>
+            <tr><th scope="row">Swarm belief</th><td>Mean of the colonies with input</td><td class="text-faint">probability, chance</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================================================================== -->
+<section class="sc" id="status">
+  <div class="container">
+    <h2>Status, banners, toasts, buttons</h2>
+    <p class="sc-lede">A pill carries the glyph and the word; colour only for match and fault. A banner is system state that persists until resolved. A toast is the result of your own action, bottom right, and never carries a system fault.</p>
+
+    <h3 class="sc-label">8.13 Status pill</h3>
+    <div class="sc-row">
+      <span class="pill" data-state="running" title="Since 14:20 UTC, crank 4 of 36"><i class="pill__g" aria-hidden="true"></i>Running · tick <span class="num">180</span></span>
+      <span class="pill" data-state="pending">Pending</span>
+      <span class="pill" data-state="match">Match</span>
+      <span class="pill" data-state="mismatch">Mismatch</span>
+      <span class="pill" data-state="paused">Paused</span>
+      <span class="pill" data-state="stalled" title="No crank since 14:02 UTC">Stalled · 6 min</span>
+      <span class="pill" data-state="default">Default: skipped, refunded</span>
+      <span class="pill" data-state="skipped">Skipped</span>
+      <span class="pill" aria-busy="true">…</span>
+    </div>
+
+    <h3 class="sc-label">8.12 Banner</h3>
+    <div class="stack" style="--stack-gap: var(--space-2)">
+      <div class="banner" role="status"><span class="banner__g" aria-hidden="true">i</span><div><b class="banner__title">Testnet only</b><p>$ANTO here is a play token. Forecasts are not advice.</p></div></div>
+      <div class="banner" role="status"><span class="banner__g" aria-hidden="true">○</span><div><b class="banner__title">Waiting for drand round #5,123,456</b><p>The seed is drawn by the first crank after it publishes, about 14:20 UTC.</p></div><a class="btn btn--sm banner__action" href="#">Why</a></div>
+      <div class="banner banner--fault" role="alert"><span class="banner__g" aria-hidden="true">✗</span><div><b class="banner__title">Chain unreachable</b><p>Every testnet RPC refused the read (rate limit). Values below are from 14:02 UTC.</p></div><button class="btn btn--sm banner__action" type="button">Retry</button></div>
+      <div class="banner banner--hold" role="status"><span class="banner__g" aria-hidden="true">‖</span><div><b class="banner__title">Paused by the guardian</b><p>New stakes, posts and cranks are refused until it unpauses.</p></div></div>
+    </div>
+
+    <h3 class="sc-label">Toast</h3>
+    <div class="sc-row">
+      <button class="btn btn--sm" type="button" id="toast-ok">Send a transaction</button>
+      <button class="btn btn--sm" type="button" id="toast-fail">Fail one</button>
+      <span class="text-xs text-faint">Pending updates in place to confirmed; hover pauses the 5s timer; a failed toast stays.</span>
+    </div>
+
+    <h3 class="sc-label">Buttons</h3>
+    <div class="sc-row">
+      <button class="btn btn--primary" type="button">Stake 25 $ANTO on ■ No</button>
+      <button class="btn" type="button">Verify in your browser</button>
+      <button class="btn btn--ghost" type="button">Cancel</button>
+      <button class="btn btn--fault" type="button">Withdraw</button>
+      <button class="btn is-loading" type="button">Waiting for wallet…</button>
+      <span><button class="btn" type="button" disabled>Stake</button><span class="why">Staking closed at 12:00 UTC. Opens again 00:00.</span></span>
+    </div>
+  </div>
+</section>
+
+<!-- =================================================================== -->
+<section class="sc" id="options">
+  <div class="container">
+    <h2>Option cards and the stake</h2>
+    <p class="sc-lede">The colony chooses an index, never an amount, so a menu is a set of cards with the contract's cap written under it once.</p>
+
+    <h3 class="sc-label">8.1 Option card · tile, with its cap</h3>
+    <fieldset class="option-cards" id="menu-tiles" aria-label="Daily pot size"></fieldset>
+
+    <div class="sc-two" style="margin-top: var(--space-5)">
+      <div>
+        <h3 class="sc-label">List · selected, disabled</h3>
+        <fieldset class="option-cards option-cards--list" aria-label="Outcome">
+          <label class="option-card" data-opt="0"><input type="radio" name="oc-list"><span class="opt-chip"></span><span class="option-card__label">Yes</span><span class="option-card__facts">market <span class="num">18.5%</span></span></label>
+          <label class="option-card" data-opt="1"><input type="radio" name="oc-list" checked><span class="opt-chip"></span><span class="option-card__label">No</span><span class="option-card__facts">market <span class="num">81.5%</span></span></label>
+          <label class="option-card" data-opt="2"><input type="radio" name="oc-list" disabled><span class="opt-chip"></span><span class="option-card__label">Other</span><span class="option-card__why">Over your cap</span></label>
+        </fieldset>
+      </div>
+      <div>
+        <h3 class="sc-label">Legend · picked, loading, error</h3>
+        <div class="option-cards option-cards--list option-cards--legend">
+          <div class="option-card option-card--picked" data-opt="2"><span class="opt-chip"></span><span class="option-card__label">0.50% of treasury</span><span class="option-card__facts">0.42% burned · 0.08% to stakers</span></div>
+          <div class="option-card" data-opt="3" aria-busy="true"><span class="opt-chip"></span><span class="option-card__label">1.00% of treasury</span><span class="option-card__facts num">…</span></div>
+          <div class="option-card" data-opt="4"><span class="opt-chip"></span><span class="option-card__label">2.00% of treasury</span><span class="option-card__facts">— Couldn't read the menu · <a href="#options">Retry</a></span></div>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="sc-label">8.4 Stake input with per-wallet cap and influence preview</h3>
+    <div class="sc-states seg" role="group" aria-label="Stake state" id="stake-states">
+      <button type="button" aria-pressed="true" data-s="ok">Default</button>
+      <button type="button" aria-pressed="false" data-s="nowallet">No wallet</button>
+      <button type="button" aria-pressed="false" data-s="closed">Closed</button>
+      <button type="button" aria-pressed="false" data-s="empty">Faucet used</button>
+      <button type="button" aria-pressed="false" data-s="busy">Waiting for wallet</button>
+    </div>
+    <div class="sc-two">
+      <form class="panel stake" id="stake" onsubmit="return false">
+        <div class="option-cards option-cards--list option-cards--legend">
+          <div class="option-card" data-opt="1" aria-checked="true"><span class="opt-chip"></span><span class="option-card__label">No</span><span class="option-card__facts">market <span class="num">81.5%</span></span></div>
+        </div>
+        <fieldset>
+          <legend class="field__label" style="margin-bottom: var(--space-2)">Amount</legend>
+          <div class="stake__amount">
+            <input class="range" type="range" id="st-range" min="0" max="100" value="25" aria-label="Amount">
+            <div class="input-group"><input class="input" id="st-num" type="number" min="0" value="25" inputmode="numeric" aria-describedby="st-err"><span class="input-group__suffix">$ANTO</span></div>
+            <div class="stake__picks"><button type="button" data-v="10">10</button><button type="button" data-v="25">25</button><button type="button" data-v="max">Max</button></div>
+          </div>
+          <p class="field__error" id="st-err" hidden></p>
+        </fieldset>
+        <div class="budget">
+          <div class="budget__bar" aria-hidden="true"><span data-part="locked" id="b-locked"></span><span data-part="elsewhere" id="b-else"></span><span data-part="this" id="b-this"></span><span data-part="over" id="b-over"></span><span data-part="free" id="b-free"></span></div>
+          <p class="budget__text" id="b-text"></p>
+          <ul class="budget__key"><li data-part="locked">locked on Burn</li><li data-part="elsewhere">markets, requests</li><li data-part="this">this stake</li><li data-part="free">free</li></ul>
+        </div>
+        <p class="stake__weight" id="st-weight"></p>
+        <div class="influence" data-opt="1" id="st-infl"><div class="influence__track" aria-hidden="true"></div><p id="st-infl-text"></p></div>
+        <p class="stake__when">Counts for round <b>41</b>. Refunded when round <b>42</b> opens.</p>
+        <div><button class="btn btn--primary" type="submit" id="st-go"></button><span class="why" id="st-why" hidden></span></div>
+      </form>
+      <div class="stack text-sm text-muted">
+        <p>One budget covers every stake: the 100 $ANTO per-wallet cap counts Burn, market and request stakes together. A Burn stake stays locked until every day it counts for has paid, so it shows hatched.</p>
+        <p>Weight is the square root of your total on an option: 25 → 5, 100 → 10, so four times the stake gives twice the weight.</p>
+        <p>Over the cap is an inline error that says by how much and why, never a silent disabled button. Success goes to a toast.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================================================================== -->
+<section class="sc" id="forecast">
+  <div class="container">
+    <h2>Forecast: chips, table, cards, stepper</h2>
+    <p class="sc-lede">Computed here with the real sim: a three-outcome fixture market (the one <code>sim/tests/crosscheck.py</code> uses), its three forecasters each on their own map. Trail shares are labelled swarm belief, never probability.</p>
+
+    <h3 class="sc-label">8.6 Forecaster chip · tabs, label, input count, sits out, loading</h3>
+    <div class="sc-row" id="fc-chips"></div>
+    <div class="sc-row" style="margin-top: var(--space-3)">
+      <span class="forecaster"><b>Momentum</b></span>
+      <span class="forecaster"><b>Community</b><span class="forecaster__reads">12 stakers</span></span>
+      <span class="forecaster is-out"><b>Agents</b><span class="forecaster__reads">no posts</span></span>
+      <span class="forecaster" aria-busy="true"><b>Agents</b><span class="forecaster__reads num">…</span></span>
+    </div>
+
+    <h3 class="sc-label">8.5 Swarm vs market</h3>
+    <div class="table-wrap">
+      <table class="table vs-table">
+        <caption>Swarm belief per outcome next to the market odds. <span class="tag-forecast">Forecast · not advice</span></caption>
+        <thead><tr><th>Outcome</th><th class="num">Market odds</th><th class="num">Swarm belief</th><th class="num">Gap</th><th class="num">Momentum</th><th class="num">Community</th><th class="num">Agents</th><th>Belief vs market</th></tr></thead>
+        <tbody id="vs-rows"><tr><td colspan="8" class="num" aria-busy="true">…</td></tr></tbody>
+      </table>
+    </div>
+    <p class="sc-note">Market hash <span id="vs-hash"></span></p>
+
+    <h3 class="sc-label">8.9 Market card · current, before the seed, skipped, mismatch</h3>
+    <div class="sc-cards" id="cards"></div>
+
+    <h3 class="sc-label">8.3 Stepper · round, request (stalled), day, skipped</h3>
+    <div class="stack" style="--stack-gap: var(--space-6)">
+      <div class="stepper">
+        <ol class="stepper__steps">
+          <li data-state="past" title="13:55 UTC · start_round"><b>Staking</b><span class="stepper__at">13:55</span></li>
+          <li data-state="past" title="14:15 UTC · close_at"><b>Agents post</b><span class="stepper__at">14:15</span></li>
+          <li data-state="now" title="14:20 UTC · the first crank_round draws the seed"><b>Seed · drand #5,123,456</b><span class="stepper__at">14:20</span></li>
+          <li data-state="next" title="crank_round, one colony per call"><b>Colonies run 0/36</b><span class="stepper__at">~14:24</span></li>
+          <li data-state="next"><b>Result</b><span class="stepper__at">~14:25</span></li>
+        </ol>
+        <div class="stepper__clock"><span class="eyebrow">seed drawn in</span><span class="num-lg">0:01:42</span></div>
+      </div>
+      <div class="stepper">
+        <ol class="stepper__steps">
+          <li data-state="past"><b>Request</b><span class="stepper__at">10:02</span></li>
+          <li data-state="past"><b>Odds</b><span class="stepper__at">10:03</span></li>
+          <li data-state="past"><b>Agents' window</b><span class="stepper__at">10:04</span></li>
+          <li data-state="stalled" title="No crank since 10:06 UTC"><b>Seed</b><span class="stepper__at">10:05</span></li>
+          <li data-state="next"><b>Run</b></li>
+          <li data-state="next"><b>Result</b></li>
+        </ol>
+        <div class="stepper__clock"><span class="pill" data-state="stalled">Stalled · 6 min</span><button class="btn btn--primary btn--sm" type="button">Crank · pays 3.33 $ANTO</button></div>
+      </div>
+      <div class="sc-two">
+        <div class="stepper stepper--compact"><ol class="stepper__steps"><li data-state="past"><b>Staking 00–12</b></li><li data-state="now"><b>Run 12–24</b></li><li data-state="next"><b>Payout</b></li></ol></div>
+        <div class="stepper stepper--compact"><ol class="stepper__steps"><li data-state="past"><b>Staking</b></li><li data-state="skipped"><b>Skipped</b></li><li><b>Seed</b></li><li><b>Run</b></li><li><b>Result</b></li></ol></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================================================================== -->
+<section class="sc" id="stage">
+  <div class="container">
+    <h2>8.2 Colony stage</h2>
+    <p class="sc-lede">The real sim (<code>sim/js/antosim.mjs</code>) drawn by <code>ColonyView</code> inside the <code>Player</code> from <code>web/ui.mjs</code>. The frame is the only 16px radius. The scrub track has a mark every scoring checkpoint; a live run hatches the ticks the chain hasn't reached and stops there. Focus the map: space plays, arrow keys step, Home and End jump.</p>
     <div class="cluster" style="margin-bottom: var(--space-4)">
       <label class="field__label" for="seed-int">Seed</label>
       <input class="input num" id="seed-int" type="number" min="0" step="1" value="1042" style="width: 8rem">
-      <button class="btn btn--sm" type="button" id="seed-random">Random</button>
-      <span class="hash"><span class="hash__value" id="seed-hex"></span></span>
-      <span class="text-xs text-faint">sha256("seed-N")</span>
-      <div class="seg" role="group" aria-label="Map view" style="margin-left: auto">
-        <button type="button" aria-pressed="true" data-view="nest">Nest</button>
-        <button type="button" aria-pressed="false" data-view="cells">Cells</button>
+      <span id="seed-hash"></span>
+      <div class="seg" role="group" aria-label="Run variant" style="margin-left: auto">
+        <button type="button" aria-pressed="true" data-variant="full">Full</button>
+        <button type="button" aria-pressed="false" data-variant="live">Live · chain at 520</button>
+        <button type="button" aria-pressed="false" data-variant="idle">Before the seed</button>
       </div>
     </div>
-
-    <div class="two" style="grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr)">
-      <div class="stack" style="--stack-gap: var(--space-3)">
-        <div class="sim-frame">
-          <canvas id="sim-canvas" width="1440" height="960" aria-label="Colony map at the current tick" style="cursor: crosshair"></canvas>
-          <div class="sim-frame__hud">
-            <span class="sim-frame__tick">tick <strong id="tick-readout">0800</strong>/0800</span>
-            <span class="sim-frame__tick" id="leader">leading: none</span>
-          </div>
-          <div class="sim-frame__hud sim-frame__hud--bottom">
-            <span class="sim-frame__tick">○ <strong id="n-foraging">150</strong> foraging · ● <strong id="n-carrying">0</strong> carrying</span>
-            <span class="sim-frame__tick">⌂ <strong id="n-delivered">0</strong> crumbs home</span>
-          </div>
-        </div>
-        <div class="playback">
-          <button class="btn btn--icon btn--sm" type="button" id="play" aria-label="Play">▶</button>
-          <button class="btn btn--icon btn--sm btn--ghost" type="button" id="step" aria-label="Step one tick">⏭</button>
-          <input class="scrubber" type="range" id="scrubber" min="0" max="800" value="800" aria-label="Tick">
-          <div class="seg" role="group" aria-label="Speed">
-            <button type="button" aria-pressed="false" data-speed="1">1×</button>
-            <button type="button" aria-pressed="true" data-speed="4">4×</button>
-            <button type="button" aria-pressed="false" data-speed="16">16×</button>
-          </div>
-        </div>
-        <ul class="legend" aria-label="Legend">
-          <li><span class="opt" data-opt="0">0.10%</span></li>
-          <li><span class="opt" data-opt="1">0.25%</span></li>
-          <li><span class="opt" data-opt="2">0.50%</span></li>
-          <li><span class="opt" data-opt="3">1.00%</span></li>
-          <li><span class="opt" data-opt="4">2.00%</span></li>
-          <li class="text-muted"><span style="color: var(--accent)">▒</span> pheromone</li>
-          <li class="text-muted">⌂ anthill</li>
-          <li class="text-muted">● ant with crumb = carrying food home</li>
-        </ul>
+    <div class="sc-two" style="grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr)">
+      <div class="stage" id="stage-box">
+        <div class="stage__head"><h3 class="stage__name">Burn colony</h3><span class="stage__what">Showcase · run of 800 ticks</span></div>
+        <div id="player"></div>
       </div>
-
       <div class="stack">
-        <div class="chamber">
-          <div class="chamber__header">
-            <h3 class="chamber__title">Trail share</h3>
-            <span class="eyebrow" id="share-tick">tick 800</span>
-          </div>
+        <div class="panel">
+          <div class="panel__head"><h3 class="panel__title">Trail share</h3><span class="eyebrow num" id="share-tick">tick 0</span></div>
           <ul class="share-bars" id="share-bars"></ul>
-          <p class="text-xs text-faint" style="margin: var(--space-3) 0 0">Share of pheromone inside each scoring ring. The winner is decided at tick 800, and ties go to the lowest source index.</p>
         </div>
-
-        <div class="chamber">
-          <div class="chamber__header">
-            <h3 class="chamber__title">Ant autopsy</h3>
-            <span class="eyebrow" id="ant-id">ant #037</span>
-          </div>
+        <div class="panel">
+          <div class="panel__head"><h3 class="panel__title">Ant autopsy</h3><span class="eyebrow num" id="ant-id">ant #037</span></div>
           <div class="inspector">
             <div class="compass" id="compass" role="img" aria-label="Heading"><span class="compass__needle"></span></div>
             <dl class="kv text-sm">
               <dt>State</dt><dd><span class="ant-state" id="ant-state"></span></dd>
               <dt>Cell</dt><dd class="num" id="ant-cell"></dd>
               <dt>Heading</dt><dd class="num" id="ant-heading"></dd>
-              <dt>Deposit</dt><dd class="num" id="ant-deposit"></dd>
             </dl>
           </div>
-          <p class="text-xs text-faint" style="margin: var(--space-3) 0 0">Click an ant on the map to follow it. Deposit is the pheromone it lays per step on the way home, and it fades 1/32 per step.</p>
         </div>
       </div>
     </div>
@@ -282,414 +430,340 @@
 </section>
 
 <!-- =================================================================== -->
-<section class="ds" id="forms">
+<section class="sc" id="verify">
   <div class="container">
-    <h2>Forms &amp; data</h2>
-    <p class="lede">Stakes, menus and tables. The colony picks an index from a fixed menu and never an amount, so the menu reads as a set of cards.</p>
-
-    <h3 class="demo-label">Buttons</h3>
-    <div class="cluster">
-      <button class="btn btn--primary" type="button">Verify from seed</button>
-      <button class="btn" type="button">Copy replay link</button>
-      <button class="btn btn--ghost" type="button">Cancel</button>
-      <button class="btn btn--danger" type="button">Withdraw stake</button>
-      <button class="btn btn--primary is-loading" type="button">Advancing</button>
-      <button class="btn btn--primary" type="button" disabled>Staking closed</button>
-    </div>
-    <div class="cluster" style="margin-top: var(--space-3)">
-      <button class="btn btn--primary btn--lg" type="button">Advance 20 ticks · earn bounty</button>
-      <button class="btn btn--sm" type="button">Small</button>
-      <button class="btn btn--icon" type="button" aria-label="Play">▶</button>
-    </div>
-
-    <div class="two" style="margin-top: var(--space-6)">
-      <div class="chamber stack">
-        <div class="chamber__header" style="margin: 0">
-          <h3 class="chamber__title">Drop sugar</h3>
-          <span class="chip chip--drand" data-state="committed">closes before <strong>#5,123,456</strong></span>
+    <h2>8.7 Hash and 8.8 Verify</h2>
+    <p class="sc-lede">Hashes are lowercase hex in 4-character groups, the first 8 and last 8 by default. Copy always copies the full value. A mismatch shows without colour: every differing group is underlined and marked ≠.</p>
+    <div class="sc-two">
+      <div class="panel stack">
+        <div class="panel__head" style="margin: 0"><h3 class="panel__title">Verify from seed</h3></div>
+        <dl class="kv text-sm"><dt>Seed</dt><dd id="v-seed"></dd><dt>Chain</dt><dd id="v-chain"></dd><dt>Your browser</dt><dd id="v-mine"><span class="hash is-off"><span class="hash__value">not computed</span></span></dd></dl>
+        <div class="verify" data-state="idle" id="vbox">
+          <div class="cluster"><button class="btn" type="button" id="v-go">Verify in your browser</button><button class="btn btn--ghost btn--sm" type="button" aria-pressed="false" id="v-tamper">Flip one seed bit</button></div>
+          <div class="verify__progress"><div class="progress" id="v-bar"><i></i></div><span class="verify__step" id="v-step">Run 1 of 1 · tick 0 / 800</span><button class="btn btn--sm" type="button" id="v-stop">Stop</button></div>
+          <p class="verify__result" id="v-result" role="status" aria-live="polite"></p>
         </div>
-
-        <fieldset class="option-cards">
-          <legend class="field__label" style="margin-bottom: var(--space-2)">Option to back</legend>
-          <label class="option-card" data-opt="0"><input type="radio" name="burn"><span class="opt text-xs">option 0</span><span class="option-card__value">0.10%</span><span class="option-card__meta">of treasury</span></label>
-          <label class="option-card" data-opt="1"><input type="radio" name="burn"><span class="opt text-xs">option 1</span><span class="option-card__value">0.25%</span><span class="option-card__meta">of treasury</span></label>
-          <label class="option-card" data-opt="2"><input type="radio" name="burn" checked><span class="opt text-xs">option 2</span><span class="option-card__value">0.50%</span><span class="option-card__meta">of treasury</span></label>
-          <label class="option-card" data-opt="3"><input type="radio" name="burn"><span class="opt text-xs">option 3</span><span class="option-card__value">1.00%</span><span class="option-card__meta">of treasury</span></label>
-          <label class="option-card" data-opt="4"><input type="radio" name="burn"><span class="opt text-xs">option 4</span><span class="option-card__value">2.00%</span><span class="option-card__meta">cap: 2% max</span></label>
-        </fieldset>
-
-        <div class="stake field">
-          <label class="field__label" for="stake-num">Stake</label>
-          <div class="stake__row">
-            <input class="range" type="range" id="stake-range" min="0" max="10000" step="50" value="2500" aria-label="Stake amount">
-            <div class="input-group"><input class="input num" type="number" id="stake-num" min="0" max="10000" step="50" value="2500"><span class="input-group__suffix">tANTO</span></div>
-          </div>
-          <dl class="stake__readout">
-            <div><dt>Stake</dt><dd class="num" id="r-stake">2,500</dd></div>
-            <div><dt>Weight √</dt><dd class="num is-accent" id="r-weight">50.0</dd></div>
-            <div><dt>Cap used</dt><dd class="num" id="r-cap">25%</dd></div>
-          </dl>
-          <span class="field__hint">One budget across all colonies. Weight is the square root of stake, and each wallet is capped at 10,000 tANTO (sample value).</span>
-        </div>
-        <button class="btn btn--primary" type="button">Lay pheromone</button>
+        <div id="v-compare"></div>
       </div>
-
       <div class="stack">
-        <div class="field">
-          <label class="field__label" for="seed-in">Seed</label>
-          <input class="input" id="seed-in" placeholder="0x… 64 hex characters" spellcheck="false">
-          <span class="field__hint">Paste any seed to replay it in your browser.</span>
-        </div>
-        <div class="field">
-          <label class="field__label" for="seed-bad">Seed</label>
-          <input class="input" id="seed-bad" value="0x9f3a5c07zz" aria-invalid="true" aria-describedby="seed-bad-err" spellcheck="false">
-          <span class="field__error" id="seed-bad-err">Not hex. Use 0-9 and a-f only.</span>
-        </div>
-        <div class="field">
-          <label class="field__label" for="seed-dis">Request ID</label>
-          <input class="input" id="seed-dis" value="1042" disabled>
-        </div>
-        <div class="notice notice--info"><div><span class="notice__title">Staking closes before the round</span><p>Stakes lock before drand round #5,123,456 is published, so nobody can stake after seeing the seed.</p></div></div>
-        <div class="notice notice--warning"><div><span class="notice__title">Testnet play token</span><p>tANTO has no value. Antonomy is on NEAR testnet only.</p></div></div>
-        <div class="notice notice--success"><div><span class="notice__title">Round executed</span><p>The colony picked option 2. The contract burned 0.50% of the treasury.</p></div></div>
+        <h3 class="sc-label" style="margin-top: 0">States</h3>
+        <dl class="kv text-sm">
+          <dt>Single</dt><dd id="h-single"></dd>
+          <dt>Labelled</dt><dd id="h-named"></dd>
+          <dt>Loading</dt><dd><span class="hash" aria-busy="true"><span class="hash__value">···· ···· … ···· ····</span></span></dd>
+          <dt>Not on chain</dt><dd><span class="pill" data-state="pending">Not on chain yet</span></dd>
+          <dt>Error</dt><dd><span class="text-faint">— Couldn't read</span> <button class="btn btn--sm btn--ghost" type="button">Retry</button></dd>
+        </dl>
+        <div class="verify" data-state="partial"><p class="verify__result">2 of 3 · 1 not cranked yet</p></div>
+        <div class="verify" data-state="match"><p class="verify__result">3 of 3 hashes match · <a href="#v-compare">compare</a></p></div>
+        <div class="verify" data-state="mismatch"><p class="verify__result">1 of 3 hashes differ · <a href="#v-compare">Which input differs</a></p></div>
       </div>
     </div>
+  </div>
+</section>
 
-    <h3 class="demo-label">Belief board and pick</h3>
-    <div class="two">
-      <div class="chamber">
-        <div class="chamber__header"><h3 class="chamber__title">Swarm belief</h3><span class="tag-forecast">Forecast · not advice</span></div>
-        <ul class="belief">
-          <li class="belief__row" data-opt="0" style="--share: 38.4; --market: 62"><span class="opt belief__label">Cut</span><span class="belief__value num">38.4<small>%</small></span><span class="belief__track" aria-hidden="true"><span class="belief__fill"></span><span class="belief__market"></span></span><span class="belief__meta"><span>market 62.0%</span><span class="delta delta--down">23.6 pts vs market</span></span></li>
-          <li class="belief__row" data-opt="1" style="--share: 33.1; --market: 28"><span class="opt belief__label">Hold</span><span class="belief__value num">33.1<small>%</small></span><span class="belief__track" aria-hidden="true"><span class="belief__fill"></span><span class="belief__market"></span></span><span class="belief__meta"><span>market 28.0%</span><span class="delta delta--up">5.1 pts vs market</span></span></li>
-          <li class="belief__row" data-opt="2" style="--share: 28.5; --market: 10"><span class="opt belief__label">Hike</span><span class="belief__value num">28.5<small>%</small></span><span class="belief__track" aria-hidden="true"><span class="belief__fill"></span><span class="belief__market"></span></span><span class="belief__meta"><span>market 10.0%</span><span class="delta delta--up">18.5 pts vs market</span></span></li>
+<!-- =================================================================== -->
+<section class="sc" id="people">
+  <div class="container">
+    <h2>8.10 Leaderboard and 8.11 Bot rows</h2>
+    <p class="sc-lede">Paid for work, never for being right, so there is no accuracy board. Wallets show as an ant swatch and the account id.</p>
+    <div class="sc-two">
+      <div class="stack">
+        <h3 class="sc-label" style="margin-top: 0">Burn earners</h3>
+        <ol class="board" id="board"></ol>
+        <ol class="board"><li class="board__empty">No payouts yet. The first Burn pays after 24:00 UTC.</li></ol>
+      </div>
+      <div class="stack">
+        <h3 class="sc-label" style="margin-top: 0">Who keeps it moving</h3>
+        <ul class="bots">
+          <li class="bot-row"><span class="bot-row__role">Keeper</span><code>keeper.antonomy-oracle.testnet</code><a class="bot-row__last" href="#people">post_odds · 40 s ago</a><span class="pill" data-state="done">Healthy</span><span class="bot-row__earned">12.00 $ANTO</span><span class="bot-row__by">team daemon</span></li>
+          <li class="bot-row"><span class="bot-row__role">Cranker</span><code>cranker.antonomy-oracle.testnet</code><a class="bot-row__last" href="#people">crank_round · 6 min ago</a><span class="pill" data-state="stalled">Stalled · 6 min</span><span class="bot-row__earned">3.33 $ANTO</span><span class="bot-row__by">team daemon</span></li>
+          <li class="bot-row"><span class="bot-row__role">Agent</span><code>sharp.antonomy-oracle.testnet</code><a class="bot-row__last" href="#people">post_forecast · 2 min ago</a><span class="pill" data-state="pending">Idle</span><span class="bot-row__earned">1.20 $ANTO</span><span class="bot-row__by">demo</span></li>
+          <li class="bot-row is-retired"><span class="bot-row__role">Staker</span><code>old-bot.testnet</code><span class="bot-row__last">last seen day 20,741</span><span class="pill" data-state="skipped">Retired</span><span class="bot-row__earned">0.00 $ANTO</span><span class="bot-row__by">community</span></li>
         </ul>
-        <ul class="belief-key" style="margin-top: var(--space-4)"><li class="belief-key__swarm">swarm belief</li><li class="belief-key__market">market odds</li></ul>
-      </div>
-      <div class="stack">
-        <div class="chamber">
-          <div class="chamber__header"><h3 class="chamber__title">Leading now</h3><span class="chip">tick 412 / 800</span></div>
-          <div class="pick" data-state="pending"><p class="pick__value"><span class="opt" data-opt="2">0.50%</span></p><p class="text-sm text-muted" style="margin: 0">The leader can still change. The pick is final at tick 800.</p></div>
-        </div>
-        <div class="chamber">
-          <div class="chamber__header"><h3 class="chamber__title">Today's pick</h3><span class="chip">✓ final · tick 800</span></div>
-          <div class="pick" data-state="final"><p class="pick__value"><span class="opt" data-opt="2">0.50%</span></p><p class="text-sm text-muted" style="margin: 0">of the treasury, capped at 2%.</p></div>
-        </div>
       </div>
     </div>
-
-    <h3 class="demo-label">Swarm versus market</h3>
-    <div class="table-wrap">
-      <table class="table">
-        <caption><span class="tag-forecast">Forecast · not advice</span>&nbsp; Fixture market, round seed-1042, run in your browser by <code>forecastMarket</code> (60 ants, 300 ticks per forecaster, each on its own map). Swarm belief is the average of the three colonies' trail shares and is not yet calibrated as a probability.</caption>
-        <thead>
-          <tr>
-            <th scope="col">Outcome</th>
-            <th scope="col" class="num">Market</th>
-            <th scope="col" class="num">Momentum</th>
-            <th scope="col" class="num">Community</th>
-            <th scope="col" class="num">Agents</th>
-            <th scope="col" class="num">Swarm belief</th>
-            <th scope="col" class="num">Δ vs market</th>
-          </tr>
-        </thead>
-        <tbody id="swarm-rows">
-          <tr><td colspan="7" class="text-faint">Running three colonies…</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="text-xs text-faint" style="margin-top: var(--space-2)">Odds are the median of the keeper snapshots stored on-chain. No links to trading venues. Market hash <span class="hash"><span class="hash__value" id="swarm-hash">…</span><button class="hash__copy" type="button" aria-label="Copy market hash" id="swarm-hash-copy" hidden></button></span></p>
   </div>
 </section>
 
 <footer class="container" style="padding-block: var(--space-6)">
-  <p class="text-xs text-faint">Antonomy design system v0 · dark only · see docs/DESIGN_SYSTEM.md</p>
+  <p class="text-xs text-faint">Antonomy design system v1 (Nest and ledger) · dark only · docs/DESIGN_SYSTEM.md</p>
 </footer>
 
 <script type="module">
-/* Showcase behaviour. The sim panels run the real sim from sim/js/antosim.mjs. */
-import { Colony, run, seedFromInt, toHex, sha256, W, H, TICKS, forecastMarket, marketColony } from "../../sim/js/antosim.mjs";
-import { ColonyView, leadingSource } from "./colony-view.mjs";
-
-// Swatches: read token values from CSS so this page cannot drift from tokens.css.
-const root = getComputedStyle(document.documentElement);
-const css = (n) => root.getPropertyValue(n).trim();
-for (const host of document.querySelectorAll("[data-swatches]")) {
-  for (const name of host.dataset.swatches.split(" ")) {
-    const v = css(name);
-    host.insertAdjacentHTML("beforeend",
-      `<div class="swatch"><div class="swatch__chip" style="background:${v}"></div><div class="swatch__meta"><b>${name}</b><span>${v}</span></div></div>`);
-  }
-}
+/* Showcase behaviour. The stage, the forecast table and the verify panel run
+   the real sim from sim/js/antosim.mjs. */
+import { Colony, run, seedFromInt, toHex, sha256, TICKS, forecastMarket, marketColony, colonySeed,
+  oddsRichness, stakeRichness, agentRichness, oddsSnapshotHash, MOMENTUM,
+  FORECAST_ANTS, FORECAST_TICKS, BURN_HANDICAP } from "../../sim/js/antosim.mjs";
+import { ColonyThumb } from "./colony-thumb.mjs";
+import { walletHue } from "./staker-ants.mjs";
+import { hashHTML, hashCompareHTML, installCopy, pillHTML, toast, Player, liveShares, esc } from "../ui.mjs";
 
 const $ = (id) => document.getElementById(id);
-const short = (hex) => `${hex.slice(0, 8)}…${hex.slice(-8)}`;
-const setHash = (el, hex) => { el.textContent = short(hex); el.title = hex; };
+installCopy();
 
-// Copy-to-clipboard for .hash__copy
-document.addEventListener("click", async (e) => {
-  const b = e.target.closest(".hash__copy");
-  if (!b) return;
-  try { await navigator.clipboard.writeText(b.dataset.copy); } catch { return; }
-  const label = b.getAttribute("aria-label");
-  b.classList.add("is-copied");
-  b.setAttribute("aria-label", "Copied");
-  setTimeout(() => { b.classList.remove("is-copied"); b.setAttribute("aria-label", label); }, 1400);
-});
-
-// ---- Verify: replay seed-1042 in this tab and compare with the Python reference ----
-const VERIFY_SEED = seedFromInt(1042);
-const EXPECTED = "f1726c83cc21afaf1aa5e29a328897508297adac7915995e397de752de24cb93";
-const badge = $("verify-badge"), replayed = $("replayed-hash"), replayedCopy = $("replayed-copy");
-const tamper = $("verify-tamper");
-const verifySeed = () => {
-  const s = VERIFY_SEED.slice();
-  if (tamper.getAttribute("aria-pressed") === "true") s[31] ^= 1; // flip one bit
-  return s;
-};
-const showVerifySeed = () => {
-  const hex = toHex(verifySeed());
-  setHash($("v-seed"), hex);
-  $("v-seed-copy").dataset.copy = hex;
-};
-showVerifySeed();
-tamper.addEventListener("click", () => {
-  tamper.setAttribute("aria-pressed", tamper.getAttribute("aria-pressed") === "true" ? "false" : "true");
-  showVerifySeed();
-});
-$("verify-btn").addEventListener("click", (e) => {
-  const btn = e.currentTarget;
-  btn.classList.add("is-loading");
-  badge.dataset.state = "pending";
-  badge.textContent = "Replaying 800 ticks";
-  replayed.textContent = "…";
-  replayedCopy.hidden = true;
-  // Let the pending state paint before the (synchronous) replay runs.
-  setTimeout(() => {
-    const t0 = performance.now();
-    const r = run(verifySeed());
-    const ms = Math.round(performance.now() - t0);
-    const ok = r.hash === EXPECTED;
-    btn.classList.remove("is-loading");
-    setHash(replayed, r.hash);
-    replayedCopy.dataset.copy = r.hash;
-    replayedCopy.hidden = false;
-    badge.dataset.state = ok ? "match" : "mismatch";
-    badge.textContent = ok ? `Hash match · ${ms} ms` : "Hash mismatch";
-  }, 60);
-});
-
-// ---- Stake readout: square-root weight and cap usage ----
-const STAKE_CAP = 10000;
-const range = $("stake-range"), num = $("stake-num");
-const setStake = (v) => {
-  v = Math.max(0, Math.min(STAKE_CAP, Number(v) || 0));
-  range.value = num.value = v;
-  range.style.setProperty("--progress", (v / STAKE_CAP) * 100);
-  $("r-stake").textContent = v.toLocaleString("en-US");
-  $("r-weight").textContent = Math.sqrt(v).toFixed(1);
-  $("r-cap").textContent = Math.round((v / STAKE_CAP) * 100) + "%";
-};
-range.addEventListener("input", () => setStake(range.value));
-num.addEventListener("input", () => setStake(num.value));
-setStake(range.value);
-
-// ---- Real sim replay ----
-// The sim state is the integer Colony; ColonyView only reads it to draw.
-const MENU = ["0.10%", "0.25%", "0.50%", "1.00%", "2.00%"];
-const GLYPHS = ["▲", "■", "◆", "●", "★"];
-const TPS = { 1: 12, 4: 48, 16: 192 }; // ticks per second for each speed button
-const TWEEN_MS = 90;                    // single-step animation
-const cv = $("sim-canvas");
-const view = new ColonyView(cv, { labels: MENU, glyphs: GLYPHS });
-
-let seed, col, playing = false, speed = 4;
-let raf = 0, lastNow = 0, acc = 0, tweenEnd = 0;
-
-function loadSeed(i) {
-  seed = seedFromInt(i);
-  col = new Colony(seed);
-  view.attach(col);
-  $("seed-hex").textContent = short(toHex(seed));
-  $("seed-hex").title = toHex(seed);
-  goTo(TICKS);
-  render();
+// ---- Swatches: token values read from CSS, so this page can't drift from tokens.css ----
+const root = getComputedStyle(document.documentElement);
+for (const host of document.querySelectorAll("[data-swatches]")) {
+  const glyphs = host.dataset.glyphs?.split(" "), names = host.dataset.names?.split(" ");
+  host.innerHTML = host.dataset.swatches.split(" ").map((n, i) =>
+    `<div class="swatch"><div class="swatch__chip" style="background: var(${n})">${glyphs ? glyphs[i] : ""}</div>` +
+    `<div class="swatch__meta"><b>${n}</b><span>${root.getPropertyValue(n).trim()}${names ? ` · ${names[i]}` : ""}</span></div></div>`).join("");
 }
+$("wallets").innerHTML = ["alice.testnet", "bob.testnet", "carol.testnet", "dave.testnet", "erin.testnet", "frank.testnet", "grace.testnet", "heidi.testnet"]
+  .map((id) => `<span class="wallet" style="--wallet-hue: ${walletHue(id)}"><span class="wallet__id">${id}</span></span>`).join("");
+$("spaces").innerHTML = [4, 8, 12, 16, 24, 32, 48, 64, 96].map((px, i) =>
+  `<div class="space-row"><span>--space-${i + 1} · ${px}</span><span class="space-bar" style="width: ${px * 2}px"></span></div>`).join("");
+$("type-hash").innerHTML = hashHTML(toHex(seedFromInt(42)), "seed 42");
 
-// Jump to tick t. The sim only runs forward, so going back replays from tick 0.
-function goTo(t, fx = false) {
-  if (t < col.t) { col = new Colony(seed); view.attach(col); }
-  while (col.t < t) { col.step(); view.afterStep(fx); }
+// ---- Toasts ----
+$("toast-ok").onclick = () => {
+  const t = toast("pending", "Confirming: stake 25 $ANTO on ■ No…");
+  setTimeout(() => t("confirmed", "Staked 25 $ANTO on ■ No. Counts for round 41.", "#status"), 1600);
+};
+$("toast-fail").onclick = () => toast("failed", "Stake failed: 20 over your 100 $ANTO cap. 35 is locked on Burn.");
+
+// ---- 8.1 Option cards: the Burn menu with its cap ----
+const POT = [10, 25, 50, 100, 200]; // basis points of the treasury
+$("menu-tiles").innerHTML = POT.map((bp, o) =>
+  `<label class="option-card" data-opt="${o}"><input type="radio" name="pot" value="${o}"${o === 1 ? " checked" : ""}>` +
+  `<span class="opt-chip"></span><span class="option-card__label">${(bp / 100).toFixed(2)}% of treasury</span>` +
+  `<span class="option-card__facts">handicap ×${(BURN_HANDICAP[o] / 1000).toFixed(3)}</span>` +
+  (o === 1 ? `<span class="option-card__mine">Your stake 25 $ANTO</span>` : "") + `</label>`).join("") +
+  `<p class="option-cards__cap">The contract caps the pot at 2.00% of the treasury.</p>`;
+
+// ---- 8.4 Stake: one wallet budget, square-root weight, influence ----
+const CAP = 100, LOCKED = 35, ELSEWHERE = 0;
+const OPT_W = [6.0, 2.5, 2.5]; // food weight (sqrt-tokens plus the flat base) on each outcome now
+let stakeState = "ok";
+const fmt = (x) => x.toFixed(1);
+function paintStake() {
+  const v = Math.max(0, Math.floor(+$("st-num").value || 0));
+  $("st-range").value = Math.min(v, CAP);
+  $("st-range").style.setProperty("--progress", (Math.min(v, CAP) / CAP) * 100);
+  const free = CAP - LOCKED - ELSEWHERE, over = Math.max(0, v - free), mine = Math.min(v, free);
+  const part = (id, x) => { $(id).style.setProperty("--part", x); $(id).hidden = !x; };
+  part("b-locked", LOCKED); part("b-else", ELSEWHERE); part("b-this", mine); part("b-over", over); part("b-free", Math.max(0, free - v));
+  $("b-text").innerHTML = `<b>${LOCKED}</b> locked on Burn until day 20,756 pays. <b>${Math.max(0, free - v)}</b> free.`;
+  const err = $("st-err");
+  err.hidden = !over;
+  err.textContent = over ? `${over} over your ${CAP} $ANTO cap. ${LOCKED} is locked on Burn.` : "";
+  $("st-num").setAttribute("aria-invalid", String(!!over));
+  const w = Math.sqrt(mine);
+  $("st-weight").innerHTML = `<b>${mine} $ANTO → weight ${fmt(w)}</b> (√${mine})`;
+  const total = OPT_W.reduce((a, b) => a + b, 0), now = (OPT_W[1] / total) * 100, wth = ((OPT_W[1] + w) / (total + w)) * 100;
+  $("st-infl").style.setProperty("--now", now.toFixed(1));
+  $("st-infl").style.setProperty("--with", wth.toFixed(1));
+  $("st-infl-text").innerHTML = `<span class="opt" data-opt="1">No</span>'s share of what Community follows: <b>${fmt(now)}%</b> → <b>${fmt(wth)}%</b>`;
+  const go = $("st-go"), why = $("st-why"), form = $("stake");
+  form.removeAttribute("aria-busy");
+  go.classList.remove("is-loading");
+  go.classList.toggle("btn--primary", stakeState !== "nowallet");
+  go.disabled = false; why.hidden = true;
+  go.textContent = stakeState === "nowallet" ? "Connect wallet" : `Stake ${v} $ANTO on ■ No`;
+  if (stakeState === "closed") { go.disabled = true; why.hidden = false; why.textContent = "Staking closed at 14:15 UTC. Opens again when round 42 starts, about 14:25."; }
+  if (stakeState === "empty") { go.disabled = true; why.hidden = false; why.textContent = "Your faucet claim is used and your balance is 0."; }
+  if (stakeState === "busy") { form.setAttribute("aria-busy", "true"); go.classList.add("is-loading"); go.textContent = "Waiting for wallet…"; }
+  if (over && stakeState === "ok") go.disabled = true;
 }
+$("st-range").addEventListener("input", (e) => { $("st-num").value = e.target.value; paintStake(); });
+$("st-num").addEventListener("input", paintStake);
+document.querySelectorAll(".stake__picks button").forEach((b) => b.addEventListener("click", () => {
+  $("st-num").value = b.dataset.v === "max" ? CAP - LOCKED - ELSEWHERE : b.dataset.v; paintStake();
+}));
+document.querySelectorAll("#stake-states button").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll("#stake-states button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  stakeState = b.dataset.s; paintStake();
+}));
+$("st-go").addEventListener("click", () => { if (stakeState === "ok") toast("confirmed", `Staked ${$("st-num").value} $ANTO on ■ No. Counts for round 41.`); });
+paintStake();
 
-// Share bars: built once, updated every tick so widths can animate.
-const bars = $("share-bars");
-bars.innerHTML = MENU.map((label, o) =>
-  `<li class="share-bar" data-opt="${o}"><span class="opt">${label}</span><span class="share-bar__track"><span class="share-bar__fill"></span></span><span class="share-bar__value num">0.0%</span></li>`).join("");
-
-function panels() {
-  const t = col.t;
-  $("tick-readout").textContent = String(t).padStart(4, "0");
-  const scrub = $("scrubber");
-  scrub.value = t;
-  scrub.style.setProperty("--progress", (t / TICKS) * 100);
-  $("share-tick").textContent = `tick ${t}`;
-
-  const carrying = view.carrying();
-  $("n-foraging").textContent = col.ants - carrying;
-  $("n-carrying").textContent = carrying;
-  $("n-delivered").textContent = view.delivered.toLocaleString("en");
-
-  const scores = col.scores();
-  const sum = scores.reduce((a, b) => a + b, 0);
-  const lead = leadingSource(scores);
-  const leadOpt = lead < 0 ? -1 : col.perm.indexOf(lead);
-  bars.querySelectorAll(".share-bar").forEach((li, o) => {
-    const pct = sum ? (scores[col.perm[o]] / sum) * 100 : 0;
-    li.style.setProperty("--share", pct.toFixed(2));
-    li.querySelector(".share-bar__value").textContent = pct.toFixed(1) + "%";
-    li.classList.toggle("is-winner", t === TICKS && o === leadOpt);
+// ---- Forecast: one fixture market, its three forecasters with the real sim ----
+const OUT = ["Cut", "Hold", "Hike"], NAMES = ["Momentum", "Community", "Agents"];
+const odds = [6200, 2800, 1000], odds6h = [5500, 3300, 1200], stakes = [3000, 0, 12000];
+const agentOdds = [4500, 4000, 1500], agentHash = sha256(new TextEncoder().encode("agents"));
+const roundSeed = seedFromInt(1042), colony = marketColony(0);
+const pct = (b) => (b / 100).toFixed(1);
+const optHTML = (o) => `<span class="opt" data-opt="${o}">${OUT[o]}</span>`;
+const lead = (sh) => sh.indexOf(Math.max(...sh));
+setTimeout(() => {
+  const m = forecastMarket(roundSeed, colony, odds, odds6h, stakes, new Uint8Array(32), agentOdds, agentHash);
+  const top = lead(m.swarm);
+  $("fc-chips").innerHTML = m.colonies.map((c, k) => {
+    const l = lead(c.shares);
+    return `<button class="forecaster" type="button" aria-pressed="${k === 0}"><b>${NAMES[k]}</b>` +
+      `<span class="forecaster__reads">${["odds +6h move", "2 stakers", "3 agents"][k]}</span>` +
+      `<span class="forecaster__lead">${optHTML(l)} ${pct(c.shares[l])}%</span></button>`;
+  }).join("");
+  $("fc-chips").addEventListener("click", (e) => {
+    const b = e.target.closest(".forecaster"); if (!b) return;
+    $("fc-chips").querySelectorAll(".forecaster").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
   });
-  $("leader").innerHTML = leadOpt < 0 ? "no trail yet"
-    : `${t === TICKS ? "✓ winner" : "leading"}: <span class="opt" data-opt="${leadOpt}">${MENU[leadOpt]}</span>`;
+  $("vs-rows").innerHTML = OUT.map((_, o) => {
+    const d = m.swarm[o] - odds[o];
+    return `<tr class="vs-row${o === top ? " is-lead" : ""}" data-opt="${o}"><th scope="row">${optHTML(o)}${o === top ? `<span class="vs-row__leads">Leads</span>` : ""}</th>` +
+      `<td class="num">${pct(odds[o])}%</td><td class="num col-swarm">${pct(m.swarm[o])}%</td>` +
+      `<td class="num"><span class="delta ${d > 0 ? "delta--up" : d < 0 ? "delta--down" : "delta--flat"}">${pct(Math.abs(d))} pp</span></td>` +
+      m.colonies.map((c) => c.counted ? `<td class="num">${pct(c.shares[o])}%</td>` : `<td class="num vs-out">out</td>`).join("") +
+      `<td><span class="vs-bar" style="--share: ${m.swarm[o] / 100}; --market: ${odds[o] / 100}"></span></td></tr>`;
+  }).join("");
+  $("vs-hash").innerHTML = hashHTML(m.hash, "market hash");
+  cards(m, top);
+}, 0);
 
-  // Ant autopsy
-  const a = view.selected;
+// Market cards. The current card's thumbnails are the market's real forecast
+// colonies, played once; the idle card's scouts are drawn from the clock.
+function cards(m, top) {
+  const stack = (sw) => {
+    let at = 0;
+    return sw.map((s, o) => `<i data-opt="${o}" class="${s > 1800 ? "is-wide" : ""}" style="--w: ${s}"></i>`).join("") +
+      odds.slice(0, -1).map((x) => `<b style="--at: ${(at += x) / 100}"></b>`).join("");
+  };
+  const cols = (idle) => `<ol class="market-card__cols">${NAMES.map((n, k) =>
+    `<li><span class="forecaster"><b>${n}</b>${idle ? `<span class="forecaster__reads">${["odds", "stakes", "agents"][k]}</span>` : `<span class="forecaster__lead">${optHTML(lead(m.colonies[k].shares))}</span>`}</span>` +
+    `<canvas width="216" height="144" data-k="${k}" data-idle="${idle ? 1 : 0}" aria-hidden="true"></canvas></li>`).join("")}</ol>`;
+  const card = ({ n, title, pill, body = "", cls = "", foot = "" }) =>
+    `<article class="market-card ${cls}"><div class="market-card__top"><span class="market-card__n">${n}</span>` +
+    `<h3 class="market-card__title"><a href="#forecast">${esc(title)}</a></h3>${pill}</div>${body}` +
+    `<p class="market-card__foot">${foot}<span class="tag-forecast">Forecast · not advice</span></p></article>`;
+  const d = m.swarm[top] - odds[top];
+  const leadLine = `<p class="market-card__lead">${optHTML(top)}<b>${pct(m.swarm[top])}%</b><span class="delta ${d < 0 ? "delta--down" : "delta--up"}">${pct(Math.abs(d))} pp</span><span class="market-card__sub">swarm belief · market ${pct(odds[top])}%</span></p>`;
+  $("cards").innerHTML = [
+    card({ n: "01", title: "Fed decision in December?", pill: pillHTML("done", "Done"),
+      body: leadLine + `<div class="belief-stack" title="Swarm belief by outcome; ticks are the market odds">${stack(m.swarm)}</div>` + cols(false) +
+        `<p class="market-card__mine">Your stake <b>25 $ANTO</b> on ${optHTML(0)}</p>`,
+      foot: `<span class="market-card__verify" data-state="match">✓ Verified in your browser · 3/3</span>` }),
+    card({ n: "02", title: "Will the Fed cut in March?", pill: pillHTML("pending", "Seed at 14:20"),
+      body: `<p class="market-card__lead"><span class="market-card__sub">The maps appear when the seed is drawn, about 14:20 UTC.</span></p>` + cols(true) }),
+    card({ n: "03", title: "Turnout above 60% in the election?", pill: pillHTML("skipped", "Skipped"), cls: "is-skipped",
+      body: `<p class="market-card__lead"><span class="market-card__sub">No keeper quorum by 14:20 UTC (1 of 3 posted), so this market sits the round out.</span></p>` }),
+    card({ n: "04", title: "BTC above $100k on Dec 31?", pill: pillHTML("mismatch", "Mismatch"), cls: "is-mismatch",
+      body: leadLine + `<div class="belief-stack">${stack(m.swarm)}</div>`,
+      foot: `<span class="market-card__verify" data-state="mismatch">✗ 1 of 3 hashes differ · <a href="#verify">which input</a></span>` }),
+  ].join("");
+  const rich = [oddsRichness(MOMENTUM, odds, odds6h), stakeRichness(stakes), agentRichness(agentOdds)];
+  const commit = [oddsSnapshotHash(odds, odds6h), oddsSnapshotHash(odds, odds6h), agentHash];
+  const live = [];
+  for (const cv of $("cards").querySelectorAll("canvas")) {
+    const th = new ColonyThumb(cv, { glyphs: ["▲", "■", "◆", "●", "★"] }), k = +cv.dataset.k;
+    if (cv.dataset.idle === "1") { live.push({ th, k, idle: true }); continue; }
+    const col = new Colony(colonySeed(roundSeed, colony, k), OUT.length, rich[k], FORECAST_ANTS, FORECAST_TICKS, new Uint8Array(32), commit[k]);
+    th.attach(col);
+    live.push({ th, col });
+  }
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let last = performance.now(), acc = 0;
+  const frame = (now) => {
+    acc += ((now - last) / 1000) * 48; last = now;
+    let busy = false;
+    for (const x of live) {
+      if (x.idle) { x.th.drawIdle(x.k, reduced ? 0 : now / 1000); busy ||= !reduced; continue; }
+      if (reduced) { while (x.col.t < x.col.ticks) { x.col.step(); x.th.afterStep(); } x.th.draw(1); continue; }
+      let n = Math.floor(acc);
+      while (n-- > 0 && x.col.t < x.col.ticks) { x.col.step(); x.th.afterStep(); }
+      x.th.draw(x.col.t < x.col.ticks ? acc % 1 : 1);
+      if (x.col.t < x.col.ticks) busy = true;
+    }
+    acc %= 1;
+    if (busy) requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+
+// ---- 8.2 Stage: the Player with the real sim ----
+const MENU = ["0.10%", "0.25%", "0.50%", "1.00%", "2.00%"];
+const bars = $("share-bars");
+bars.innerHTML = MENU.map((label, o) => `<li class="share-bar" data-opt="${o}"><span class="opt">${label}</span><span class="share-bar__track"><span class="share-bar__fill"></span></span><span class="share-bar__value num">0.0%</span></li>`).join("");
+const player = new Player($("player"), {
+  onTick: (col) => {
+    const { pct: p, lead: l } = liveShares(col);
+    $("share-tick").textContent = `tick ${col.t}`;
+    [...bars.children].forEach((li, o) => {
+      li.style.setProperty("--share", p[o].toFixed(2));
+      li.lastElementChild.textContent = p[o].toFixed(1) + "%";
+      li.classList.toggle("is-winner", col.t === col.ticks && o === l);
+    });
+    autopsy(col);
+  },
+  onSelect: () => player.col && autopsy(player.col),
+});
+function autopsy(col) {
+  const a = player.view.selected;
   $("ant-id").textContent = `ant #${String(a).padStart(3, "0")}`;
   const st = $("ant-state");
   st.dataset.state = col.returning[a] ? "returning" : "searching";
-  st.textContent = col.returning[a] ? `returning with ${GLYPHS[col.perm.indexOf(view.carry[a])]}` : "searching";
+  st.textContent = col.returning[a] ? "carrying a crumb home" : "searching";
   $("ant-cell").textContent = `(${col.ax[a] >> 8}, ${col.ay[a] >> 8})`;
   $("ant-heading").textContent = `${col.ah[a]} / 16`;
-  $("ant-deposit").textContent = col.returning[a] ? String(col.strength[a]) : "—";
-  const compass = $("compass");
-  compass.style.setProperty("--heading", col.ah[a]);
-  compass.setAttribute("aria-label", `Heading ${col.ah[a]} of 16`);
+  $("compass").style.setProperty("--heading", col.ah[a]);
 }
-
-function render() { view.draw(1); panels(); }
-
-// One animation loop for playback, single-step tweens and effects. It stops
-// itself when nothing is moving.
-function loop(now) {
-  raf = 0;
-  const t0 = col.t;
-  if (playing) {
-    acc += (Math.min(100, now - lastNow) / 1000) * TPS[speed];
-    while (acc >= 1 && col.t < TICKS) { col.step(); view.afterStep(true); acc -= 1; }
-    if (col.t >= TICKS) { acc = 1; stop(); }
+let variant = "full";
+function load() {
+  const i = Math.max(0, Math.floor(+$("seed-int").value || 0));
+  const seed = seedFromInt(i);
+  $("seed-hash").innerHTML = hashHTML(toHex(seed), "seed");
+  player.chainT = variant === "live" ? 520 : null;
+  player.load(() => new Colony(seed), MENU);
+  const box = $("stage-box");
+  box.classList.toggle("is-idle", variant === "idle");
+  box.querySelector(".stage__veil")?.remove();
+  if (variant === "idle") {
+    box.querySelector(".sim-frame").insertAdjacentHTML("beforeend", `<div class="stage__veil">The map appears when the seed is drawn, about 14:20 UTC.</div>`);
+    return;
   }
-  lastNow = now;
-  const frac = playing ? acc : tweenEnd > now ? 1 - (tweenEnd - now) / TWEEN_MS : 1;
-  const busy = view.draw(frac, now);
-  if (col.t !== t0) panels();
-  if (playing || busy || tweenEnd > now) raf = requestAnimationFrame(loop);
+  // Default: paused on the final frame, or on the chain's tick when live.
+  player.seek(player.limit);
 }
-function kick() {
-  if (raf) return;
-  lastNow = performance.now();
-  raf = requestAnimationFrame(loop);
-}
+$("seed-int").addEventListener("change", load);
+document.querySelectorAll("[data-variant]").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll("[data-variant]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  variant = b.dataset.variant;
+  load();
+}));
+load();
 
-// Controls
-$("scrubber").addEventListener("input", (e) => { stop(); goTo(+e.target.value); render(); });
-$("step").addEventListener("click", () => {
-  stop();
-  if (col.t >= TICKS) return;
-  goTo(col.t + 1, true);
-  panels();
-  tweenEnd = performance.now() + TWEEN_MS;
-  kick();
-});
-for (const b of document.querySelectorAll("[data-speed]")) {
-  b.addEventListener("click", () => {
-    document.querySelectorAll("[data-speed]").forEach((x) => x.setAttribute("aria-pressed", "false"));
-    b.setAttribute("aria-pressed", "true");
-    speed = +b.dataset.speed;
-  });
-}
-for (const b of document.querySelectorAll("[data-view]")) {
-  b.addEventListener("click", () => {
-    document.querySelectorAll("[data-view]").forEach((x) => x.setAttribute("aria-pressed", "false"));
-    b.setAttribute("aria-pressed", "true");
-    view.mode = b.dataset.view;
-    if (!raf) view.draw(1);
-  });
-}
-const play = $("play");
-function stop() {
-  playing = false;
-  play.textContent = "▶";
-  play.setAttribute("aria-label", "Play");
-}
-play.addEventListener("click", () => {
-  if (playing) { stop(); return; }
-  if (col.t >= TICKS) { goTo(0); panels(); }
-  playing = true;
-  acc = 0;
-  play.textContent = "❚❚";
-  play.setAttribute("aria-label", "Pause");
-  kick();
-});
-
-// Hover highlights the ant under the cursor; click follows it.
-const toCells = (e) => {
-  const r = cv.getBoundingClientRect();
-  return [((e.clientX - r.left) / r.width) * W, ((e.clientY - r.top) / r.height) * H];
-};
-cv.addEventListener("mousemove", (e) => {
-  const [idx, d2] = view.nearest(...toCells(e));
-  const hover = d2 <= 2.5 ? idx : -1;
-  cv.style.cursor = hover >= 0 ? "pointer" : "crosshair";
-  if (hover !== view.hover) { view.hover = hover; if (!raf) view.draw(1); }
-});
-cv.addEventListener("mouseleave", () => { view.hover = -1; if (!raf) view.draw(1); });
-cv.addEventListener("click", (e) => {
-  view.selected = view.nearest(...toCells(e))[0];
-  if (raf) panels(); else render();
-});
-
-// Seed controls
-const seedInput = $("seed-int");
-seedInput.addEventListener("change", () => {
-  const i = Math.max(0, Math.floor(+seedInput.value || 0));
-  seedInput.value = i;
-  stop();
-  loadSeed(i);
-});
-$("seed-random").addEventListener("click", () => {
-  seedInput.value = Math.floor(Math.random() * 1e6);
-  seedInput.dispatchEvent(new Event("change"));
-});
-
-loadSeed(1042);
-// Badges are canvas text, so redraw once the web font arrives.
-document.fonts.ready.then(() => { if (!raf) view.draw(1); });
-
-// Swarm versus market: the five forecasters on a fixture market (the same one
-// sim/tests/crosscheck.py uses, agents included), computed here with the real sim.
-{
-  const outcomes = ["Cut", "Hold", "Hike"];
-  const odds = [6200, 2800, 1000], odds6h = [5500, 3300, 1200], stakes = [3000, 0, 12000];
-  const agentOdds = [4500, 4000, 1500], agentHash = sha256(new TextEncoder().encode("agents"));
-  const pct = (b) => (b / 100).toFixed(1);
-  const show = () => {
-    const m = forecastMarket(seedFromInt(1042), marketColony(0), odds, odds6h, stakes, new Uint8Array(32), agentOdds, agentHash);
-    $("swarm-rows").innerHTML = outcomes.map((label, o) => {
-      const d = m.swarm[o] - odds[o];
-      const cls = d > 0 ? "delta--up" : d < 0 ? "delta--down" : "delta--flat";
-      const cols = m.colonies.map((c) => `<td class="num">${pct(c.shares[o])}</td>`).join("");
-      return `<tr><th scope="row"><span class="opt" data-opt="${o}">${label}</span></th><td class="num">${pct(odds[o])}</td>${cols}` +
-        `<td class="num col-swarm">${pct(m.swarm[o])}</td><td class="num"><span class="delta ${cls}">${pct(Math.abs(d))}</span></td></tr>`;
-    }).join("");
-    setHash($("swarm-hash"), m.hash);
-    const copy = $("swarm-hash-copy");
-    copy.dataset.copy = m.hash;
-    copy.hidden = false;
+// ---- 8.7 / 8.8 Verify: seed 1042 replayed here vs the Python reference ----
+const VERIFY_SEED = seedFromInt(1042);
+const EXPECTED = "f1726c83cc21afaf1aa5e29a328897508297adac7915995e397de752de24cb93";
+$("h-single").innerHTML = hashHTML(EXPECTED, "result hash");
+$("h-named").innerHTML = hashHTML(toHex(VERIFY_SEED), "seed", { name: "Seed" });
+$("v-chain").innerHTML = hashHTML(EXPECTED, "chain hash");
+const tampered = () => $("v-tamper").getAttribute("aria-pressed") === "true";
+const vSeed = () => { const s = VERIFY_SEED.slice(); if (tampered()) s[31] ^= 1; return s; };
+const showSeed = () => { $("v-seed").innerHTML = hashHTML(toHex(vSeed()), "seed"); };
+showSeed();
+$("v-tamper").onclick = (e) => { e.currentTarget.setAttribute("aria-pressed", String(!tampered())); showSeed(); };
+let stopped = false;
+$("v-stop").onclick = () => { stopped = true; };
+$("v-go").onclick = () => {
+  const box = $("vbox"), col = new Colony(vSeed());
+  stopped = false;
+  box.dataset.state = "running";
+  $("v-result").textContent = "";
+  $("v-compare").innerHTML = "";
+  $("v-mine").innerHTML = `<span class="hash" aria-busy="true"><span class="hash__value">···· ···· … ···· ····</span></span>`;
+  const chunk = () => {
+    for (let n = 0; n < 40 && col.t < TICKS; n++) col.step();
+    $("v-bar").style.setProperty("--done", (col.t / TICKS) * 100);
+    $("v-step").textContent = `Run 1 of 1 · tick ${col.t} / ${TICKS}`;
+    if (stopped) { box.dataset.state = "idle"; $("v-mine").innerHTML = `<span class="hash is-off"><span class="hash__value">stopped</span></span>`; return; }
+    if (col.t < TICKS) return requestAnimationFrame(chunk);
+    const hash = run(vSeed()).hash, ok = hash === EXPECTED;
+    $("v-mine").innerHTML = hashHTML(hash, "your browser's hash");
+    box.dataset.state = ok ? "match" : "mismatch";
+    $("v-result").innerHTML = ok ? "Match. Your browser computed the same hash as the contract."
+      : `Mismatch. Chain <span class="num">${EXPECTED.slice(0, 4)}…${EXPECTED.slice(-4)}</span>, your browser <span class="num">${hash.slice(0, 4)}…${hash.slice(-4)}</span>. Re-run, or report it.`;
+    if (!ok) $("v-compare").innerHTML = hashCompareHTML(EXPECTED, hash);
   };
-  // About 90k ant-steps; let the page paint first.
-  setTimeout(show, 0);
-}
+  requestAnimationFrame(chunk);
+};
+
+// ---- 8.10 Leaderboard ----
+$("board").innerHTML = [["alice.testnet", "42.10", 6], ["you.testnet", "18.75", 3], ["carol.testnet", "9.40", 2]].map(([id, amt, days], i) =>
+  `<li class="board-row${id === "you.testnet" ? " is-you" : ""}" tabindex="0"><span class="board-row__rank">${i + 1}</span>` +
+  `<span class="wallet" style="--wallet-hue: ${walletHue(id)}"><span class="wallet__id">${id}</span></span>` +
+  `<span class="board-row__main">${amt} $ANTO</span><span class="board-row__second">${days} days paid</span></li>`).join("");
 </script>
 </body>
 </html>

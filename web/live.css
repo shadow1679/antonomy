@@ -1,34 +1,18 @@
-/* Live page (web/live.html) and the market page (web/market.html). Their own look on top of the design system:
-   IBM Plex Sans for UI and prose, mono only for numbers, ids and hashes,
-   Fraunces only for the page, section and market titles. Flat panels with
-   hairlines instead of raised chambers. The design
-   system's rules still hold: amber is reserved, options show their glyph,
-   every forecast output carries .tag-forecast. See docs/DESIGN_SYSTEM.md. */
+/* Live page (web/live.html) and the market page (web/market.html). These two
+   pages set the v1 look ("Nest and ledger") that the design system now gives
+   every page: Plex Sans for UI, tabular mono for numbers, ids and hashes,
+   Fraunces only for the page and market titles, flat panels with hairlines.
+   Amber is reserved, options show their glyph, every forecast output carries
+   .tag-forecast. See docs/DESIGN_SYSTEM.md. */
 
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap");
-
-body.lv {
-  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --lv-max: 1240px;
-  --lv-radius: 12px;
-  font-family: var(--font-ui);
-  font-size: 0.9375rem;
-  line-height: 1.5;
-}
-/* The shared shell keeps the mono of every other page. */
-body.lv .topbar, body.lv .demo-strip, body.lv .page-foot { font-family: var(--font-mono); }
-body.lv .container { max-width: var(--lv-max); }
 body.lv main { padding-bottom: var(--space-8); }
-body.lv code { font-size: 0.86em; }
-body.lv .what { font-family: var(--font-ui); font-size: var(--text-sm); }
-body.lv .btn { font-family: var(--font-ui); font-weight: 600; letter-spacing: 0; }
-body.lv .eyebrow { font-size: 11px; margin: 0; }
-.lv-g { font-family: var(--font-mono); font-size: 0.92em; }
+body.lv .what { font-size: var(--text-sm); }
+body.lv .eyebrow { margin: 0; }
+.lv-g { font-family: "IBM Plex Mono", var(--font-symbol); font-size: 0.92em; }
 
 /* ---- Round bar: which round, where it is, the one clock that matters ---- */
 .lv-round {
   border-bottom: 1px solid var(--border);
-  background: linear-gradient(180deg, rgb(242 165 65 / 0.045), transparent 80%);
 }
 .lv-round__row {
   display: grid;
@@ -37,21 +21,25 @@ body.lv .eyebrow { font-size: 11px; margin: 0; }
   align-items: center;
   padding-block: var(--space-6) var(--space-5);
 }
-.lv-round h1 { font-size: clamp(1.75rem, 1.2rem + 1.5vw, 2.375rem); margin: var(--space-1) 0 0; line-height: 1.05; }
+.lv-round h1 { font-size: clamp(1.75rem, 1.2rem + 1.5vw, var(--text-2xl)); margin: var(--space-1) 0 0; line-height: 1.1; }
 .lv-round__lede { margin: var(--space-2) 0 0; max-width: 44ch; color: var(--text-muted); font-size: var(--text-sm); text-wrap: pretty; }
 
 .lv-steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; }
 .lv-steps li { display: grid; gap: 6px; align-content: start; min-width: 0; font-size: var(--text-xs); color: var(--text-faint); }
-.lv-steps li::before { content: ""; height: 4px; border-radius: 2px; background: var(--border); }
-.lv-steps li[data-state="past"]::before { background: var(--text-faint); }
-.lv-steps li[data-state="now"]::before { background: var(--accent); box-shadow: 0 0 12px rgb(242 165 65 / 0.45); }
+/* The stepper (§8.3): past ✓ muted, now ◌ a thicker bone segment, next a
+   hairline, skipped ✗ with the rest greyed. Amber only on a button. */
+.lv-steps li::before { content: ""; height: 2px; margin-bottom: 2px; background: var(--border); }
+.lv-steps li[data-state="past"] { color: var(--text-muted); }
+.lv-steps li[data-state="past"]::before { background: var(--bone-500); }
+.lv-steps li[data-state="now"]::before { height: 4px; margin-bottom: 0; background: var(--bone-100); }
 .lv-steps li[data-state="now"] { color: var(--text); }
-.lv-steps li[data-state="skipped"]::before { background: var(--danger); }
+.lv-steps li[data-state="skipped"] ~ li { opacity: 0.5; }
 .lv-steps b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lv-steps__at { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+/* The glyphs (✓ ◌ ✗) are in the markup: stepsHTML() in lv.mjs. */
+.lv-steps__at { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-faint); }
 
 .lv-round__clock { display: grid; justify-items: end; text-align: right; gap: 2px; }
-.lv-clock { font-family: var(--font-mono); font-size: 2rem; font-weight: 500; line-height: 1.1; letter-spacing: -0.02em; color: var(--text); }
+.lv-clock { font-family: var(--font-mono); font-size: var(--num-lg); line-height: var(--lh-num-lg); font-weight: 500; letter-spacing: -0.02em; color: var(--text); }
 
 .lv-round__foot {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-5);
@@ -68,7 +56,7 @@ body.lv .eyebrow { font-size: 11px; margin: 0; }
 .lv-round--slim .lv-clock { font-size: 1.375rem; }
 .lv-back { font-size: var(--text-sm); color: var(--text-muted); text-decoration: none; }
 .lv-back:hover { color: var(--text); }
-.lv-round__name { margin: var(--space-1) 0 0; font-family: var(--font-display); font-size: var(--text-xl); font-weight: 600; line-height: 1.1; }
+.lv-round__name { margin: var(--space-1) 0 0; font-size: var(--text-lg); line-height: var(--lh-lg); font-weight: 600; }
 
 @media (max-width: 1000px) {
   .lv-round__row { grid-template-columns: minmax(0, 1fr) auto; }
@@ -82,140 +70,193 @@ body.lv .eyebrow { font-size: 11px; margin: 0; }
   .lv-steps__at { display: none; }
 }
 
-/* ---- $ANTO strip under the round bar: the token's live facts and the
-   connected wallet's balance or faucet claim ---- */
-.lv-anto { border-bottom: 1px solid var(--border); background: var(--accent-tint); }
-.lv-anto__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-6); padding-block: var(--space-3); }
-.lv-anto__mark { font-size: var(--text-lg); text-decoration: none; }
-.lv-anto__facts { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); margin: 0; flex: 1 1 auto; }
-.lv-anto__facts div { display: grid; gap: 1px; }
-.lv-anto__facts dt { font-size: 11px; letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-faint); }
-.lv-anto__facts dd { margin: 0; font-size: var(--text-base); color: var(--text); }
-.lv-anto__facts dd small { font-size: var(--text-xs); color: var(--accent); }
-.lv-anto__me { margin-left: auto; color: var(--text-muted); }
-.lv-anto__me b { color: var(--text); font-weight: 600; }
 .lv-burn__anto { display: block; margin-top: 2px; font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 400; color: var(--text-muted); }
-@media (max-width: 560px) { .lv-anto__me { margin-left: 0; } }
 
 /* ---- Sections ---- */
 .lv-section { padding-top: var(--space-7); scroll-margin-top: var(--topbar-h); }
 .lv-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin-bottom: var(--space-4); }
-.lv-head h2 { font-size: var(--text-xl); margin: 0; }
+.lv-head h2 { margin: 0; }
 .lv-head__count { font-size: var(--text-sm); color: var(--text-faint); }
 .lv-head .what { margin-left: auto; }
-.lv-subhead { margin: var(--space-6) 0 var(--space-3); font-family: var(--font-ui); font-size: var(--text-sm); font-weight: 600; letter-spacing: 0; color: var(--text-muted); }
+.lv-subhead { margin: var(--space-6) 0 var(--space-3); font-size: var(--text-sm); line-height: var(--lh-sm); font-weight: 600; color: var(--text-muted); }
 .lv-subhead span { font-weight: 400; color: var(--text-faint); }
 .lv-note { margin: var(--space-3) 0 0; font-size: var(--text-xs); color: var(--text-faint); }
-.lv-empty { margin: 0; padding: var(--space-4) var(--space-5); border: 1px dashed var(--border); border-radius: var(--lv-radius); color: var(--text-muted); font-size: var(--text-sm); }
+.lv-empty { margin: 0; padding: var(--space-4) var(--space-5); border: 1px dashed var(--border); border-radius: var(--radius-panel); color: var(--text-muted); font-size: var(--text-sm); }
 
-/* ---- Dense rows (requested forecasts): one line per market ---- */
-.lv-table { border: 1px solid var(--border); border-radius: var(--lv-radius); background: var(--surface); overflow: hidden; }
-.lv-rows { margin: 0; padding: 0; list-style: none; }
-.lv-grid {
-  display: grid;
-  grid-template-columns: 2rem minmax(0, 2.3fr) minmax(0, 1.5fr) minmax(7rem, 1.1fr) minmax(9rem, 1fr) 1rem;
-  grid-template-areas: "n title lead bar state go";
-  gap: var(--space-4);
-  align-items: center;
-  padding: 0 var(--space-4);
-}
-.lv-row { position: relative; min-height: 58px; padding-block: var(--space-2); border-top: 1px solid var(--border); color: var(--text); text-decoration: none; transition: background var(--dur-fast); }
-.lv-rows > li:first-child > .lv-row { border-top: 0; }
-.lv-row:hover { background: var(--surface-raised); color: var(--text); }
-.lv-row__n { grid-area: n; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-faint); }
-.lv-row__title { grid-area: title; display: grid; min-width: 0; }
-.lv-row__title b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lv-row__title code { font-size: 11px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lv-row__lead { grid-area: lead; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--space-3); min-width: 0; align-items: baseline; }
-.lv-row__lead .opt { min-width: 0; font-size: var(--text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lv-row__pct { font-family: var(--font-mono); font-weight: 600; }
-.lv-row__sub { grid-column: 1 / -1; font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); white-space: nowrap; }
-.lv-row__bar { grid-area: bar; min-width: 0; }
-.lv-row__state { grid-area: state; display: grid; min-width: 0; font-size: var(--text-xs); color: var(--text-faint); }
-.lv-row__state b { font-weight: 500; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lv-row__state[data-state="ok"] b { color: var(--success); }
-.lv-row__state[data-state="bad"] b { color: var(--danger); }
-.lv-row__go { grid-area: go; color: var(--text-faint); transition: transform var(--dur-fast), color var(--dur-fast); }
-.lv-row:hover .lv-row__go { color: var(--text); transform: translateX(2px); }
-
-/* One stacked bar per market: segments in the option colours, the glyph on
-   any segment wide enough to carry it (the lead column names the leader). */
-.lv-stack { display: flex; gap: 2px; height: 14px; border-radius: 4px; overflow: hidden; background: var(--bg-canvas); }
-.lv-stack i { flex: var(--w) 0 0; min-width: 0; background: var(--opt-color); font-style: normal; font-size: 9px; line-height: 14px; text-align: center; color: rgb(13 10 7 / 0.78); overflow: hidden; }
+/* One stacked bar per market (the market page's lead): segments in the
+   option colours, the glyph on any segment wide enough to carry it. */
+.lv-stack { display: flex; gap: 2px; height: 14px; border-radius: 2px; overflow: hidden; background: var(--bg-canvas); }
+.lv-stack i { flex: var(--w) 0 0; min-width: 0; background: var(--opt-color); font-style: normal; font-family: "IBM Plex Mono", var(--font-symbol); font-size: 9px; line-height: 14px; text-align: center; color: rgb(13 10 7 / 0.78); overflow: hidden; }
 .lv-stack i.is-wide::before { content: var(--opt-glyph); }
 
-@media (max-width: 860px) {
-  .lv-grid.lv-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "title title" "lead state" "bar bar";
-    gap: 6px var(--space-3);
-    min-height: 0;
-    padding-block: var(--space-3);
-  }
-  .lv-row__n, .lv-row__go, .lv-row__title code, .lv-row__sub, .lv-row__state > span { display: none; }
-  .lv-row__lead { grid-template-columns: minmax(0, auto) auto; justify-content: start; }
-  .lv-row__state { justify-items: end; text-align: right; }
-  .lv-stack { height: 12px; }
-  .lv-stack i { font-size: 8px; line-height: 12px; }
-}
+/* ---- Forecasts (docs/FORECAST_PAGE.md) ---- */
 
-/* ---- Market cards: the round's markets, a page at a time, each with its
-   five colonies as mini maps (ColonyThumb) once the seed exists ---- */
-.lv-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
-@media (max-width: 860px) { .lv-cards { grid-template-columns: minmax(0, 1fr); } }
-.lv-card {
-  position: relative; display: grid; gap: var(--space-3); min-width: 0;
-  padding: var(--space-4) var(--space-5) var(--space-4);
-  border: 1px solid var(--border); border-radius: var(--lv-radius); background: var(--surface);
-  transition: border-color var(--dur-fast), background var(--dur-fast);
-}
-.lv-card:hover { border-color: var(--border-strong); background: var(--surface-raised); }
-.lv-card:focus-within { border-color: var(--border-strong); }
-.lv-card__top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-3); align-items: baseline; }
-.lv-card__n { font-size: var(--text-xs); color: var(--text-faint); }
-.lv-card__title { margin: 0; min-width: 0; font-family: var(--font-ui); font-size: var(--text-base); font-weight: 600; letter-spacing: 0; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lv-card__title a { color: var(--text); text-decoration: none; }
-/* The whole card opens the market; the title is the one link. */
-.lv-card__title a::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
-.lv-card__title a:focus-visible { outline: none; }
-.lv-card__title a:focus-visible::after { outline: 2px solid var(--focus, var(--accent)); outline-offset: 2px; }
-.lv-card__state { font-size: var(--text-xs); color: var(--text-muted); white-space: nowrap; }
-.lv-card__state[data-state="ok"] { color: var(--success); }
-.lv-card__state[data-state="bad"] { color: var(--danger); }
-.lv-card__lead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--space-3); min-width: 0; }
-.lv-card__lead .opt { min-width: 0; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); }
-.lv-card__pct { font-size: 1.25rem; font-weight: 600; line-height: 1; }
-.lv-card__sub { flex-basis: 100%; font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
-.lv-card__go { position: absolute; right: var(--space-5); bottom: var(--space-4); font-size: var(--text-xs); color: var(--text-faint); opacity: 0; transition: opacity var(--dur-fast), transform var(--dur-fast); pointer-events: none; }
-.lv-card:hover .lv-card__go { opacity: 1; transform: translateX(2px); }
+/* The persistent line: forecast display, not betting. Sticky under the top
+   bar, never dismissible. */
+.fc-line { position: sticky; top: var(--topbar-h); z-index: 19; background: var(--surface-raised); border-bottom: 1px solid var(--border); font-size: var(--text-xs); color: var(--text-muted); }
+.fc-line .container { display: flex; gap: var(--space-2); align-items: center; min-height: 32px; }
+.fc-line__g { font-family: "IBM Plex Mono", var(--font-symbol); color: var(--text); }
+.fc-line__short { display: none; }
+@media (max-width: 760px) { .fc-line { top: 0; } }
 
-.lv-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); margin: var(--space-1) 0 var(--space-2); padding: 0; list-style: none; }
-.lv-cols__slot { display: grid; gap: 1px; min-width: 0; font-size: 11px; }
-.lv-cols canvas { display: block; width: 100%; aspect-ratio: 72 / 48; margin-bottom: 4px; border-radius: 6px; box-shadow: inset 0 0 0 1px var(--border); background: var(--soil-950, var(--bg-canvas)); }
-/* Before the seed: the bare plots with idling scouts (ColonyThumb.drawIdle) and what each colony will read. */
-.lv-cols__name { font-weight: 600; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lv-cols__lead { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lv-cols__lead[data-state="out"], .lv-cols__lead small { color: var(--warning); }
-.lv-cols__lead small { font-size: inherit; }
-.lv-cols__lead .opt { font-size: inherit; }
-@media (max-width: 480px) {
-  .lv-card { padding-inline: var(--space-4); }
-  .lv-cols { gap: 4px; }
-  .lv-cols__name { font-size: 10px; }
-  .lv-cols__lead { font-size: 9.5px; }
-}
+/* Round timeline: what is happening now, the five steps, the one clock. */
+.fc-round { border-bottom: 1px solid var(--border); }
+.fc-round .container { padding-block: var(--space-4) 0; }
+.fc-round__head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: var(--space-1) var(--space-5); margin-bottom: var(--space-3); font-size: var(--text-sm); color: var(--text-muted); }
+.fc-round__head p { margin: 0; }
+.fc-round__head p:first-child { display: flex; flex-wrap: wrap; gap: 0 var(--space-3); align-items: baseline; min-width: 0; }
+.fc-round__head b { color: var(--text); font-weight: 600; }
+.fc-round__clock { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-2); }
+.fc-round__value { font-size: var(--text-lg); font-weight: 500; color: var(--text); }
+.fc-round__label { font-size: var(--text-xs); color: var(--text-faint); }
+.fc-round__foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-2) var(--space-5); margin-top: var(--space-3); padding: var(--space-2) 0; border-top: 1px solid var(--border); font-size: var(--text-sm); color: var(--text-muted); }
+.fc-round__facts, .fc-round__acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-4); min-width: 0; }
+.fc-round__acts label { display: inline-flex; align-items: center; gap: 6px; }
 
-/* Pages of cards. */
-.lv-pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-4); }
-.lv-pager ol { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; }
-.lv-pager ol button {
-  min-width: 2rem; height: 2rem; padding: 0 var(--space-2);
-  border: 1px solid var(--border); border-radius: 8px; background: transparent;
-  font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-muted); cursor: pointer;
+.fc-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--space-6); align-items: start; }
+.fc-main { min-width: 0; }
+.fc-side { position: sticky; top: calc(var(--topbar-h) + 32px + var(--space-4)); display: grid; gap: var(--space-5); min-width: 0; max-height: calc(100vh - var(--topbar-h) - 32px - var(--space-6)); overflow-y: auto; overscroll-behavior: contain; }
+.fc-head h1 { margin: 0 0 var(--space-2); }
+.fc-head .lede { margin: 0 0 var(--space-5); color: var(--text-muted); max-width: 60ch; }
+
+/* The widest gap among finished markets: label, question and outcome on the
+   left; the gap and a jump to its card on the right edge, like a card's head. */
+.fc-widest { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2) var(--space-5); align-items: center; margin-bottom: var(--space-5); padding: var(--space-3) var(--space-4); border: 1px solid var(--bone-300); border-radius: var(--radius-panel); background: var(--surface); font-size: var(--text-sm); color: var(--text-muted); }
+.fc-widest__main { display: grid; gap: 2px; min-width: 0; }
+.fc-widest__eyebrow { font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-faint); }
+.fc-widest__q { color: var(--text); font-weight: 600; font-size: var(--text-base); }
+.fc-widest .num { font-family: var(--font-mono); color: var(--text); }
+.fc-widest__side { display: grid; justify-items: end; gap: var(--space-2); text-align: right; }
+.fc-widest__gap { font-family: var(--font-mono); font-size: var(--text-xl); line-height: 1; color: var(--text); white-space: nowrap; }
+.fc-widest__gap small { font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-faint); }
+.fc-widest a { color: var(--text); font-size: var(--text-xs); white-space: nowrap; }
+
+.fc-tools { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-3); margin-bottom: var(--space-2); }
+.fc-tools label { display: inline-flex; gap: var(--space-2); align-items: center; font-size: var(--text-sm); color: var(--text-muted); }
+.fc-tools select { padding: 4px 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-data); background: var(--surface); color: var(--text); font: inherit; }
+.fc-legend { margin: 0 0 var(--space-3); font-size: var(--text-xs); color: var(--text-faint); }
+.fc-legend b { font-weight: 600; color: var(--text-muted); }
+
+.fc-sec { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); margin: var(--space-6) 0 var(--space-3); }
+.fc-sec h2 { margin: 0; font-size: var(--text-lg); }
+.fc-sec p { margin: 0; font-size: var(--text-xs); color: var(--text-faint); }
+.fc-sec .what { margin-left: auto; font-size: var(--text-xs); }
+
+/* Market card: head (rank, question, status, headline gap), then the three
+   maps beside the outcome table, then one footer line. Nothing expands. */
+.fc-list { display: grid; gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
+.fc-card { padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); scroll-margin-top: calc(var(--topbar-h) + 32px + var(--space-3)); }
+.fc-card.is-widest { border-color: var(--bone-300); }
+.fc-card.is-skipped { background: none; }
+.fc-card__head { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto 128px; gap: var(--space-3); align-items: start; margin-bottom: var(--space-3); }
+.fc-card__n { padding-top: 3px; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-faint); }
+.fc-card__q { min-width: 0; }
+.fc-card__q a { color: var(--text); font-weight: 600; text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
+.fc-card__q a:hover { text-decoration-color: var(--bone-300); }
+.fc-card.is-skipped .fc-card__q a { color: var(--text-muted); font-weight: 500; }
+.fc-card__q small { display: flex; flex-wrap: wrap; gap: 2px var(--space-2); align-items: center; margin-top: 2px; font-size: var(--text-xs); color: var(--text-faint); }
+.fc-card__q small code { font-size: inherit; }
+.fc-card__status { padding-top: 1px; }
+.fc-card__gap { display: grid; justify-items: end; text-align: right; }
+.fc-card__gap .num { font-family: var(--font-mono); font-size: var(--text-xl); line-height: 1; color: var(--text); }
+.fc-card__gap .fc-card__none { color: var(--text-faint); }
+.fc-card__gap small { margin-top: 3px; font-size: var(--text-2xs); color: var(--text-faint); }
+.fc-card__gap > small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fc-card__gap .fc-card__unit { margin: 0; font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-faint); }
+.fc-card__gap .opt { color: var(--text-muted); }
+.fc-card__gap .fc-card__later { font-size: var(--text-xs); }
+.fc-card__body { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 5fr); gap: var(--space-4); align-items: start; }
+.fc-card__foot { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); align-items: center; margin-top: var(--space-3); padding-top: var(--space-2); border-top: 1px solid var(--border); font-size: var(--text-xs); color: var(--text-faint); }
+.fc-card__foot a { margin-left: auto; color: var(--text); }
+.fc-card__later { margin: 0; font-size: var(--text-sm); color: var(--text-faint); }
+.fc-flag { padding: 0 5px; border: 1px solid var(--bone-300); border-radius: var(--radius-data); font-family: var(--font-mono); color: var(--text); }
+.fc-yours { padding: 0 5px; border: 1px solid var(--border-strong); border-radius: var(--radius-data); font-family: var(--font-mono); color: var(--text-muted); }
+
+/* The three colonies, always on: a map each (144×96, 2 px per cell), its
+   name and leader. Each map opens the market page on that colony. */
+.fc-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); align-content: start; margin: 0; padding: 0; list-style: none; }
+.fc-cols li { min-width: 0; }
+.fc-cols a { display: grid; gap: 1px; min-width: 0; font-size: var(--text-xs); color: inherit; text-decoration: none; }
+.fc-cols canvas { display: block; width: 100%; aspect-ratio: var(--sim-aspect); margin-bottom: 3px; border-radius: var(--radius-data); box-shadow: inset 0 0 0 1px var(--border); background: var(--earth-900); }
+.fc-cols a:hover canvas, .fc-cols a:focus-visible canvas { box-shadow: inset 0 0 0 1px var(--bone-300); }
+.fc-cols b { font-weight: 600; color: var(--text-muted); }
+.fc-cols__lead { font-family: var(--font-mono); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fc-cols__lead .opt { font-family: var(--font-ui); }
+.fc-cols__wait { font-family: var(--font-ui); color: var(--text-faint); }
+
+/* Design B: Outcome | Market (6h ago → now) | Swarm belief | Gap. */
+.fc-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.fc-table caption { padding-bottom: var(--space-1); text-align: left; font-size: var(--text-xs); color: var(--text-faint); }
+.fc-table th, .fc-table td { padding: 5px var(--space-2); border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
+.fc-table th:first-child { padding-left: 0; }
+.fc-table td:last-child { padding-right: 0; }
+.fc-table thead th { vertical-align: bottom; font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 500; letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-faint); }
+.fc-table thead th small { display: block; white-space: nowrap; font-family: var(--font-ui); letter-spacing: 0; text-transform: none; }
+.fc-table thead th.fc-r { text-align: right; }
+.fc-table tbody tr:last-child > * { border-bottom: 0; }
+.fc-table th[scope="row"] { max-width: 11em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.fc-table td.num { font-family: var(--font-mono); text-align: right; white-space: nowrap; }
+.fc-table td.num small { font-size: var(--text-2xs); color: var(--text-faint); }
+.fc-table__move { color: var(--text-faint); }
+.fc-table__swarm { font-weight: 500; color: var(--text); }
+.fc-table__gap { display: grid; grid-template-columns: 32px minmax(64px, 1fr); gap: var(--space-2); align-items: center; }
+.fc-table__gap .num { font-family: var(--font-mono); text-align: right; }
+.fc-table__mirror { font-size: var(--text-xs); color: var(--text-faint); }
+.fc-table__none { font-size: var(--text-xs); color: var(--text-faint); }
+.fc-other small { font-weight: 400; color: var(--text-faint); }
+.fc-out-lbl { display: none; }
+
+/* Track record, under the lists: one quiet line until enough markets are
+   scored, then the full panel (.panel.track) in the same place. */
+.fc-track { margin: var(--space-6) 0 0; padding-top: var(--space-3); border-top: 1px solid var(--border); font-size: var(--text-xs); color: var(--text-faint); }
+.fc-track b { font-weight: 600; color: var(--text-muted); }
+.fc-main > .panel.track { margin-top: var(--space-6); }
+/* Side: add a market. */
+.track h2, .fc-side .panel h2 { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); margin: 0; font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-faint); }
+.track__sample { padding: 1px 6px; border: 1px dashed var(--bone-300); border-radius: var(--radius-data); background: var(--pattern-hatch); color: var(--text); }
+.track__head { margin: var(--space-3) 0; font-size: var(--text-md); font-weight: 600; line-height: 1.35; }
+.track dl { display: grid; grid-template-columns: auto 52px minmax(0, 1fr); gap: 6px var(--space-3); align-items: center; margin: 0 0 var(--space-3); font-size: var(--text-sm); }
+.track dt.track__metric { grid-column: 1 / -1; margin-top: var(--space-2); font-size: var(--text-xs); color: var(--text-faint); }
+.track dd { margin: 0; font-family: var(--font-mono); text-align: right; }
+.track__bar { display: block; height: 8px; border-radius: 2px; background: var(--bone-300); }
+.track p { margin: var(--space-2) 0 0; font-size: var(--text-xs); color: var(--text-faint); }
+.track p.track__counts { font-family: var(--font-mono); color: var(--text-muted); }
+
+/* .fc-add itself is in app.css: Recruit uses it too. */
+.fc-add__more { margin: var(--space-3) 0 0; padding-top: var(--space-3); border-top: 1px solid var(--border); font-size: var(--text-xs); }
+
+@media (max-width: 1199px) {
+  .fc-grid { grid-template-columns: minmax(0, 1fr); }
+  .fc-side { position: static; max-width: 32rem; max-height: none; overflow: visible; }
 }
-.lv-pager ol button:hover { border-color: var(--border-strong); color: var(--text); }
-.lv-pager ol button[aria-current="page"] { border-color: var(--text-muted); background: var(--surface-raised); color: var(--text); }
-.lv-pager__of { font-size: var(--text-xs); color: var(--text-faint); }
+@media (max-width: 759px) {
+  .fc-card__body { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 599px) {
+  /* Five labels don't fit a phone: only the step that is happening keeps its name. */
+  .fc-round .stepper__steps > li:not([data-state="now"]):not([data-state="stalled"]) b { visibility: hidden; }
+  .fc-round .stepper__steps > li b { overflow: visible; }
+  .fc-line__long { display: none; }
+  .fc-line__short { display: inline; }
+  .fc-widest { grid-template-columns: minmax(0, 1fr); }
+  .fc-widest__side { grid-auto-flow: column; justify-content: space-between; align-items: baseline; text-align: left; }
+  .fc-tools { font-size: var(--text-xs); }
+  .fc-card { padding: var(--space-3); }
+  .fc-card__head { grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2) var(--space-3); }
+  .fc-card__n { display: none; }
+  .fc-card__q { grid-column: 1; grid-row: 1; }
+  .fc-card__gap { grid-column: 2; grid-row: 1; }
+  .fc-card__status { grid-column: 1 / -1; grid-row: 2; }
+  .fc-card__gap .num { font-size: var(--text-lg); }
+  .fc-card__foot a { margin-left: 0; }
+  /* Design B, phone form: one two-line block per outcome. */
+  .fc-table thead { display: none; }
+  .fc-table, .fc-table tbody, .fc-table tr, .fc-table td, .fc-table th { display: block; padding: 0; border: 0; text-align: left !important; }
+  .fc-table caption { display: block; }
+  .fc-table tr { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 4px var(--space-3); align-items: center; padding: var(--space-2) 0; border-bottom: 1px solid var(--border); }
+  .fc-table tr > th { grid-column: 1 / -1; max-width: none; }
+  .fc-out-lbl { display: inline; font-family: var(--font-ui); font-weight: 400; color: var(--text-faint); }
+}
 
 /* ---- The market page (market.html) ---- */
 .lv-market { margin-top: var(--space-6); scroll-margin-top: calc(var(--topbar-h) + var(--space-3)); }
@@ -223,14 +264,14 @@ body.lv .eyebrow { font-size: 11px; margin: 0; }
   display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--space-3) var(--space-5);
   padding-bottom: var(--space-4); margin-bottom: var(--space-5); border-bottom: 1px solid var(--border);
 }
-.lv-market__head h1 { font-size: clamp(1.5rem, 1.1rem + 1.2vw, 2.125rem); margin: var(--space-1) 0 var(--space-2); }
+.lv-market__head h1 { font-size: clamp(1.5rem, 1.1rem + 1.2vw, var(--text-2xl)); margin: var(--space-1) 0 var(--space-2); }
 .lv-market__head h1:focus { outline: none; } /* focused on open, for screen readers */
 .lv-market__step { display: flex; align-items: center; gap: var(--space-2); }
 .lv-market__step [aria-disabled="true"] { opacity: 0.4; pointer-events: none; }
 .lv-market__of { min-width: 3.5rem; text-align: center; font-size: var(--text-xs); color: var(--text-faint); }
 .lv-state b { font-weight: 500; color: var(--text-muted); }
-.lv-state[data-state="ok"] b { color: var(--success); }
-.lv-state[data-state="bad"] b { color: var(--danger); }
+.lv-state[data-state="ok"] b { color: var(--ok); }
+.lv-state[data-state="bad"] b { color: var(--fault); }
 .lv-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-4); margin: 0; font-size: var(--text-xs); color: var(--text-faint); }
 .lv-meta > span { display: inline-flex; align-items: center; gap: var(--space-2); }
 
@@ -239,9 +280,9 @@ body.lv .eyebrow { font-size: 11px; margin: 0; }
 .lv-market__main { min-width: 0; }
 @media (max-width: 1000px) { .lv-market__grid { grid-template-columns: minmax(0, 1fr); } }
 
-.lv-panel { min-width: 0; padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--lv-radius); background: var(--surface); }
+.lv-panel { min-width: 0; padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
 .lv-panel__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); margin-bottom: var(--space-4); }
-.lv-panel h3, .lv-h3 { margin: 0; font-family: var(--font-ui); font-size: var(--text-base); font-weight: 600; letter-spacing: 0; }
+.lv-panel h3, .lv-h3 { margin: 0; font-size: var(--text-base); line-height: var(--lh-base); font-weight: 600; }
 .lv-panel__note { margin: 0 0 var(--space-4); font-size: var(--text-xs); color: var(--text-faint); }
 .lv-panel__foot { margin: var(--space-4) 0 0; font-size: var(--text-xs); color: var(--text-faint); }
 .lv-panel--quiet { background: transparent; border-style: dashed; color: var(--text-muted); font-size: var(--text-sm); }
@@ -249,7 +290,7 @@ body.lv .eyebrow { font-size: 11px; margin: 0; }
 
 /* Your part: stake or post odds on this market. */
 .lv-act .kv { margin-bottom: var(--space-4); font-size: var(--text-sm); }
-.lv-act .kv dt { font-family: var(--font-mono); font-size: 10.5px; }
+.lv-act .kv dt { font-size: var(--text-2xs); }
 .lv-act .field { margin: 0; }
 .lv-act__form { display: grid; grid-template-columns: minmax(0, 1fr) 7rem; gap: var(--space-3); align-items: end; margin-bottom: var(--space-3); }
 .lv-act__form .btn { grid-column: 1 / -1; justify-content: center; }
@@ -271,7 +312,7 @@ body.lv .eyebrow { font-size: 11px; margin: 0; }
 .lv-timeline li:last-child .lv-timeline__body { border-left-color: transparent; padding-bottom: 0; }
 .lv-timeline__body::before { content: ""; position: absolute; left: -5px; top: 6px; width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface); }
 .lv-timeline li[data-state="past"] .lv-timeline__body::before { border-color: var(--text-faint); background: var(--text-faint); }
-.lv-timeline li[data-state="now"] .lv-timeline__body::before { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 10px rgb(242 165 65 / 0.5); }
+.lv-timeline li[data-state="now"] .lv-timeline__body::before { border-color: var(--bone-100); background: var(--bone-100); box-shadow: 0 0 0 3px var(--surface), 0 0 0 4px var(--bone-300); }
 .lv-timeline b { display: block; font-weight: 500; }
 .lv-timeline li[data-state="past"] b { color: var(--text-muted); font-weight: 400; }
 .lv-timeline p { margin: 2px 0 0; font-size: var(--text-xs); color: var(--text-faint); }
@@ -283,19 +324,21 @@ body.lv .eyebrow { font-size: 11px; margin: 0; }
 .lv-picks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
 .lv-pick {
   display: grid; gap: 3px; min-width: 0; padding: 6px 6px 8px;
-  border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-data); background: var(--surface);
   color: var(--text-muted); font-size: var(--text-xs); text-align: left; cursor: pointer;
   transition: border-color var(--dur-fast), background var(--dur-fast);
 }
-.lv-pick:hover { border-color: var(--border-strong); background: var(--surface-raised); }
-.lv-pick[aria-selected="true"] { border-color: var(--accent); background: var(--surface-raised); box-shadow: inset 0 0 0 1px var(--accent); }
-.lv-pick canvas { width: 100%; aspect-ratio: 72 / 48; margin-bottom: 3px; border-radius: 6px; box-shadow: inset 0 0 0 1px var(--border); }
+.lv-pick:hover { border-color: var(--bone-300); background: var(--surface-raised); }
+.lv-pick[aria-selected="true"] { border-color: var(--bone-100); background: var(--surface-raised); box-shadow: inset 0 0 0 1px var(--bone-100); }
+.lv-pick[aria-selected="true"] .lv-pick__name { color: var(--soil-900); background: var(--bone-100); border-radius: 2px; }
+.lv-pick canvas { width: 100%; aspect-ratio: var(--sim-aspect); margin-bottom: 3px; border-radius: var(--radius-data); box-shadow: inset 0 0 0 1px var(--border); }
 .lv-pick__name { padding-inline: 2px; font-weight: 600; color: var(--text); }
 .lv-pick__lead, .lv-pick__out { padding-inline: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lv-pick__out { font-family: var(--font-mono); font-size: 10.5px; color: var(--warning); }
+.lv-pick__out { font-size: var(--text-2xs); color: var(--text-muted); }
+.lv-pick__out::before { content: "○ "; font-family: var(--font-mono); }
 .lv-pick__blurb { padding-inline: 2px; color: var(--text-muted); }
 .lv-pick__reads { display: block; padding-inline: 2px; font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
-.lv-pick__reads[data-state="out"] { color: var(--warning); }
+.lv-pick__reads[data-state="out"] { color: var(--text-muted); }
 .lv-picks--idle { margin: 0; padding: 0; list-style: none; }
 .lv-picks--idle .lv-pick { gap: 2px; align-content: start; padding-bottom: 10px; cursor: default; }
 .lv-picks--idle .lv-pick:hover { border-color: var(--border); background: var(--surface); }
@@ -306,19 +349,19 @@ body.lv .eyebrow { font-size: 11px; margin: 0; }
   .lv-pick { scroll-snap-align: start; }
 }
 
-.lv-stage__map { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--lv-radius); background: var(--surface); }
+.lv-stage__map { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
 .lv-stage__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
-.lv-stage__head h3, .lv-stage__head .lv-h3 { margin: 0; font-family: var(--font-ui); font-size: var(--text-base); font-weight: 600; letter-spacing: 0; }
+.lv-stage__head h3, .lv-stage__head .lv-h3 { margin: 0; font-size: var(--text-base); line-height: var(--lh-base); font-weight: 600; }
 .lv-stage__head .btn { margin-left: auto; }
-.lv-stage .sim-frame { border-radius: 10px; }
+
 .lv-stage [data-r="follow"]:not(:empty) { padding-top: var(--space-3); border-top: 1px solid var(--border); }
-.lv-roster { padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--lv-radius); background: var(--surface); }
-.lv-roster h3 { margin: 0 0 var(--space-1); font-family: var(--font-ui); font-size: var(--text-sm); font-weight: 600; letter-spacing: 0; }
+.lv-roster { padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
+.lv-roster h3 { margin: 0 0 var(--space-1); font-size: var(--text-sm); line-height: var(--lh-sm); font-weight: 600; }
 
 /* Checks and inputs, under the market. */
 .lv-checks { display: grid; gap: var(--space-4); margin-top: var(--space-5); }
 .lv-checks .table th, .lv-checks .table td { vertical-align: middle; }
-.lv-more { margin-top: var(--space-4); border: 1px solid var(--border); border-radius: var(--lv-radius); background: var(--surface); }
+.lv-more { margin-top: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
 .lv-more > summary { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-4) var(--space-5); cursor: pointer; list-style: none; font-weight: 500; }
 .lv-more > summary::-webkit-details-marker { display: none; }
 .lv-more > summary::before { content: "▸"; color: var(--text-faint); transition: transform var(--dur-fast); }
@@ -332,22 +375,21 @@ body.lv .eyebrow { font-size: 11px; margin: 0; }
 /* ---- Today's burn: one strip ---- */
 .lv-burn {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: var(--space-5) var(--space-7); align-items: center;
-  padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--lv-radius); background: var(--surface);
+  padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface);
 }
 .lv-burn__pick p { margin: 0; }
-.lv-burn__value { margin: var(--space-1) 0 !important; font-family: var(--font-display); font-size: 1.75rem; font-weight: 600; line-height: 1.15; }
-.lv-burn__value .opt { font-family: var(--font-mono); }
+.lv-burn__value { margin: var(--space-1) 0 !important; font-family: var(--font-mono); font-size: var(--text-xl); line-height: var(--lh-xl); font-weight: 500; }
 .lv-burn__actions { display: grid; justify-items: stretch; gap: var(--space-2); text-align: center; }
 @media (max-width: 860px) { .lv-burn { grid-template-columns: minmax(0, 1fr); } .lv-burn__actions { justify-items: start; text-align: left; } }
 
 /* Runs itself: who keeps the round moving */
 .lv-auto { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
-.lv-auto__card { padding: var(--space-4) var(--space-5); border: 1px solid var(--border); border-radius: var(--lv-radius); background: var(--surface); }
+.lv-auto__card { padding: var(--space-4) var(--space-5); border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
 .lv-auto__card .lv-subhead { margin: 0 0 var(--space-1); }
-.lv-auto__status { margin: 0 0 var(--space-3); font-size: var(--text-sm, .875rem); }
-.lv-auto__who { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--space-1); font-size: var(--text-xs, .75rem); }
+.lv-auto__status { margin: 0 0 var(--space-3); font-size: var(--text-sm); }
+.lv-auto__who { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--space-1); font-size: var(--text-xs); }
 .lv-auto__who code { overflow-wrap: anywhere; }
 .lv-auto__how { margin-top: var(--space-3); }
-.lv-auto__how summary { cursor: pointer; font-size: var(--text-sm, .875rem); }
-.lv-auto__cmd { margin: var(--space-2) 0 0; padding: var(--space-3) var(--space-4); overflow-x: auto; border: 1px solid var(--border); border-radius: var(--lv-radius); background: var(--surface); font-size: var(--text-xs, .75rem); }
+.lv-auto__how summary { cursor: pointer; font-size: var(--text-sm); }
+.lv-auto__cmd { margin: var(--space-2) 0 0; padding: var(--space-3) var(--space-4); overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); font-size: var(--text-xs); }
 @media (max-width: 860px) { .lv-auto { grid-template-columns: minmax(0, 1fr); } }

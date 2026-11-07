@@ -138,6 +138,12 @@ export const chain = {
   leaderboard: () => view("reward_leaderboard"),
   isAgent: (account_id) => view("is_agent", { account_id }),
   agentSnapshot: (colony) => view("agent_snapshot", { colony }),
+  // { phase: "commit" | "reveal", reveal_from_ms, by_ms, committed } or null.
+  agentWindow: (colony) => view("agent_window", { colony }),
+  // The scorebook (docs/FORECAST_QUALITY.md §2): totals, colony weights, open markets.
+  scoreTally: () => view("score_tally"),
+  agentScores: () => view("agent_scores"),
+  openMarkets: (from_index = 0, limit = 50) => view("open_markets", { from_index, limit }),
   requestConfig: () => view("request_config"),
   requestCount: () => view("forecast_request_count"),
   request: (request_id) => view("forecast_request", { request_id }),

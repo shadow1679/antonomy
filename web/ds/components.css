@@ -1,36 +1,49 @@
-/* Antonomy components. Depends on tokens.css and base.css.
-   Naming: .block, .block__part, .block--variant, state via .is-* or data-state. */
+/* Antonomy components, v1 ("Nest and ledger"). Depends on tokens.css and base.css.
+   Naming: .block, .block__part, .block--variant, state via .is-* or data-state.
+
+   Shared state rules (every component):
+   - Default uses only semantic tokens.
+   - Hover raises the surface one step and moves the border to --bone-300.
+     Data never moves on hover.
+   - Focus is the bone ring (base.css). Every interactive part takes Tab.
+   - Disabled is faint text and border, a not-allowed cursor, and always a
+     visible reason.
+   - Loading shows values as … in mono with aria-busy (no shimmer); an action
+     shows ◌ and a verb ("Waiting for wallet…").
+   - Error has a --fault border, ✗, what happened and what to do, and Retry
+     where retrying makes sense.
+   Sections follow docs/REDESIGN_FOUNDATIONS.md §8. */
 
 /* ======================================================================
-   Chamber: the card. Every panel sits in one.
+   Panel. .chamber is the v0 name and stays as an alias: flat, hairline,
+   8px, no shadow. The stage frame is the only 16px radius.
    ====================================================================== */
-.chamber {
+.panel, .chamber {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-chamber);
+  border-radius: var(--radius-panel);
   padding: var(--space-5);
 }
-.chamber--raised { background: var(--surface-raised); }
-.chamber--glow { box-shadow: var(--shadow-chamber), var(--glow-accent); border-color: transparent; }
-.chamber--flush { padding: 0; overflow: hidden; }
-.chamber__header {
+.chamber--raised, .panel--raised { background: var(--surface-raised); }
+.chamber--glow { border-color: var(--border-strong); } /* v0; no glows in v1 */
+.chamber--flush, .panel--flush { padding: 0; overflow: hidden; }
+.chamber__header, .panel__head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-3);
   margin-bottom: var(--space-4);
 }
-.chamber__title {
-  font-family: var(--font-display);
-  font-size: var(--text-lg);
+.chamber__title, .panel__title {
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  line-height: var(--lh-base);
   font-weight: 600;
-  font-variation-settings: "opsz" 24;
   margin: 0;
 }
 
 /* ======================================================================
-   Button
+   Button. Amber only on the one primary action in a view, with a verb.
    ====================================================================== */
 .btn {
   --btn-bg: var(--surface-raised);
@@ -40,145 +53,238 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  min-height: 40px;
+  min-height: var(--row);
   padding: 0 var(--space-4);
   border: 1px solid var(--btn-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-data);
   background: var(--btn-bg);
   color: var(--btn-fg);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: var(--text-sm);
-  font-weight: 500;
-  letter-spacing: 0.02em;
+  font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
-  transition:
-    background var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-base) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out);
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
-.btn:hover { --btn-border: var(--text-muted); }
-.btn:active { transform: translateY(1px); }
+.btn:hover { --btn-border: var(--bone-300); color: var(--btn-fg); }
 
-.btn--primary {
-  --btn-bg: var(--accent);
-  --btn-fg: var(--on-accent);
-  --btn-border: var(--accent);
-  font-weight: 600;
-}
-.btn--primary:hover { --btn-bg: var(--accent-hover); --btn-border: var(--accent-hover); box-shadow: var(--glow-accent); }
+.btn--primary { --btn-bg: var(--accent); --btn-fg: var(--on-accent); --btn-border: var(--accent); }
+.btn--primary:hover { --btn-bg: var(--accent-hover); --btn-border: var(--accent-hover); }
 .btn--primary:active { --btn-bg: var(--accent-press); --btn-border: var(--accent-press); }
 
 .btn--ghost { --btn-bg: transparent; --btn-border: transparent; --btn-fg: var(--text-muted); }
 .btn--ghost:hover { --btn-bg: var(--surface-raised); --btn-border: transparent; --btn-fg: var(--text); }
 
-.btn--danger { --btn-bg: var(--danger-tint); --btn-fg: var(--danger); --btn-border: var(--danger); }
-.btn--danger:hover { --btn-border: var(--danger); box-shadow: var(--glow-danger); }
+.btn--danger, .btn--fault { --btn-bg: transparent; --btn-fg: var(--fault); --btn-border: var(--fault); }
+.btn--danger:hover, .btn--fault:hover { --btn-bg: var(--fault-tint); --btn-border: var(--fault); }
 
-.btn--sm { min-height: 32px; padding: 0 var(--space-3); font-size: var(--text-xs); border-radius: var(--radius-sm); }
-.btn--lg { min-height: 48px; padding: 0 var(--space-5); font-size: var(--text-base); }
-.btn--icon { padding: 0; width: 40px; }
-.btn--icon.btn--sm { width: 32px; }
+.btn--sm { min-height: var(--row-compact); padding: 0 var(--space-3); font-size: var(--text-xs); }
+.btn--lg { min-height: var(--row-touch); padding: 0 var(--space-5); font-size: var(--text-base); }
+.btn--icon { padding: 0; width: var(--row); font-family: var(--font-mono), var(--font-symbol); }
+.btn--icon.btn--sm { width: var(--row-compact); }
 
 .btn:disabled, .btn[aria-disabled="true"] {
-  --btn-bg: var(--surface);
+  --btn-bg: transparent;
   --btn-fg: var(--text-faint);
   --btn-border: var(--border);
   cursor: not-allowed;
-  box-shadow: none;
-  transform: none;
 }
-
+/* Loading: ◌ and a verb ("Waiting for wallet…"). No spinner. */
 .btn.is-loading { pointer-events: none; }
-.btn.is-loading::before {
-  content: "";
-  width: 12px; height: 12px;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: anto-spin 700ms linear infinite;
-}
+.btn.is-loading::before { content: "◌"; font-family: "IBM Plex Mono", var(--font-symbol); }
+/* The visible reason under a disabled control. */
+.why { display: block; margin-top: var(--space-1); font-size: var(--text-xs); line-height: var(--lh-xs); color: var(--text-faint); }
 
 /* ======================================================================
-   Chip and tags
+   Tags. A .chip is a neutral label (not a status; status is .pill).
    ====================================================================== */
 .chip {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: 26px;
-  padding: 0 var(--space-3);
+  min-height: 24px;
+  padding: 0 var(--space-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--surface-raised);
+  border-radius: var(--radius-data);
+  background: transparent;
   color: var(--text-muted);
   font-size: var(--text-xs);
-  letter-spacing: 0.02em;
+  line-height: var(--lh-xs);
   white-space: nowrap;
 }
 .chip strong { color: var(--text); font-weight: 500; }
-
-.chip--live { color: var(--accent); border-color: rgb(242 165 65 / 0.4); background: var(--accent-tint); }
-.chip--live::before {
-  content: "";
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: currentColor;
-  animation: anto-pulse 1.6s var(--ease-in-out) infinite;
-}
-
-/* drand round: committed (future round, waiting) → published (randomness known) → late */
-.chip--drand::before { content: "◎"; font-size: 1.1em; }
-.chip--drand[data-state="committed"] { color: var(--info); border-color: rgb(134 183 220 / 0.35); }
-.chip--drand[data-state="published"] { color: var(--success); border-color: rgb(147 207 110 / 0.35); }
-.chip--drand[data-state="published"]::before { content: "◉"; }
-.chip--drand[data-state="late"] { color: var(--warning); border-color: rgb(233 205 91 / 0.35); }
+/* v0 live chip: now the Running pill's look (◌ with the one live pulse). */
+.chip--live { border-radius: var(--radius-pill); color: var(--hold); }
+.chip--live::before { content: "◌"; font-family: "IBM Plex Mono", var(--font-symbol); animation: anto-pulse 2s ease-in-out infinite; }
+/* drand round: committed (future, waiting) → published (randomness known) → late. Neutral, glyph carries it. */
+.chip--drand::before { content: "○"; font-family: "IBM Plex Mono", var(--font-symbol); }
+.chip--drand[data-state="published"] { color: var(--text); }
+.chip--drand[data-state="published"]::before { content: "●"; }
+.chip--drand[data-state="late"] { border-style: dashed; }
+.chip--drand[data-state="late"]::before { content: "!"; }
 
 /* Required on every forecast output. Do not restyle it away. */
 .tag-forecast {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 2px var(--space-2);
+  padding: 1px var(--space-2);
   border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-data);
   color: var(--text-muted);
-  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--lh-2xs);
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
   white-space: nowrap;
 }
-.tag-forecast::before { content: "◇"; color: var(--info); }
+.tag-forecast::before { content: "◇"; }
 
 /* ======================================================================
-   Notice
+   8.13 Status pill. Glyph and word always; colour only for ok and fault.
+   <span class="pill" data-state="running"><i class="pill__g"></i>Running · tick 180</span>
+   The glyph comes from data-state; .pill__g is optional (for the pulse).
    ====================================================================== */
-.notice {
-  --notice-color: var(--info);
-  --notice-tint: var(--info-tint);
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid color-mix(in srgb, var(--notice-color) 40%, transparent);
-  border-left-width: 3px;
-  border-radius: var(--radius-md);
-  background: var(--notice-tint);
-  font-size: var(--text-sm);
+.pill {
+  --pill-color: var(--hold);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+  padding: 0 var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--pill-color) 55%, transparent);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--pill-color);
+  font-size: var(--text-xs);
+  line-height: var(--lh-xs);
+  font-weight: 500;
+  white-space: nowrap;
 }
-.notice::before { content: var(--notice-glyph, "i"); color: var(--notice-color); font-weight: 600; }
-.notice__title { display: block; color: var(--text); font-weight: 600; }
-.notice p { margin: 0; color: var(--text-muted); }
-.notice--info     { --notice-glyph: "i"; }
-.notice--success  { --notice-color: var(--success); --notice-tint: var(--success-tint); --notice-glyph: "✓"; }
-.notice--warning  { --notice-color: var(--warning); --notice-tint: var(--warning-tint); --notice-glyph: "!"; }
-.notice--danger   { --notice-color: var(--danger);  --notice-tint: var(--danger-tint);  --notice-glyph: "✗"; }
-.notice--forecast { --notice-glyph: "◇"; }
+.pill::before {
+  content: var(--pill-glyph, "○");
+  font-family: "IBM Plex Mono", var(--font-symbol);
+  font-weight: 400;
+}
+.pill:has(> .pill__g)::before { content: none; }
+.pill__g { font-family: "IBM Plex Mono", var(--font-symbol); font-style: normal; font-weight: 400; }
+.pill__g::before { content: var(--pill-glyph, "○"); }
+.pill[data-state="running"]  { --pill-glyph: "◌"; }
+.pill[data-state="running"] .pill__g,
+.pill[data-state="running"]:not(:has(> .pill__g))::before { animation: anto-pulse 2s ease-in-out infinite; }
+.pill[data-state="pending"]  { --pill-glyph: "○"; }
+.pill[data-state="match"]    { --pill-color: var(--ok); --pill-glyph: "✓"; border-color: var(--ok); }
+.pill[data-state="mismatch"] { --pill-color: var(--fault); --pill-glyph: "✗"; border-color: var(--fault); background: var(--pattern-hatch), var(--fault-tint); }
+.pill[data-state="paused"]   { --pill-glyph: "‖"; background: var(--bone-100); border-color: var(--bone-100); color: var(--soil-900); }
+.pill[data-state="stalled"]  { --pill-glyph: "!"; border-style: dashed; background: var(--pattern-hatch); }
+.pill[data-state="default"]  { --pill-glyph: "↷"; border-style: dotted; }
+.pill[data-state="skipped"]  { --pill-glyph: "✗"; }
+.pill[data-state="done"]     { --pill-glyph: "●"; color: var(--text); }
+.pill[aria-busy="true"]      { --pill-glyph: "◌"; }
+a.pill { text-decoration: none; }
+a.pill:hover { border-color: var(--bone-300); }
+
+/* v0 verify badge: renders as a pill. data-state idle | pending | match | mismatch. */
+.verify-badge {
+  --pill-color: var(--hold);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 0 var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--pill-color) 55%, transparent);
+  border-radius: var(--radius-pill);
+  color: var(--pill-color);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+.verify-badge::before { content: var(--pill-glyph, "○"); font-family: "IBM Plex Mono", var(--font-symbol); font-weight: 400; }
+.verify-badge[data-state="pending"]  { --pill-glyph: "◌"; }
+.verify-badge[data-state="match"]    { --pill-color: var(--ok); --pill-glyph: "✓"; border-color: var(--ok); }
+.verify-badge[data-state="mismatch"] { --pill-color: var(--fault); --pill-glyph: "✗"; border-color: var(--fault); background: var(--pattern-hatch), var(--fault-tint); }
 
 /* ======================================================================
-   Option marker: colour + glyph for food source / menu option 0..4.
+   8.12 Banner and toast. A banner is system state that persists until
+   resolved; a toast is the result of the user's own action.
+   <div class="banner banner--fault" role="alert"><span class="banner__g">✗</span>
+     <div><b class="banner__title">…</b><p>…</p></div><button class="btn btn--sm">Retry</button></div>
+   ====================================================================== */
+.banner, .notice {
+  --banner-color: var(--hold);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-data);
+  background: var(--surface);
+  font-size: var(--text-sm);
+  line-height: var(--lh-sm);
+}
+.banner__g, .notice::before {
+  font-family: "IBM Plex Mono", var(--font-symbol);
+  color: var(--banner-color);
+  font-weight: 600;
+  line-height: var(--lh-sm);
+}
+.notice::before { content: var(--notice-glyph, "i"); }
+.banner__title, .notice__title { display: block; color: var(--text); font-weight: 600; }
+.banner p, .notice p { margin: 0; color: var(--text-muted); }
+.banner__action { align-self: center; }
+.banner--fault, .notice--danger { --banner-color: var(--fault); --notice-glyph: "✗"; border-color: color-mix(in srgb, var(--fault) 45%, transparent); }
+.banner--hold { --banner-color: var(--bone-100); --notice-glyph: "‖"; background: var(--surface-raised); }
+.notice--info     { --notice-glyph: "i"; }
+.notice--success  { --banner-color: var(--ok); --notice-glyph: "✓"; }
+.notice--warning  { --notice-glyph: "!"; }
+.notice--forecast { --notice-glyph: "◇"; }
+/* A notice with no glyph-bearing first child keeps its two columns. */
+.notice { grid-template-columns: auto minmax(0, 1fr); }
+
+/* Toasts: bottom right, newest last. Hover pauses the 5s timer (JS);
+   a fault toast stays until dismissed. Fade only. */
+.toasts {
+  position: fixed;
+  right: var(--space-5);
+  bottom: var(--space-5);
+  z-index: 60;
+  display: grid;
+  gap: var(--space-2);
+  width: min(380px, calc(100vw - 2 * var(--space-4)));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.toast {
+  --toast-color: var(--hold);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-data);
+  background: var(--surface-raised);
+  font-size: var(--text-sm);
+  line-height: var(--lh-sm);
+  animation: anto-fade var(--dur-base) var(--ease-out);
+}
+.toast__g { font-family: "IBM Plex Mono", var(--font-symbol); color: var(--toast-color); }
+.toast__g::before { content: var(--toast-glyph, "○"); }
+.toast p { margin: 0; }
+.toast a { font-size: var(--text-xs); }
+.toast__close { padding: 0 var(--space-1); border: 0; background: none; color: var(--text-faint); cursor: pointer; }
+.toast__close:hover { color: var(--text); }
+.toast[data-kind="pending"]   { --toast-glyph: "◌"; }
+.toast[data-kind="sent"]      { --toast-glyph: "○"; }
+.toast[data-kind="confirmed"] { --toast-color: var(--ok); --toast-glyph: "✓"; }
+.toast[data-kind="copied"]    { --toast-glyph: "✓"; }
+.toast[data-kind="failed"]    { --toast-color: var(--fault); --toast-glyph: "✗"; border-color: var(--fault); }
+
+/* ======================================================================
+   Options: colour + glyph for food source / menu option 0..4.
    Never use the colour without the glyph.
    ====================================================================== */
 [data-opt="0"] { --opt-color: var(--opt-0); --opt-glyph: var(--opt-0-glyph); }
@@ -196,66 +302,124 @@
 .opt::before {
   content: var(--opt-glyph);
   color: var(--opt-color);
+  font-family: "IBM Plex Mono", var(--font-symbol);
   font-size: 0.95em;
   line-height: 1;
   width: 1em;
   text-align: center;
 }
+/* Glyph chip: the option's glyph in its colour, on a hairline square. */
+.opt-chip {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 28px; height: 28px;
+  border: 1px solid color-mix(in srgb, var(--opt-color) 55%, transparent);
+  border-radius: var(--radius-data);
+  background: color-mix(in srgb, var(--opt-color) 10%, transparent);
+  color: var(--opt-color);
+  font-family: "IBM Plex Mono", var(--font-symbol);
+  font-size: 14px;
+  line-height: 1;
+}
+.opt-chip::before { content: var(--opt-glyph); }
 
-/* Wallet-tinted ant / staker marker. Set --wallet-hue (0..359) inline. */
+/* Wallet: an ant silhouette swatch in the wallet's tint beside the account
+   id. Set --wallet-hue (0..359) inline. A tint never fills a bar or area. */
 .wallet {
   --wallet-color: oklch(var(--wallet-l) var(--wallet-c) var(--wallet-hue, 0));
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+  min-width: 0;
 }
 .wallet::before {
   content: "";
-  width: 8px; height: 8px;
-  border-radius: 50%;
+  flex: none;
+  width: 14px; height: 10px;
   background: var(--wallet-color);
-  box-shadow: 0 0 0 2px var(--surface);
+  -webkit-mask: var(--ant-mask) center / contain no-repeat;
+  mask: var(--ant-mask) center / contain no-repeat;
 }
+:root {
+  --ant-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 20'%3E%3Cg fill='%23000'%3E%3Cellipse cx='6' cy='10' rx='5' ry='4'/%3E%3Cellipse cx='14' cy='10' rx='3.2' ry='2.6'/%3E%3Ccircle cx='21' cy='10' r='3.2'/%3E%3C/g%3E%3Cg stroke='%23000' stroke-width='1.4' stroke-linecap='round' fill='none'%3E%3Cpath d='M13 8 9 2M14 8l1-6M15 8l4-6M13 12l-4 6M14 12l1 6M15 12l4 6M23 8l3-5M23 12l3 5'/%3E%3C/g%3E%3C/svg%3E");
+}
+.wallet__id { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: 0.92em; }
 
 /* ======================================================================
-   Verification: hash, ledger, badge
+   8.7 Hash display: label, value in 4-character groups (first 8 and last
+   8 by default), Expand, Copy (always the full value), badge.
+   Built by hashHTML() in web/ui.mjs; the v0 markup (.hash__value with a
+   title, .hash__copy with data-copy) still works.
    ====================================================================== */
 .hash {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
   max-width: 100%;
-  padding: 2px 2px 2px var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-canvas);
-  font-family: var(--font-mono);
   font-size: var(--text-sm);
+  line-height: var(--lh-sm);
 }
+.hash__label { color: var(--text-faint); font-size: var(--text-xs); }
 .hash__value {
+  min-width: 0;
+  padding: 1px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-data);
+  background: var(--bg-canvas);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums slashed-zero;
+  font-variant-ligatures: none;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text);
-  letter-spacing: 0.02em;
 }
 .hash__value[title]:hover { cursor: help; }
-.hash__copy {
+.hash__grp + .hash__grp { margin-left: 0.5ch; }
+.hash__gap { color: var(--text-faint); margin-inline: 0.5ch; }
+.hash.is-expanded .hash__value { white-space: normal; max-width: 40ch; overflow-wrap: anywhere; }
+.hash__expand, .hash__copy {
   flex: none;
-  display: inline-grid;
-  place-items: center;
-  width: 26px; height: 26px;
-  border: 0;
-  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-data);
   background: transparent;
   color: var(--text-faint);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
   cursor: pointer;
-  transition: color var(--dur-fast), background var(--dur-fast);
+  transition: color var(--dur-fast), border-color var(--dur-fast);
 }
-.hash__copy:hover { color: var(--text); background: var(--surface-raised); }
-.hash__copy::before { content: "⧉"; }
-.hash__copy.is-copied { color: var(--success); }
-.hash__copy.is-copied::before { content: "✓"; }
+.hash__expand:hover, .hash__copy:hover { color: var(--text); border-color: var(--border); }
+.hash__copy:empty::before { content: "Copy"; }
+.hash__copy.is-copied { color: var(--ok); }
+.hash__copy.is-copied:empty::before { content: "✓ Copied"; }
+.hash__hint { flex-basis: 100%; font-size: var(--text-xs); color: var(--text-faint); }
+/* In table cells the title and Copy carry the full value; Expand would push the column. */
+.table .hash__expand { display: none; }
+.hash[aria-busy="true"] .hash__value { color: var(--text-faint); }
+.hash.is-off .hash__value { color: var(--text-faint); border-style: dashed; }
+
+/* Compare: Chain and Your browser, stacked and aligned. Every differing
+   group is underlined and marked ≠, so a mismatch shows without colour. */
+.hash-compare {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--lh-sm);
+}
+.hash-compare dt { color: var(--text-faint); font-size: var(--text-xs); align-self: center; }
+.hash-compare dd { margin: 0; min-width: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero; overflow-wrap: anywhere; }
+.hash-compare .hash__grp.is-diff { color: var(--fault); text-decoration: underline 2px; text-underline-offset: 3px; }
+.hash-compare .hash__grp.is-diff::after { content: "≠"; display: inline-block; margin-left: 2px; font-family: var(--font-ui); font-size: 1em; font-weight: 600; text-decoration: none; }
+.hash-compare__badge { grid-column: 1 / -1; }
 
 /* Ledger: label / value rows for seeds, rounds, hashes, ant state */
 .kv {
@@ -266,33 +430,14 @@
   align-items: center;
 }
 .kv dt {
-  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--lh-2xs);
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
   color: var(--text-faint);
 }
 .kv dd { margin: 0; min-width: 0; color: var(--text); }
-
-.verify-badge {
-  --vb-color: var(--text-muted);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--vb-color) 45%, transparent);
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--vb-color) 12%, transparent);
-  color: var(--vb-color);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-.verify-badge::before { content: var(--vb-glyph, "○"); display: inline-block; }
-.verify-badge[data-state="idle"]     { --vb-glyph: "○"; }
-.verify-badge[data-state="pending"]  { --vb-color: var(--info); --vb-glyph: "◌"; }
-.verify-badge[data-state="pending"]::before { animation: anto-spin 1.2s linear infinite; }
-.verify-badge[data-state="match"]    { --vb-color: var(--success); --vb-glyph: "✓"; box-shadow: var(--glow-success); animation: anto-reveal var(--dur-slow) var(--ease-out); }
-.verify-badge[data-state="mismatch"] { --vb-color: var(--danger); --vb-glyph: "✗"; box-shadow: var(--glow-danger); animation: anto-reveal var(--dur-slow) var(--ease-out); }
 
 .verify-panel { display: grid; gap: var(--space-4); }
 .verify-panel__result {
@@ -306,26 +451,60 @@
 }
 
 /* ======================================================================
-   Sim frame, playback, scrubber
+   8.8 Verify button with progress.
+   <div class="verify" data-state="idle|running|match|mismatch|partial|error">
+     <button class="btn">Verify in your browser</button>
+     <div class="verify__progress"><div class="progress"><i style="--done: 40"></i></div>
+       <span class="verify__step">Run 2 of 3 · tick 180 / 300</span><button class="btn btn--sm">Stop</button></div>
+     <p class="verify__result">✓ 3 of 3 hashes match · <a>compare</a></p></div>
    ====================================================================== */
+.verify { display: grid; gap: var(--space-3); justify-items: start; }
+.verify__progress { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-1) var(--space-3); width: 100%; }
+.verify__progress .progress { grid-column: 1 / -1; }
+.verify__step { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); }
+.verify__result { margin: 0; font-size: var(--text-sm); line-height: var(--lh-sm); color: var(--text-muted); }
+.verify__result:empty { display: none; }
+.verify__result::before { margin-right: var(--space-2); font-family: "IBM Plex Mono", var(--font-symbol); }
+.verify[data-state="match"] .verify__result { color: var(--ok); }
+.verify[data-state="match"] .verify__result::before { content: "✓"; }
+.verify[data-state="mismatch"] .verify__result { color: var(--fault); }
+.verify[data-state="mismatch"] .verify__result::before { content: "✗"; }
+.verify[data-state="partial"] .verify__result::before { content: "○"; }
+.verify[data-state="error"] .verify__result::before { content: "✗"; color: var(--fault); }
+.verify:not([data-state="running"]) .verify__progress { display: none; }
+
+/* Determinate progress bar (long replays, verify). Set --done 0..100. */
+.progress { --done: 0; position: relative; height: 6px; border-radius: 3px; background: var(--bg-canvas); box-shadow: inset 0 0 0 1px var(--border); overflow: hidden; }
+.progress > i { position: absolute; inset: 0 auto 0 0; width: calc(var(--done) * 1%); background: var(--bone-300); transition: width var(--dur-base) var(--ease-out); }
+
+/* ======================================================================
+   8.2 Colony stage with playback bar. Wraps ColonyView.
+   .stage > .stage__head, .sim-frame (16px, 3:2) with .stage__overlay,
+   then .playback. Variants: --live (scrub stops at the chain's tick),
+   --day (43,200 ticks, UTC axis), --thumb (no bar; for cards).
+   ====================================================================== */
+.stage { display: grid; gap: var(--space-3); min-width: 0; }
+.stage__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); }
+.stage__name { margin: 0; font-size: var(--text-base); line-height: var(--lh-base); font-weight: 600; }
+.stage__what { color: var(--text-muted); font-size: var(--text-sm); }
+.stage__head .hash { margin-left: auto; }
+
 .sim-frame {
   position: relative;
   aspect-ratio: var(--sim-aspect);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background:
-    radial-gradient(ellipse at 50% 50%, rgb(242 165 65 / 0.05), transparent 60%),
-    var(--bg-canvas);
+  border-radius: var(--radius-stage);
+  background: var(--earth-900); /* the map's loam, before the canvas paints */
   overflow: hidden;
-  box-shadow: var(--shadow-chamber);
 }
+.sim-frame:focus-visible { outline-offset: 3px; border-radius: var(--radius-stage); }
 .sim-frame canvas {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
 }
-.sim-frame__hud {
+.sim-frame__hud, .stage__overlay {
   position: absolute;
   inset: var(--space-3) var(--space-3) auto;
   display: flex;
@@ -334,44 +513,109 @@
   pointer-events: none;
 }
 .sim-frame__hud--bottom { inset: auto var(--space-3) var(--space-3); }
-.sim-frame__hud > * { pointer-events: auto; }
+.sim-frame__hud > *, .stage__overlay > * { pointer-events: auto; }
 .sim-frame__tick {
   padding: 2px var(--space-2);
-  border-radius: var(--radius-sm);
-  background: rgb(13 10 7 / 0.75);
+  border-radius: var(--radius-data);
+  background: rgb(13 10 7 / 0.8);
   color: var(--text-muted);
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
-  backdrop-filter: blur(4px);
+  line-height: var(--lh-xs);
 }
 .sim-frame__tick strong { color: var(--text); font-weight: 500; }
+/* Over the map: idle before the seed, loading, error. */
+.stage__veil {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: rgb(13 10 7 / 0.72);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+.stage__veil .progress { width: min(320px, 70vw); }
+.stage__veil--fault { color: var(--text); }
+.stage__veil--fault::before { content: "✗"; color: var(--fault); font-family: "IBM Plex Mono", var(--font-symbol); }
+.stage.is-idle .playback { opacity: 0.45; pointer-events: none; }
+.stage--thumb .sim-frame { border-radius: var(--radius-data); }
 
 .playback {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2) var(--space-3);
 }
-.playback .scrubber { flex: 1; }
+.playback .scrubber, .playback .scrub { flex: 1 1 180px; }
+.playback__keys { white-space: nowrap; }
 
-/* Segmented control: speed, colony picker */
+/* Scrub track with a mark every scoring checkpoint (set --marks to
+   ticks / 100) and, on live runs, a "chain is here" marker (--chain 0..100;
+   past it the track is hatched and the slider stops there). */
+.scrub { --marks: 3; --chain: 100; position: relative; display: grid; align-items: center; min-width: 0; }
+.scrub::before {
+  content: "";
+  position: absolute;
+  inset: 50% 7px auto;
+  height: 10px;
+  margin-top: -5px;
+  background: repeating-linear-gradient(to right, var(--border-strong) 0 1px, transparent 1px calc(100% / var(--marks)));
+  pointer-events: none;
+}
+.scrub::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: calc(7px + (100% - 14px) * var(--chain) / 100);
+  right: 7px;
+  height: 6px;
+  margin-top: -3px;
+  --hatch-color: var(--bone-300);
+  background: var(--pattern-hatch);
+  pointer-events: none;
+}
+.scrub__chain {
+  position: absolute;
+  top: -14px;
+  left: calc(7px + (100% - 14px) * var(--chain) / 100);
+  translate: -50% 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  color: var(--text-muted);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.scrub__chain::after { content: ""; display: block; width: 1px; height: 22px; margin: 2px auto 0; background: var(--bone-100); }
+.scrub:not(.scrub--live)::after, .scrub:not(.scrub--live) .scrub__chain { display: none; }
+.scrub__axis { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 10px; color: var(--text-faint); }
+
+/* Segmented control: speed, view, colony picker */
 .seg {
   display: inline-flex;
-  padding: 3px;
+  padding: 2px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-data);
   background: var(--bg-canvas);
 }
 .seg button {
-  min-height: 30px;
+  min-height: 28px;
   padding: 0 var(--space-3);
   border: 0;
-  border-radius: 7px;
+  border-radius: 3px;
   background: transparent;
   color: var(--text-muted);
   font-size: var(--text-xs);
+  font-family: var(--font-ui);
   cursor: pointer;
   transition: background var(--dur-fast), color var(--dur-fast);
 }
-.seg button:hover { color: var(--text); }
+.seg button[data-speed] { font-family: var(--font-mono); }
+.seg button:hover { color: var(--text); background: var(--surface); }
 .seg button[aria-pressed="true"], .seg button[aria-selected="true"] {
   background: var(--surface-raised);
   color: var(--text);
@@ -379,11 +623,13 @@
 }
 
 /* Range slider. JS sets --progress (0..100) for the filled part in WebKit;
-   Firefox uses ::-moz-range-progress. */
+   Firefox uses ::-moz-range-progress. Bone, not amber: the fill is a
+   position, not an action. */
 .scrubber, .range {
   --progress: 0;
   -webkit-appearance: none;
   appearance: none;
+  position: relative;
   width: 100%;
   height: 24px;
   margin: 0;
@@ -391,41 +637,80 @@
   cursor: pointer;
 }
 .scrubber::-webkit-slider-runnable-track, .range::-webkit-slider-runnable-track {
-  height: 6px;
-  border-radius: var(--radius-pill);
+  height: 4px;
+  border-radius: 2px;
   background: linear-gradient(to right,
-    var(--accent) calc(var(--progress) * 1%),
+    var(--bone-300) calc(var(--progress) * 1%),
     var(--surface-raised) calc(var(--progress) * 1%));
   box-shadow: inset 0 0 0 1px var(--border);
 }
 .scrubber::-moz-range-track, .range::-moz-range-track {
-  height: 6px;
-  border-radius: var(--radius-pill);
+  height: 4px;
+  border-radius: 2px;
   background: var(--surface-raised);
   box-shadow: inset 0 0 0 1px var(--border);
 }
 .scrubber::-moz-range-progress, .range::-moz-range-progress {
-  height: 6px;
-  border-radius: var(--radius-pill);
-  background: var(--accent);
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bone-300);
 }
 .scrubber::-webkit-slider-thumb, .range::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 16px; height: 16px;
+  width: 14px; height: 14px;
   margin-top: -5px;
   border: 2px solid var(--bg);
   border-radius: 50%;
-  background: var(--accent-hover);
-  box-shadow: 0 0 0 1px var(--accent), 0 0 10px rgb(242 165 65 / 0.4);
+  background: var(--bone-100);
 }
 .scrubber::-moz-range-thumb, .range::-moz-range-thumb {
-  width: 12px; height: 12px;
+  width: 10px; height: 10px;
   border: 2px solid var(--bg);
   border-radius: 50%;
-  background: var(--accent-hover);
-  box-shadow: 0 0 0 1px var(--accent), 0 0 10px rgb(242 165 65 / 0.4);
+  background: var(--bone-100);
 }
 .scrubber:focus-visible, .range:focus-visible { outline-offset: 4px; }
+
+/* ======================================================================
+   8.3 Round timeline stepper. One segment per step, each with a label, its
+   UTC time and a state glyph; the one clock that matters beside it.
+   <div class="stepper"><ol class="stepper__steps">
+     <li data-state="past|now|next|skipped|stalled" title="13:55 UTC · start_round">
+       <b>Staking</b><span class="stepper__at">13:55</span></li> …</ol>
+     <div class="stepper__clock">…</div></div>
+   Amber appears only on a button, when the user can act.
+   ====================================================================== */
+.stepper { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: var(--space-3) var(--space-6); }
+.stepper__steps { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; margin: 0; padding: 0; list-style: none; }
+.stepper__steps > li { display: grid; gap: 4px; align-content: start; min-width: 0; font-size: var(--text-xs); line-height: var(--lh-xs); color: var(--text-faint); }
+.stepper__steps > li::before { content: ""; height: 2px; margin-bottom: 2px; background: var(--border); }
+.stepper__steps b { display: flex; align-items: baseline; gap: 5px; min-width: 0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stepper__steps b::before { font-family: "IBM Plex Mono", var(--font-symbol); font-weight: 400; }
+.stepper__at { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-faint); }
+.stepper__steps > li[data-state="past"] { color: var(--text-muted); }
+.stepper__steps > li[data-state="past"]::before { background: var(--bone-500); }
+.stepper__steps > li[data-state="past"] b::before { content: "✓"; }
+.stepper__steps > li[data-state="now"] { color: var(--text); }
+.stepper__steps > li[data-state="now"]::before { height: 4px; margin-bottom: 0; background: var(--bone-100); }
+.stepper__steps > li[data-state="now"] b::before { content: "◌"; }
+.stepper__steps > li[data-state="skipped"] b::before { content: "✗"; }
+.stepper__steps > li[data-state="skipped"] ~ li { opacity: 0.5; }
+/* Error: the current segment hatched (a Stalled pill and a Crank action
+   sit beside the stepper). */
+.stepper__steps > li[data-state="stalled"] { color: var(--text); }
+.stepper__steps > li[data-state="stalled"]::before { height: 4px; margin-bottom: 0; --hatch-color: var(--bone-100); background: var(--pattern-hatch); box-shadow: inset 0 0 0 1px var(--bone-300); }
+.stepper__steps > li[data-state="stalled"] b::before { content: "!"; }
+.stepper__clock { display: grid; justify-items: end; gap: 2px; text-align: right; }
+.stepper__clock .num-lg { color: var(--text); }
+.stepper[aria-busy="true"] .stepper__steps > li::before { background: var(--border); }
+/* Compact: segments only, for cards. */
+.stepper--compact { grid-template-columns: minmax(0, 1fr); }
+.stepper--compact .stepper__steps b, .stepper--compact .stepper__at { display: none; }
+@media (max-width: 599px) {
+  .stepper { grid-template-columns: minmax(0, 1fr); }
+  .stepper__clock { justify-items: start; text-align: left; }
+  .stepper__at { display: none; }
+}
 
 /* ======================================================================
    Legend and trail-share bars
@@ -451,8 +736,8 @@
 }
 .share-bar__track {
   display: block;
-  height: 10px;
-  border-radius: var(--radius-pill);
+  height: 8px;
+  border-radius: 2px;
   background: var(--bg-canvas);
   box-shadow: inset 0 0 0 1px var(--border);
   overflow: hidden;
@@ -461,31 +746,30 @@
   display: block;
   height: 100%;
   width: calc(var(--share) * 1%);
-  border-radius: inherit;
   background: var(--opt-color);
-  transition: width var(--dur-slow) var(--ease-out);
+  transition: width var(--dur-base) var(--ease-out);
 }
-.share-bar__value { text-align: right; color: var(--text-muted); }
-.share-bar.is-winner .share-bar__value { color: var(--accent); font-weight: 600; }
+.share-bar__value { text-align: right; color: var(--text-muted); font-family: var(--font-mono); }
+.share-bar.is-winner .share-bar__value { color: var(--text); font-weight: 600; }
 .share-bar.is-winner .opt::after {
-  content: "winner";
+  content: "Picked";
   margin-left: var(--space-1);
-  padding: 0 6px;
-  border-radius: var(--radius-sm);
-  background: var(--accent-tint);
-  color: var(--accent);
-  font-size: var(--text-xs);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
+  padding: 0 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-data);
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  line-height: 16px;
 }
-/* Compact: for small cards such as the five forecasters of a market. */
+/* Compact: for small cards. */
 .share-bars--compact { gap: var(--space-2); }
 .share-bars--compact .share-bar { grid-template-columns: minmax(4.5rem, max-content) 1fr 5ch; gap: var(--space-2); font-size: var(--text-xs); }
 .share-bars--compact .share-bar__track { height: 6px; }
-.share-bars--compact .share-bar.is-winner .opt::after { content: "✓"; padding: 0 4px; }
+.share-bars--compact .share-bar.is-winner .opt::after { content: "✓"; border: 0; padding: 0; }
 
 /* ======================================================================
-   Ant inspector (ant autopsy)
+   Ant inspector (ant autopsy). Inside the stage's story, so charm is
+   allowed in the words; the marks stay plain.
    ====================================================================== */
 .inspector { display: grid; grid-template-columns: auto 1fr; gap: var(--space-5); align-items: center; }
 
@@ -515,9 +799,8 @@
   margin-top: -1px;
   transform-origin: 0 50%;
   transform: rotate(calc(var(--heading) * 22.5deg));
-  background: linear-gradient(to right, transparent, var(--accent));
+  background: linear-gradient(to right, transparent, var(--bone-100));
   border-radius: 2px;
-  transition: transform var(--dur-base) var(--ease-out);
 }
 .compass__needle::after {
   content: "";
@@ -525,13 +808,12 @@
   right: -3px; top: -3px;
   width: 8px; height: 8px;
   border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 8px var(--accent);
+  background: var(--bone-100);
 }
 
 .ant-state { display: inline-flex; align-items: center; gap: var(--space-2); }
-.ant-state::before { content: "→"; color: var(--info); }
-.ant-state[data-state="returning"]::before { content: "←"; color: var(--accent); }
+.ant-state::before { content: "→"; color: var(--text-faint); font-family: var(--font-mono); }
+.ant-state[data-state="returning"]::before { content: "←"; color: var(--text); }
 
 /* Trip log: one row per trip the followed ant makes. The tick cells are
    buttons that seek the replay. .is-current marks the trip under way,
@@ -545,6 +827,7 @@
   max-height: 15rem;
   overflow-y: auto;
   font-size: var(--text-xs);
+  font-family: var(--font-mono);
 }
 .trip-log li {
   display: grid;
@@ -552,7 +835,7 @@
   align-items: center;
   gap: var(--space-2);
   padding: 2px var(--space-2);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-data);
   color: var(--text-muted);
 }
 .trip-log li.is-current { background: var(--surface-raised); color: var(--text); }
@@ -579,7 +862,7 @@
   position: relative;
   height: 22px;
   margin: var(--space-3) 0 var(--space-1);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-data);
   background: var(--bg-canvas);
   box-shadow: inset 0 0 0 1px var(--border);
 }
@@ -595,7 +878,7 @@
   cursor: pointer;
   opacity: 0.85;
 }
-.ant-timeline__trip:hover, .ant-timeline__trip:focus-visible { opacity: 1; top: 1px; bottom: 1px; }
+.ant-timeline__trip:hover, .ant-timeline__trip:focus-visible { opacity: 1; }
 .ant-timeline__trip.is-future { opacity: 0.3; }
 .ant-timeline__head {
   position: absolute;
@@ -607,34 +890,36 @@
   background: var(--text);
   pointer-events: none;
 }
-.ant-timeline__legend { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--text-faint); }
+.ant-timeline__legend { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-faint); }
 
 /* Notable ants: one-click picks for the autopsy (busiest, first home...). */
 .ant-picks { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-4); padding: 0; list-style: none; }
 .ant-pick {
   display: inline-flex; align-items: baseline; gap: var(--space-2);
-  padding: 4px var(--space-3);
+  min-height: 28px;
+  padding: 2px var(--space-3);
   font: inherit; font-size: var(--text-xs);
   color: var(--text-muted);
-  background: var(--surface);
+  background: transparent;
   border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-data);
   cursor: pointer;
   transition: color var(--dur-fast), border-color var(--dur-fast), background var(--dur-fast);
 }
 .ant-pick b { color: var(--text); font-weight: 500; }
-.ant-pick:hover { color: var(--text); border-color: var(--border-strong); }
-.ant-pick[aria-pressed="true"] { color: var(--text); background: var(--surface-raised); border-color: var(--text-muted); }
+.ant-pick:hover { color: var(--text); border-color: var(--bone-300); background: var(--surface-raised); }
+.ant-pick[aria-pressed="true"] { color: var(--soil-900); background: var(--bone-100); border-color: var(--bone-100); }
+.ant-pick[aria-pressed="true"] b { color: inherit; }
 
 /* Follow card: one ant on a live map (followHTML in web/ui.mjs). */
 .follow { display: grid; gap: var(--space-3); }
 .follow__head { display: flex; align-items: center; gap: var(--space-3); }
-.follow__id { font-size: var(--text-lg); color: var(--text); }
+.follow__id { font-size: var(--text-lg); color: var(--text); font-family: var(--font-mono); }
 .follow__close { margin-left: auto; }
 .follow__now { margin: 0; font-size: var(--text-sm); }
 .follow__stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); margin: 0; }
-.follow__stats dt { font-size: var(--text-xs); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-faint); }
-.follow__stats dd { margin: 0; color: var(--text); }
+.follow__stats dt { font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-faint); }
+.follow__stats dd { margin: 0; color: var(--text); font-family: var(--font-mono); }
 .follow__crumbs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; min-height: 12px; }
 .follow__crumb { width: 10px; height: 10px; border-radius: 50%; background: var(--opt-color); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.5); }
 .follow__go { justify-self: start; }
@@ -642,7 +927,7 @@
 /* Staker roster: a row per wallet (stakerLegendHTML in web/ui.mjs). Rows are
    buttons: hover or focus lights the wallet's ants on the map, a click pins
    the light (aria-pressed). The bar is the wallet's ants against the
-   biggest wallet's (--ants, 0 to 1). */
+   biggest wallet's (--ants, 0 to 1), drawn in bone: a tint never fills a bar. */
 .roster { display: grid; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
 .roster__row {
   --wallet-color: oklch(var(--wallet-l) var(--wallet-c) var(--wallet-hue, 0));
@@ -655,16 +940,16 @@
   color: var(--text-muted);
   background: none;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-data);
   cursor: pointer;
   transition: background var(--dur-fast), border-color var(--dur-fast);
 }
-.roster__row:hover, .roster__row:focus-visible { background: var(--surface-raised); }
-.roster__row[aria-pressed="true"] { background: var(--surface-raised); border-color: var(--wallet-color); }
+.roster__row:hover, .roster__row:focus-visible { background: var(--surface-raised); border-color: var(--border); }
+.roster__row[aria-pressed="true"] { background: var(--surface-raised); border-color: var(--bone-300); }
 .roster__id { color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.roster__ants { color: var(--text); }
+.roster__ants { color: var(--text); font-family: var(--font-mono); }
 .roster__meta { grid-column: 1 / -1; color: var(--text-faint); }
-.roster__bar { grid-column: 1 / -1; height: 3px; border-radius: 2px; background: linear-gradient(to right, var(--wallet-color) calc(var(--ants) * 100%), var(--border) 0); }
+.roster__bar { grid-column: 1 / -1; height: 2px; background: linear-gradient(to right, var(--bone-500) calc(var(--ants) * 100%), var(--border) 0); }
 
 /* ======================================================================
    Form fields
@@ -672,26 +957,28 @@
 .field { display: grid; gap: var(--space-2); }
 .field__label { font-size: var(--text-sm); color: var(--text); font-weight: 500; }
 .field__hint { font-size: var(--text-xs); color: var(--text-faint); }
-.field__error { font-size: var(--text-xs); color: var(--danger); }
+.field__error { font-size: var(--text-xs); color: var(--fault); }
 .field__error::before { content: "✗ "; }
 
 .input {
   width: 100%;
-  min-height: 40px;
+  min-height: var(--row);
   padding: 0 var(--space-3);
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-data);
   background: var(--bg-canvas);
   color: var(--text);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
-  transition: border-color var(--dur-fast), box-shadow var(--dur-base);
+  font-variant-numeric: tabular-nums slashed-zero;
+  transition: border-color var(--dur-fast);
 }
 .input::placeholder { color: var(--text-faint); }
-.input:hover { border-color: var(--text-muted); }
-.input:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--glow-accent); }
-.input[aria-invalid="true"] { border-color: var(--danger); }
+.input:hover { border-color: var(--bone-300); }
+.input:focus-visible { border-color: var(--bone-100); }
+.input[aria-invalid="true"] { border-color: var(--fault); }
 .input:disabled { color: var(--text-faint); border-color: var(--border); cursor: not-allowed; }
+select.input { font-family: var(--font-ui); }
 
 .input-group { display: flex; align-items: stretch; }
 .input-group .input { border-top-right-radius: 0; border-bottom-right-radius: 0; }
@@ -701,14 +988,35 @@
   padding: 0 var(--space-3);
   border: 1px solid var(--border-strong);
   border-left: 0;
-  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  border-radius: 0 var(--radius-data) var(--radius-data) 0;
   background: var(--surface-raised);
   color: var(--text-muted);
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
 }
 
-/* Stake: amount slider + input + square-root weight readout */
-.stake { display: grid; gap: var(--space-3); }
+/* ======================================================================
+   8.4 Stake input with per-wallet cap and influence preview.
+   .stake > .stake__target (an .option-card), .stake__amount (field, slider,
+   quick picks), .budget (one bar of the 100 $ANTO wallet cap), .stake__weight,
+   .influence, .stake__when, the primary button. The v0 parts (.stake__row,
+   .stake__readout) still work.
+   ====================================================================== */
+.stake { display: grid; gap: var(--space-4); }
+.stake__amount { display: grid; grid-template-columns: minmax(0, 1fr) 10rem; gap: var(--space-2) var(--space-3); align-items: center; }
+.stake__picks { grid-column: 1 / -1; display: flex; gap: var(--space-2); }
+.stake__picks button {
+  min-height: 28px; padding: 0 var(--space-3);
+  border: 1px solid var(--border); border-radius: var(--radius-data);
+  background: transparent; color: var(--text-muted);
+  font-family: var(--font-mono); font-size: var(--text-xs); cursor: pointer;
+}
+.stake__picks button:hover { color: var(--text); border-color: var(--bone-300); background: var(--surface-raised); }
+.stake__weight, .stake__when { margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.stake__weight b, .stake__when b { color: var(--text); font-weight: 500; font-family: var(--font-mono); }
+.stake .btn--primary { width: 100%; }
+.stake fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.stake[aria-busy="true"] .stake__amount { opacity: 0.6; pointer-events: none; }
 .stake__row { display: grid; grid-template-columns: 1fr 11rem; gap: var(--space-3); align-items: center; }
 .stake__readout {
   display: grid;
@@ -717,51 +1025,123 @@
   margin: 0;
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-data);
   background: var(--bg-canvas);
 }
-.stake__readout dt { font-size: var(--text-xs); color: var(--text-faint); letter-spacing: var(--tracking-caps); text-transform: uppercase; }
-.stake__readout dd { margin: 0; font-size: var(--text-lg); color: var(--text); }
-.stake__readout dd.is-accent { color: var(--accent); }
+.stake__readout dt { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--text-faint); letter-spacing: var(--tracking-caps); text-transform: uppercase; }
+.stake__readout dd { margin: 0; font-family: var(--font-mono); font-size: var(--text-lg); color: var(--text); }
+.stake__readout dd.is-accent { font-weight: 600; }
 
-/* Menu option card: a radio styled as a card. The colony picks an index from these. */
-.option-cards { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); margin: 0; padding: 0; border: 0; }
+/* Budget meter: one bar of the wallet cap, split into stakes elsewhere
+   (hatched where locked), this stake, and what is free. Set --part on
+   each span (any unit; flex shares). */
+.budget { display: grid; gap: var(--space-2); }
+.budget__bar { display: flex; gap: 2px; height: 10px; padding: 1px; border: 1px solid var(--border); border-radius: 3px; background: var(--bg-canvas); }
+.budget__bar > span { flex: var(--part, 0) 1 0; min-width: 0; border-radius: 1px; }
+.budget__bar > span[style*="--part: 0;"], .budget__bar > span[style*="--part:0;"] { display: none; }
+.budget__bar [data-part="elsewhere"] { background: var(--bone-500); }
+.budget__bar [data-part="locked"] { --hatch-color: var(--bone-300); background: var(--pattern-hatch), var(--soil-600); box-shadow: inset 0 0 0 1px var(--bone-500); }
+.budget__bar [data-part="this"] { background: var(--bone-100); }
+.budget__bar [data-part="over"] { --hatch-color: var(--fault); background: var(--pattern-hatch), var(--fault-tint); box-shadow: inset 0 0 0 1px var(--fault); }
+.budget__bar [data-part="free"] { background: transparent; }
+.budget__text { margin: 0; font-size: var(--text-xs); color: var(--text-muted); }
+.budget__text b { color: var(--text); font-weight: 500; font-family: var(--font-mono); }
+.budget__key { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); margin: 0; padding: 0; list-style: none; font-size: var(--text-xs); color: var(--text-faint); }
+.budget__key li { display: inline-flex; align-items: center; gap: var(--space-1); }
+.budget__key li::before { content: ""; width: 10px; height: 8px; border-radius: 1px; }
+.budget__key [data-part="elsewhere"]::before { background: var(--bone-500); }
+.budget__key [data-part="locked"]::before { --hatch-color: var(--bone-300); background: var(--pattern-hatch), var(--soil-600); box-shadow: inset 0 0 0 1px var(--bone-500); }
+.budget__key [data-part="this"]::before { background: var(--bone-100); }
+.budget__key [data-part="free"]::before { box-shadow: inset 0 0 0 1px var(--border-strong); }
+
+/* Influence preview: the option's food weight now (fill), with this stake
+   (ghost tick). Set --now and --with (0..100). */
+.influence { --now: 0; --with: 0; display: grid; gap: var(--space-1); }
+.influence__track { position: relative; height: 8px; border-radius: 2px; background: var(--bg-canvas); box-shadow: inset 0 0 0 1px var(--border); }
+.influence__track::before { content: ""; position: absolute; inset: 0 auto 0 0; width: calc(var(--now) * 1%); background: var(--opt-color, var(--bone-300)); transition: width var(--dur-base) var(--ease-out); }
+.influence__track::after { content: ""; position: absolute; top: -3px; bottom: -3px; left: calc(var(--with) * 1%); width: 2px; margin-left: -1px; border: 1px dashed var(--bone-100); border-radius: 1px; }
+.influence p { margin: 0; font-size: var(--text-xs); color: var(--text-muted); }
+.influence p b { color: var(--text); font-weight: 500; font-family: var(--font-mono); }
+
+/* ======================================================================
+   8.1 Option card, with its cap. A radio styled as a card; the colony
+   picks an index from these, never an amount.
+   <label class="option-card" data-opt="2"><input type="radio">
+     <span class="opt-chip"></span>
+     <span class="option-card__label">0.50% of treasury</span>
+     <span class="option-card__facts">0.42% burned · 0.08% to stakers</span>
+     <span class="option-card__mine">Your stake 25 $ANTO</span></label>
+   <p class="option-cards__cap">The contract caps the pot at 2.00% of the treasury.</p>
+   v0 parts __value / __meta still work.
+   ====================================================================== */
+.option-cards { display: grid; gap: var(--space-2); grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); margin: 0; padding: 0; border: 0; }
 .option-card {
   position: relative;
   display: grid;
-  gap: var(--space-1);
-  padding: var(--space-4);
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: start;
+  gap: 2px var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-data);
   background: var(--surface);
   cursor: pointer;
-  transition: border-color var(--dur-fast), box-shadow var(--dur-base), background var(--dur-fast);
+  transition: border-color var(--dur-fast), background var(--dur-fast);
 }
-.option-card:hover { border-color: var(--border-strong); background: var(--surface-raised); }
+.option-card > :not(.opt-chip):not(input) { grid-column: 2; min-width: 0; }
+.option-card:not(:has(> .opt-chip)) { grid-template-columns: minmax(0, 1fr); }
+.option-card:not(:has(> .opt-chip)) > * { grid-column: 1; }
+.option-card > .opt-chip { grid-row: 1 / span 3; align-self: start; }
+.option-card:hover { border-color: var(--bone-300); background: var(--surface-raised); }
 .option-card input { position: absolute; opacity: 0; pointer-events: none; }
-.option-card__value { font-family: var(--font-display); font-size: var(--text-xl); font-weight: 600; font-variation-settings: "opsz" 36; line-height: 1.1; }
-.option-card__meta { font-size: var(--text-xs); color: var(--text-faint); }
-.option-card:has(input:checked) { border-color: var(--accent); box-shadow: var(--glow-accent); background: var(--surface-raised); }
-.option-card:has(input:checked)::after {
-  content: "✓";
-  position: absolute;
-  top: var(--space-3); right: var(--space-4);
-  color: var(--accent);
+.option-card__label, .option-card__value { font-size: var(--text-base); line-height: var(--lh-base); font-weight: 600; color: var(--text); }
+.option-card__value.opt::before { font-size: 0.85em; }
+.option-card__facts, .option-card__meta { font-size: var(--text-xs); line-height: var(--lh-xs); color: var(--text-faint); }
+.option-card__mine { font-size: var(--text-xs); color: var(--text); }
+.option-card__why { font-size: var(--text-xs); color: var(--text-muted); }
+.option-card__why::before { content: "✗ "; font-family: var(--font-mono); }
+/* Selected: a raised fill, a bone border, a ✓ and the word. */
+.option-card:has(input:checked), .option-card[aria-checked="true"] {
+  padding-bottom: var(--space-6);
+  border-color: var(--bone-300);
+  background: var(--surface-raised);
 }
-.option-card:has(input:focus-visible) { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-/* List: one row per option (value left, meta right), for a narrow panel. */
-.option-cards--list { grid-template-columns: 1fr; gap: var(--space-2); }
-.option-cards--list .option-card { grid-template-columns: 1fr auto; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-7) var(--space-3) var(--space-4); border-radius: var(--radius-md); }
-.option-cards--list .option-card__value { font-size: var(--text-lg); }
-.option-cards--list .option-card__value.opt::before { font-family: var(--font-mono); font-size: 0.8em; }
-.option-cards--list .option-card:has(input:checked)::after { top: 50%; translate: 0 -50%; }
-.option-card:has(input:disabled) { opacity: 0.5; cursor: not-allowed; }
+.option-card:has(input:checked)::after, .option-card[aria-checked="true"]::after {
+  content: "✓ Selected";
+  position: absolute;
+  bottom: var(--space-2); right: var(--space-3);
+  color: var(--text);
+  font-size: var(--text-2xs);
+  line-height: var(--lh-2xs);
+}
+.option-card:has(input:focus-visible) { outline: 2px solid var(--focus-color); outline-offset: 2px; }
+.option-card:has(input:disabled) { cursor: not-allowed; border-color: var(--border); background: transparent; }
+.option-card:has(input:disabled) .option-card__label,
+.option-card:has(input:disabled) .option-card__value { color: var(--text-faint); }
+.option-card[aria-busy="true"] .option-card__facts { color: var(--text-faint); }
+/* List: one row per option (narrow panels). */
+.option-cards--list { grid-template-columns: 1fr; gap: var(--space-1); }
+.option-cards--list .option-card, .option-cards--list .option-card:has(input:checked), .option-cards--list .option-card[aria-checked="true"] { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; padding: var(--space-2) 6.5rem var(--space-2) var(--space-3); }
+.option-cards--list .option-card:not(:has(> .opt-chip)) { grid-template-columns: minmax(0, 1fr) auto; }
+.option-cards--list .option-card > .opt-chip { grid-row: auto; }
+.option-cards--list .option-card > :not(.opt-chip):not(input) { grid-column: auto; }
+.option-cards--list .option-card__meta, .option-cards--list .option-card__facts { text-align: right; }
+.option-cards--list .option-card:has(input:checked)::after, .option-cards--list .option-card[aria-checked="true"]::after { top: 50%; bottom: auto; translate: 0 -50%; }
+/* Legend: read-only. */
+.option-cards--legend .option-card { cursor: default; }
+.option-cards--legend .option-card:hover { border-color: var(--border); background: var(--surface); }
+/* Picked: the run's result. */
+.option-card--picked { border-color: var(--bone-300); }
+.option-card--picked::after { content: "Picked"; position: absolute; bottom: var(--space-2); right: var(--space-3); font-size: var(--text-2xs); color: var(--text); }
+.option-cards--list .option-card--picked::after { top: 50%; bottom: auto; translate: 0 -50%; }
+.option-cards__cap { grid-column: 1 / -1; margin: var(--space-1) 0 0; font-size: var(--text-xs); color: var(--text-faint); }
+.option-cards__cap::before { content: "⊤ "; font-family: var(--font-symbol); }
 
 /* ======================================================================
-   Data table (swarm vs market, backtest)
+   Data table
    ====================================================================== */
-.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
-.table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
+.table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); line-height: var(--lh-sm); }
 .table caption {
   caption-side: top;
   padding: var(--space-3) var(--space-4);
@@ -770,12 +1150,13 @@
   font-size: var(--text-xs);
   border-bottom: 1px solid var(--border);
 }
-.table th, .table td { padding: var(--space-3) var(--space-4); text-align: left; border-bottom: 1px solid var(--border); }
+.table th, .table td { height: var(--row); padding: var(--space-2) var(--space-4); text-align: left; border-bottom: 1px solid var(--border); }
 .table thead th {
   position: sticky; top: 0;
   background: var(--surface);
   color: var(--text-faint);
-  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
   font-weight: 500;
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
@@ -783,18 +1164,210 @@
 }
 .table tbody tr { transition: background var(--dur-fast); }
 .table tbody tr:hover { background: var(--surface-raised); }
-.table tbody tr:last-child td { border-bottom: 0; }
+.table tbody tr:last-child td, .table tbody tr:last-child th { border-bottom: 0; }
 .table .num { text-align: right; white-space: nowrap; }
-.table .col-swarm { color: var(--accent); font-weight: 600; }
+.table .col-swarm { color: var(--text); font-weight: 600; }
+.table--compact th, .table--compact td { height: var(--row-compact); padding-block: var(--space-1); }
 
-/* Swarm minus market. Sign and arrow carry the meaning, colour only helps. */
-.delta { white-space: nowrap; }
-.delta--up { color: var(--success); }
+/* Gap (swarm minus market). Arrow and sign carry it; never green or red,
+   so a gap never reads as a verdict. */
+.delta { white-space: nowrap; color: var(--text-muted); font-family: var(--font-mono); }
 .delta--up::before { content: "▲ "; font-size: 0.75em; }
-.delta--down { color: var(--danger); }
 .delta--down::before { content: "▼ "; font-size: 0.75em; }
 .delta--flat { color: var(--text-faint); }
 .delta--flat::before { content: "= "; }
+
+/* Gap bar: a diverging bar centred on zero, --gap in points (−50…50, ±50
+   fills half the track). Bone only: never green, red or amber. Decorative
+   (aria-hidden); the signed number beside it carries the meaning.
+   <span class="gap-bar" style="--gap: -21" aria-hidden="true"></span> */
+.gap-bar { --gap: 0; position: relative; display: block; height: 10px; background: var(--bg-canvas); border-radius: 2px; box-shadow: inset 0 0 0 1px var(--border); }
+.gap-bar::before { content: ""; position: absolute; top: -3px; bottom: -3px; left: 50%; width: 1px; background: var(--border-strong); }
+.gap-bar::after { content: ""; position: absolute; top: 1px; bottom: 1px; background: var(--bone-300); border-radius: 1px;
+  left: calc(50% + min(var(--gap), 0) * 1%); width: calc(max(var(--gap), var(--gap) * -1) * 1%); }
+
+/* ======================================================================
+   8.5 Swarm vs market table. On a .table:
+   <table class="table vs-table"> … <tr class="vs-row is-lead" data-opt="1">
+     <th scope="row"><span class="opt">No</span><span class="vs-row__leads">Leads</span></th>
+     <td class="num">81.5%</td><td class="num col-swarm">56.2%</td>
+     <td class="num"><span class="delta delta--down">25.3 pp</span></td>
+     <td class="num">48.0%</td><td class="num vs-out">out</td><td class="num">61.0%</td>
+     <td><span class="vs-bar" style="--share: 56.2; --market: 81.5"></span></td></tr>
+   The column head says "Swarm belief", never probability or chance.
+   ====================================================================== */
+.vs-table th[scope="row"] { font-weight: 500; white-space: nowrap; }
+.vs-row.is-lead { background: color-mix(in srgb, var(--surface-raised) 60%, transparent); }
+.vs-row__leads { margin-left: var(--space-2); padding: 0 5px; border: 1px solid var(--border-strong); border-radius: var(--radius-data); color: var(--text-muted); font-size: var(--text-2xs); font-weight: 400; }
+.vs-out, .vs-later { color: var(--text-faint); font-family: var(--font-ui); font-size: var(--text-xs); }
+.vs-bar { --share: 0; --market: 0; position: relative; display: block; min-width: 96px; height: 8px; border-radius: 2px; background: var(--bg-canvas); box-shadow: inset 0 0 0 1px var(--border); }
+.vs-bar::before { content: ""; position: absolute; inset: 0 auto 0 0; width: calc(var(--share) * 1%); background: var(--opt-color); border-radius: 2px 0 0 2px; transition: width var(--dur-base) var(--ease-out); }
+.vs-bar::after { content: ""; position: absolute; top: -3px; bottom: -3px; left: calc(var(--market) * 1%); width: 2px; margin-left: -1px; background: var(--bone-100); box-shadow: 0 0 0 1px var(--surface); }
+.vs-table--compact th, .vs-table--compact td { height: var(--row-compact); padding: var(--space-1) var(--space-2); }
+
+/* ======================================================================
+   8.6 Forecaster chip. The name in words; no colour or glyph of its own,
+   so it can't be mistaken for an option.
+   <button class="forecaster" aria-pressed="true"><b>Momentum</b>
+     <span class="forecaster__reads">odds +6h move</span>
+     <span class="forecaster__lead"><span class="opt" data-opt="1">No</span> 61%</span></button>
+   ====================================================================== */
+.forecaster {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--space-2);
+  min-height: 28px;
+  padding: 3px var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-data);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-xs);
+  line-height: var(--lh-xs);
+  text-align: left;
+}
+.forecaster b { font-weight: 600; }
+.forecaster__reads { color: var(--text-faint); }
+.forecaster__lead { font-family: var(--font-mono); color: var(--text-muted); }
+.forecaster__lead .opt { font-family: var(--font-ui); }
+button.forecaster { cursor: pointer; transition: background var(--dur-fast), border-color var(--dur-fast); }
+button.forecaster:hover { background: var(--surface-raised); border-color: var(--bone-300); }
+.forecaster[aria-pressed="true"], .forecaster[aria-selected="true"] { background: var(--bone-100); border-color: var(--bone-100); color: var(--soil-900); }
+.forecaster[aria-pressed="true"] .forecaster__reads,
+.forecaster[aria-pressed="true"] .forecaster__lead,
+.forecaster[aria-pressed="true"] .opt,
+.forecaster[aria-selected="true"] .forecaster__reads,
+.forecaster[aria-selected="true"] .forecaster__lead,
+.forecaster[aria-selected="true"] .opt { color: var(--soil-800); }
+.forecaster[aria-pressed="true"] .opt::before, .forecaster[aria-selected="true"] .opt::before { color: var(--soil-900); }
+/* Sits out: no input, so it is not in the average. */
+.forecaster.is-out { border-style: dashed; color: var(--text-muted); }
+.forecaster.is-out .forecaster__reads::before { content: "sits out · "; }
+
+/* ======================================================================
+   8.9 Market card.
+   <article class="market-card"><div class="market-card__top"><span class="market-card__n">03</span>
+     <h3 class="market-card__title"><a href="market.html?m=m3">…</a></h3><span class="pill">…</span></div>
+     <p class="market-card__lead"><span class="opt" data-opt="1">No</span><b>56.2%</b><span class="delta delta--down">25.3 pp</span></p>
+     <div class="belief-stack">…</div>
+     <ol class="market-card__cols"><li><span class="forecaster">…</span><canvas></canvas></li>…</ol>
+     <p class="market-card__foot"><span class="market-card__verify">✓ Verified in your browser · 3/3</span><span class="tag-forecast">Forecast · not advice</span></p></article>
+   ====================================================================== */
+.market-card {
+  position: relative;
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  transition: border-color var(--dur-fast), background var(--dur-fast);
+}
+.market-card:hover { border-color: var(--bone-300); }
+.market-card:hover .market-card__title a { text-decoration: underline; text-decoration-color: var(--bone-300); }
+.market-card:has(.market-card__title a:focus-visible) { outline: 2px solid var(--focus-color); outline-offset: 2px; }
+.market-card__top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-3); align-items: baseline; }
+.market-card__n { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-faint); }
+.market-card__title { margin: 0; min-width: 0; font-size: var(--text-base); line-height: 1.35; font-weight: 600; }
+.market-card__title a { color: var(--text); text-decoration: none; }
+.market-card__title a::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.market-card__title a:focus-visible { outline: none; }
+.market-card__lead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--space-3); margin: 0; min-width: 0; }
+.market-card__lead .opt { min-width: 0; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); }
+.market-card__lead b { font-family: var(--font-mono); font-size: var(--text-lg); font-weight: 600; }
+.market-card__sub { flex-basis: 100%; font-size: var(--text-xs); color: var(--text-faint); }
+.market-card__cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.market-card__cols li { display: grid; gap: 4px; min-width: 0; align-content: start; }
+.market-card__cols canvas { width: 100%; aspect-ratio: var(--sim-aspect); border-radius: var(--radius-data); background: var(--earth-900); box-shadow: inset 0 0 0 1px var(--border); }
+.market-card__foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); margin: 0; font-size: var(--text-xs); color: var(--text-muted); }
+.market-card__verify[data-state="match"]::first-letter { color: var(--ok); }
+.market-card__verify[data-state="mismatch"] { color: var(--fault); }
+.market-card__mine { font-size: var(--text-xs); color: var(--text-muted); }
+.market-card__mine b { font-family: var(--font-mono); color: var(--text); font-weight: 500; }
+/* Skipped (no keeper quorum): pill only, maps hidden, the reason shown. */
+.market-card.is-skipped { background: transparent; border-style: dashed; }
+.market-card.is-skipped .market-card__cols, .market-card.is-skipped .belief-stack { display: none; }
+/* Mismatch: a fault-tinted border; the pill and the ✗ line carry the word. */
+.market-card.is-mismatch { border-color: color-mix(in srgb, var(--fault) 45%, transparent); }
+.market-card[aria-busy="true"] .market-card__cols canvas { background: var(--soil-800); }
+
+/* Stacked belief bar: one segment per outcome, its glyph on wide ones, the
+   market odds as ticks above. Set --w (share) on each segment and --at
+   (cumulative market %) on each tick. */
+.belief-stack { position: relative; display: flex; gap: 2px; height: 12px; border-radius: 2px; background: var(--bg-canvas); }
+.belief-stack > i { flex: var(--w) 0 0; min-width: 0; background: var(--opt-color); font-style: normal; font-family: "IBM Plex Mono", var(--font-symbol); font-size: 9px; line-height: 12px; text-align: center; color: rgb(13 10 7 / 0.8); overflow: hidden; }
+.belief-stack > i.is-wide::before { content: var(--opt-glyph); }
+.belief-stack > b { position: absolute; top: -3px; bottom: -3px; left: calc(var(--at) * 1%); width: 2px; margin-left: -1px; background: var(--bone-100); box-shadow: 0 0 0 1px var(--surface); }
+
+/* ======================================================================
+   8.10 Leaderboard row. Burn earners, agents, crankers. No accuracy board:
+   nobody is paid for being right.
+   <ol class="board"><li class="board-row is-you"><span class="board-row__rank">1</span>
+     <span class="wallet" style="--wallet-hue: 210"><span class="wallet__id">alice.testnet</span></span>
+     <span class="board-row__main">42.10 $ANTO</span><span class="board-row__second">6 days paid</span></li></ol>
+   ====================================================================== */
+.board { display: grid; margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); overflow: hidden; }
+.board-row {
+  display: grid;
+  grid-template-columns: 2.5ch minmax(0, 1fr) auto minmax(6rem, auto);
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--row);
+  padding: 0 var(--space-4);
+  font-size: var(--text-sm);
+  transition: background var(--dur-fast);
+}
+.board-row + .board-row { border-top: 1px solid var(--border); }
+.board-row:hover, .board-row:focus-within { background: var(--surface-raised); }
+.board-row__rank { font-family: var(--font-mono); color: var(--text-faint); text-align: right; }
+.board-row__main { font-family: var(--font-mono); color: var(--text); text-align: right; }
+.board-row__second { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-faint); text-align: right; }
+.board-row.is-you .wallet__id::after { content: "you"; margin-left: var(--space-2); padding: 0 5px; border: 1px solid var(--bone-300); border-radius: var(--radius-data); font-family: var(--font-ui); font-size: var(--text-2xs); color: var(--text); }
+.board__empty { padding: var(--space-4); font-size: var(--text-sm); color: var(--text-muted); }
+
+/* ======================================================================
+   8.11 Bot row: who keeps the chain moving.
+   <li class="bot-row"><span class="bot-row__role">Cranker</span><code>cranker.antonomy-oracle.testnet</code>
+     <a class="bot-row__last" href="…">crank_round · 40 s ago</a><span class="pill" data-state="running">…</span>
+     <span class="bot-row__earned">3.33 $ANTO</span><span class="bot-row__by">team daemon</span></li>
+   ====================================================================== */
+.bots { container: bots / inline-size; display: grid; margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); overflow: hidden; }
+.bot-row {
+  display: grid;
+  grid-template-columns: 6rem minmax(0, 1.4fr) minmax(0, 1.4fr) auto 7rem 7rem;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--row);
+  padding: var(--space-1) var(--space-4);
+  font-size: var(--text-sm);
+}
+.bot-row + .bot-row { border-top: 1px solid var(--border); }
+.bot-row:hover { background: var(--surface-raised); }
+.bot-row__role { font-weight: 600; }
+.bot-row > code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); }
+.bot-row__last { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); }
+.bot-row__earned { font-family: var(--font-mono); text-align: right; }
+.bot-row__by { font-size: var(--text-xs); color: var(--text-faint); text-align: right; }
+.bot-row.is-retired { color: var(--text-faint); }
+.bot-row.is-retired .bot-row__role, .bot-row.is-retired .bot-row__earned { color: var(--text-faint); }
+/* Stacks by the list's own width, so a half-width column gets it too. */
+@container bots (max-width: 760px) {
+  .bot-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "role pill" "acct earned" "last by";
+    row-gap: var(--space-1);
+    padding-block: var(--space-2);
+  }
+  .bot-row__role { grid-area: role; }
+  .bot-row > code { grid-area: acct; }
+  .bot-row__last { grid-area: last; }
+  .bot-row > .pill { grid-area: pill; justify-self: end; }
+  .bot-row__earned { grid-area: earned; }
+  .bot-row__by { grid-area: by; }
+}
 
 /* ======================================================================
    Belief board: swarm belief per outcome, with the market odds as a tick
@@ -812,19 +1385,19 @@
 }
 .belief__label { font-size: var(--text-base); }
 .belief__value {
-  font-family: var(--font-display);
-  font-size: var(--text-2xl);
-  font-weight: 600;
-  font-variation-settings: "opsz" 72;
-  line-height: 1;
+  font-family: var(--font-mono);
+  font-size: var(--num-lg);
+  line-height: var(--lh-num-lg);
+  font-weight: 500;
+  letter-spacing: -0.02em;
   color: var(--text);
 }
-.belief__value small { font-size: 0.5em; color: var(--text-muted); margin-left: 2px; }
+.belief__value small { font-size: 0.5em; color: var(--text-muted); margin-left: 2px; letter-spacing: 0; }
 .belief__track {
   grid-column: 1 / -1;
   position: relative;
-  height: 12px;
-  border-radius: var(--radius-pill);
+  height: 10px;
+  border-radius: 2px;
   background: var(--bg-canvas);
   box-shadow: inset 0 0 0 1px var(--border);
 }
@@ -832,9 +1405,9 @@
   position: absolute;
   inset: 0 auto 0 0;
   width: calc(var(--share) * 1%);
-  border-radius: inherit;
+  border-radius: 2px 0 0 2px;
   background: var(--opt-color);
-  transition: width var(--dur-slow) var(--ease-out);
+  transition: width var(--dur-base) var(--ease-out);
 }
 /* Market odds: a bone tick across the track. */
 .belief__market {
@@ -856,13 +1429,13 @@
 @media (max-width: 480px) { .belief--compact .belief__row { grid-template-columns: minmax(0, 7rem) minmax(0, 1fr) 6ch 6ch; } }
 .belief--compact .belief__track { grid-column: auto; order: 1; height: 8px; }
 .belief--compact .belief__market { top: -3px; bottom: -3px; }
-.belief--compact .belief__value { order: 2; font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 600; text-align: right; }
+.belief--compact .belief__value { order: 2; font-size: var(--text-sm); line-height: var(--lh-sm); font-weight: 600; text-align: right; letter-spacing: 0; }
 .belief--compact .belief__value small { font-size: 0.8em; margin-left: 1px; }
 .belief--compact .belief__meta { grid-column: auto; order: 3; justify-content: flex-end; }
 .belief--compact .belief__meta > :first-child { display: none; }
 .belief-key { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin: 0; padding: 0; list-style: none; font-size: var(--text-xs); color: var(--text-faint); }
 .belief-key li { display: inline-flex; align-items: center; gap: var(--space-2); }
-.belief-key__swarm::before { content: ""; width: 14px; height: 8px; border-radius: var(--radius-pill); background: linear-gradient(to right, var(--opt-0), var(--opt-1), var(--opt-2)); }
+.belief-key__swarm::before { content: ""; width: 14px; height: 8px; border-radius: 2px; background: linear-gradient(to right, var(--opt-0), var(--opt-1), var(--opt-2)); }
 .belief-key__market::before { content: ""; width: 2px; height: 12px; border-radius: 1px; background: var(--text); }
 
 /* ======================================================================
@@ -870,27 +1443,20 @@
    (shows the current leader), "final" once the last tick has run.
    ====================================================================== */
 .pick { display: grid; gap: var(--space-2); }
-.pick__value { margin: 0; font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 600; font-variation-settings: "opsz" 72; line-height: 1.1; }
+.pick__value { margin: 0; font-size: var(--text-xl); line-height: var(--lh-xl); font-weight: 600; }
 .pick__value .opt { gap: var(--space-3); }
 .pick[data-state="pending"] .pick__value .opt { color: var(--text-muted); }
-.pick[data-state="final"] { animation: anto-reveal var(--dur-slow) var(--ease-out); }
 
 /* ======================================================================
-   Motion
+   Motion. The only UI animation outside the stage is the running pill's
+   2s opacity pulse, and a toast's fade.
    ====================================================================== */
-@keyframes anto-spin { to { transform: rotate(360deg); } }
-@keyframes anto-pulse {
-  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgb(242 165 65 / 0.5); }
-  50% { opacity: 0.6; box-shadow: 0 0 0 5px rgb(242 165 65 / 0); }
-}
-@keyframes anto-reveal {
-  from { opacity: 0; transform: scale(0.92); }
-  to { opacity: 1; transform: none; }
-}
+@keyframes anto-pulse { 50% { opacity: 0.35; } }
+@keyframes anto-fade { from { opacity: 0; } }
 
 @media (prefers-reduced-motion: reduce) {
   .chip--live::before,
-  .verify-badge[data-state="pending"]::before,
-  .btn.is-loading::before { animation: none; }
-  .verify-badge, .pick { animation: none !important; }
+  .pill[data-state="running"] .pill__g,
+  .pill[data-state="running"]::before,
+  .toast { animation: none !important; }
 }

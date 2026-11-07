@@ -1,9 +1,9 @@
 // Offline tests for check the receipts: node web/test_receipts.mjs
 // The chain is canned JSON (test_chain_fixture.mjs) run through the round adapter.
 import assert from "node:assert/strict";
-import { issueReceipt, checkReceipt, parseReceipt, roundFromChain, SPEC } from "./receipts.mjs";
+import { issueReceipt, receiptOf, checkReceipt, parseReceipt, roundFromChain, SPEC } from "./receipts.mjs";
 import { buildRound } from "./roundchain.mjs";
-import { cannedRound } from "./test_chain_fixture.mjs";
+import { cannedRound, REQUEST_0 } from "./test_chain_fixture.mjs";
 
 const flip = (h) => (h[0] === "0" ? "1" : "0") + h.slice(1);
 
@@ -94,5 +94,27 @@ const seen = [];
 await checkReceipt(receipt, round7, { onColony: (s, i, n) => seen.push([s.name, i, n]) });
 assert.deepEqual(seen.map((x) => x[0]), ["Momentum", "Community", "Agents"]);
 assert.ok(seen.every((x, i) => x[1] === i && x[2] === 3));
+
+// Requests made while the round was open go in its receipt and are re-run too.
+const reqs = [REQUEST_0, { ...REQUEST_0, id: 1, seed: null, colony_hashes: [] }];
+const withReq = receiptOf(round7, "antonomy-oracle.testnet", reqs);
+assert.deepEqual(withReq.requests, [{ id: 0, seed: REQUEST_0.seed, colonies: REQUEST_0.colony_hashes, market: REQUEST_0.market_hash }], "a request without a seed lists nothing");
+assert.equal(receiptOf(round7).requests, undefined, "no requests, no list");
+const rq = await checkReceipt(parseReceipt(JSON.stringify(withReq)), round7, { requests: reqs });
+assert.equal(rq.ok, true);
+assert.deepEqual(rq.rows.filter((r) => r.kind === "request").map((r) => r.key), ["r0-seed", "r0-momentum", "r0-community", "r0-agents", "r0-market"]);
+const rqBad = structuredClone(withReq);
+rqBad.requests[0].colonies[2] = flip(rqBad.requests[0].colonies[2]);
+assert.deepEqual((await checkReceipt(rqBad, round7, { requests: reqs })).rows.filter((r) => r.state !== "match").map((r) => r.key), ["r0-agents"]);
+// A receipt that leaves the request out fails on its rows; one that adds a request the chain doesn't have fails as extra.
+assert.ok((await checkReceipt(receipt, round7, { requests: reqs })).rows.filter((r) => r.kind === "request").every((r) => r.state === "missing"));
+const ghostReq = await checkReceipt({ ...withReq, requests: [...withReq.requests, { id: 9, seed: "ab".repeat(32), colonies: [] }] }, round7, { requests: reqs });
+assert.equal(ghostReq.rows.at(-1).state, "extra");
+// Progress counts the request colonies after the round's.
+const prog = [];
+await checkReceipt(withReq, round7, { requests: reqs, onColony: (s, i, n) => prog.push([i, n]) });
+assert.deepEqual(prog.map((x) => x[0]), [0, 1, 2, 3, 4, 5]);
+assert.ok(prog.every((x) => x[1] === 6));
+assert.throws(() => parseReceipt(JSON.stringify({ ...withReq, requests: {} })), RangeError);
 
 console.log("receipts ok");

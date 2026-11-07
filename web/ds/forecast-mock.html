@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forecasts · mock · Antonomy</title>
+<link rel="icon" href="../brand/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="antonomy.css">
+<style>
+  /* Forecast page mock (docs/FORECAST_PAGE.md). Sample data, no chain reads. */
+  .mock-strip { margin: 0; padding: var(--space-1) 0; font-size: var(--text-xs); color: var(--text-faint); border-bottom: 1px dashed var(--border); }
+  .fc-top { border-bottom: 1px solid var(--border); }
+  .fc-top .container { display: flex; align-items: center; gap: var(--space-5); min-height: 48px; }
+  .fc-top b { font-weight: 600; }
+  .fc-top nav { display: flex; gap: var(--space-4); font-size: var(--text-sm); color: var(--text-muted); }
+  .fc-top nav [aria-current] { color: var(--text); }
+
+  .fc-line { position: sticky; top: 0; z-index: 20; background: var(--surface-raised); border-bottom: 1px solid var(--border); font-size: var(--text-xs); color: var(--text-muted); }
+  .fc-line .container { display: flex; gap: var(--space-2); align-items: center; min-height: 32px; }
+  .fc-line__g { font-family: var(--font-mono); color: var(--text); }
+  .fc-line__short { display: none; }
+
+  .mock-strip__in { display: flex !important; flex-wrap: wrap; gap: var(--space-2) var(--space-4); align-items: center; }
+  .mock-strip .seg { margin-left: auto; }
+
+  .fc-round { padding: var(--space-4) 0 var(--space-5); margin-bottom: var(--space-5); border-bottom: 1px solid var(--border); }
+  .fc-round__head { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); align-items: baseline; margin-bottom: var(--space-3); font-size: var(--text-sm); color: var(--text-muted); }
+  .fc-round__head b { color: var(--text); font-weight: 600; }
+  .fc-round__label { font-size: var(--text-xs); color: var(--text-faint); }
+
+  /* The three colonies, always on: a map each (144×96, 2 px per cell), name, leader.
+     Each map opens the market page on that colony. */
+  .fc-cols { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); align-content: start; }
+  .fc-cols li { min-width: 0; }
+  .fc-cols a { display: grid; gap: 1px; min-width: 0; font-size: var(--text-xs); color: inherit; text-decoration: none; }
+  .fc-cols canvas { display: block; width: 100%; aspect-ratio: var(--sim-aspect); margin-bottom: 3px; border-radius: var(--radius-data); box-shadow: inset 0 0 0 1px var(--border); background: var(--soil-950); }
+  .fc-cols a:hover canvas, .fc-cols a:focus-visible canvas { box-shadow: inset 0 0 0 1px var(--bone-300); }
+  .fc-cols b { font-weight: 600; color: var(--text-muted); }
+  .fc-cols__lead { font-family: var(--font-mono); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fc-cols__lead .opt { font-family: var(--font-ui); }
+  .fc-cols__wait { color: var(--text-faint); font-family: var(--font-ui); }
+  .fc-table__none { color: var(--text-faint); font-size: var(--text-xs); }
+
+  .fc-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--space-6); align-items: start; padding-bottom: var(--space-8); }
+  .fc-side { position: sticky; top: 48px; display: grid; gap: var(--space-5); }
+  .fc-head h1 { margin: 0 0 var(--space-2); }
+  .fc-head .lede { margin: 0 0 var(--space-5); color: var(--text-muted); max-width: 60ch; }
+  .fc-track-short { display: none; }
+
+  /* One line: the widest gap among finished markets, and a jump to its card. */
+  .fc-widest { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); align-items: baseline; padding: var(--space-3) var(--space-4); border: 1px solid var(--bone-300); border-radius: var(--radius-panel); background: var(--surface); margin-bottom: var(--space-5); font-size: var(--text-sm); color: var(--text-muted); }
+  .fc-widest__eyebrow { font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-faint); }
+  .fc-widest__q { color: var(--text); font-weight: 600; }
+  .fc-widest .num { color: var(--text); }
+  .fc-widest__gap { font-family: var(--font-mono); font-size: var(--text-lg); color: var(--text); white-space: nowrap; }
+  .fc-widest a { margin-left: auto; color: var(--text); white-space: nowrap; }
+
+  .fc-tools { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-2); }
+  .fc-tools label { font-size: var(--text-sm); color: var(--text-muted); display: inline-flex; gap: var(--space-2); align-items: center; }
+  .fc-tools select { background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius-data); padding: 4px 8px; font: inherit; }
+  .fc-legend { margin: 0 0 var(--space-3); font-size: var(--text-xs); color: var(--text-faint); }
+  .fc-legend b { font-weight: 600; color: var(--text-muted); }
+
+  .fc-sec { margin: var(--space-6) 0 var(--space-3); display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
+  .fc-sec h2 { margin: 0; font-size: var(--text-lg); }
+  .fc-sec p { margin: 0; font-size: var(--text-xs); color: var(--text-faint); }
+
+  /* Market card: head (rank, question, status, headline gap), then the three
+     maps beside the outcome table, then one footer line. No expand. */
+  .fc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+  .fc-card { padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); scroll-margin-top: 48px; }
+  .fc-card.is-widest { border-color: var(--bone-300); }
+  .fc-card.is-skipped { background: none; }
+  .fc-card__head { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto 112px; gap: var(--space-3); align-items: start; margin-bottom: var(--space-3); }
+  .fc-card__n { padding-top: 3px; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-faint); }
+  .fc-card__q { min-width: 0; }
+  .fc-card__q a { color: var(--text); font-weight: 600; text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
+  .fc-card__q a:hover { text-decoration-color: var(--bone-300); }
+  .fc-card.is-skipped .fc-card__q a { color: var(--text-muted); font-weight: 500; }
+  .fc-card__q small { display: flex; flex-wrap: wrap; gap: 2px var(--space-2); align-items: center; margin-top: 2px; color: var(--text-faint); font-size: var(--text-xs); }
+  .fc-card__status { padding-top: 1px; }
+  .fc-card__gap { display: grid; justify-items: end; text-align: right; }
+  .fc-card__gap .num { font-family: var(--font-mono); font-size: var(--text-xl); line-height: 1; color: var(--text); }
+  .fc-card__gap small { margin-top: 3px; font-size: var(--text-2xs); color: var(--text-faint); white-space: nowrap; }
+  .fc-card__gap .opt { color: var(--text-muted); }
+  .fc-card__gap .fc-card__later { font-size: var(--text-xs); white-space: normal; }
+  .fc-card__body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+  .fc-card__foot { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); align-items: center; margin-top: var(--space-3); padding-top: var(--space-2); border-top: 1px solid var(--border); font-size: var(--text-xs); color: var(--text-faint); }
+  .fc-card__foot a { margin-left: auto; color: var(--text); }
+  .fc-card__later { margin: 0; color: var(--text-faint); font-size: var(--text-sm); }
+  .fc-flag { padding: 0 5px; border: 1px solid var(--bone-300); border-radius: var(--radius-data); color: var(--text); font-family: var(--font-mono); }
+
+  /* .gap-bar is in components.css. */
+  .res { display: inline-flex; gap: 4px; align-items: center; padding: 0 6px; border: 1px solid transparent; border-radius: var(--radius-data); color: var(--text-muted); font-family: var(--font-mono); white-space: nowrap; }
+  .res[data-state="open"] { padding: 0; }
+  .res[data-state="disputed"], .res[data-state="proposed"] { border-style: dashed; border-color: var(--bone-300); color: var(--text); }
+  .res[data-state="disputed"]::before, .res[data-state="proposed"]::before { content: "!"; }
+
+  .fc-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+  .fc-table caption { text-align: left; padding-bottom: var(--space-1); font-size: var(--text-xs); color: var(--text-faint); }
+  .fc-table th, .fc-table td { padding: 5px var(--space-2); border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
+  .fc-table th:first-child { padding-left: 0; }
+  .fc-table td:last-child { padding-right: 0; }
+  .fc-table thead th { font-weight: 500; font-size: var(--text-2xs); font-family: var(--font-mono); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-faint); vertical-align: bottom; }
+  .fc-table thead th small { display: block; text-transform: none; letter-spacing: 0; font-family: var(--font-ui); }
+  .fc-table tbody tr:last-child > * { border-bottom: 0; }
+  .fc-table th[scope="row"] { font-weight: 500; white-space: nowrap; max-width: 9em; overflow: hidden; text-overflow: ellipsis; }
+  .fc-table td.num { font-family: var(--font-mono); text-align: right; white-space: nowrap; }
+  .fc-table__move { color: var(--text-faint); }
+  .fc-table__swarm { color: var(--text); font-weight: 500; }
+  .fc-table__gap { display: grid; grid-template-columns: 32px minmax(64px, 1fr); gap: var(--space-2); align-items: center; }
+  .fc-table__gap .num { font-family: var(--font-mono); text-align: right; }
+  .fc-table__mirror { color: var(--text-faint); font-size: var(--text-xs); }
+  .fc-other small { color: var(--text-faint); font-weight: 400; }
+  .fc-out-lbl { display: none; }
+
+  .fc-left-out { margin-top: var(--space-3); font-size: var(--text-sm); color: var(--text-muted); }
+  .fc-left-out summary { cursor: pointer; }
+  .fc-left-out table { width: 100%; margin-top: var(--space-2); border-collapse: collapse; font-size: var(--text-xs); }
+  .fc-left-out td { padding: 6px var(--space-2); border-bottom: 1px solid var(--border); }
+  .fc-left-out td:last-child { color: var(--text-faint); }
+
+  .fc-yours { padding: 0 5px; border: 1px solid var(--border-strong); border-radius: var(--radius-data); color: var(--text-muted); font-family: var(--font-mono); }
+
+  .track h2, .fc-add h2 { font-size: var(--text-2xs); font-family: var(--font-mono); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-faint); margin: 0; display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
+  .track__sample { padding: 1px 6px; border: 1px dashed var(--bone-300); border-radius: var(--radius-data); color: var(--text); background: var(--pattern-hatch); }
+  .track__head { font-size: var(--text-md); font-weight: 600; margin: var(--space-3) 0; line-height: 1.35; }
+  .track dl { margin: 0 0 var(--space-3); display: grid; grid-template-columns: auto 52px minmax(0, 1fr); gap: 6px var(--space-3); align-items: center; font-size: var(--text-sm); }
+  .track dt.track__metric { grid-column: 1 / -1; font-size: var(--text-xs); color: var(--text-faint); margin-top: var(--space-2); }
+  .track dd { margin: 0; font-family: var(--font-mono); text-align: right; }
+  .track__bar { height: 8px; background: var(--bone-300); border-radius: 2px; }
+  .track p { margin: var(--space-2) 0 0; font-size: var(--text-xs); color: var(--text-faint); }
+  .track p.track__counts { color: var(--text-muted); font-family: var(--font-mono); }
+
+  .fc-add form { display: grid; gap: var(--space-3); margin-top: var(--space-3); }
+  .fc-add input { width: 100%; background: var(--bg-canvas); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius-data); padding: 8px 10px; font: inherit; font-family: var(--font-mono); font-size: var(--text-sm); }
+  .fc-add__checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-size: var(--text-xs); color: var(--text-muted); }
+  .fc-add__checks li::before { content: "✓ "; font-family: var(--font-mono); color: var(--text); }
+  .fc-add__cost { font-size: var(--text-sm); display: grid; gap: 4px; color: var(--text-muted); }
+  .fc-add__cost .num { color: var(--text); }
+  .fc-add .btn { width: 100%; justify-content: center; }
+  .fc-add__note { font-size: var(--text-xs); color: var(--text-faint); margin: 0; }
+
+  @media (max-width: 1199px) {
+    .fc-grid { grid-template-columns: minmax(0, 1fr); }
+    .fc-side { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+    .fc-main { order: 2; }
+  }
+  @media (max-width: 759px) {
+    .fc-card__body { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 599px) {
+    .fc-top nav { display: none; }
+    .fc-line__long { display: none; }
+    .fc-line__short { display: inline; }
+    .fc-side { grid-template-columns: minmax(0, 1fr); }
+    .fc-main { order: 0; }
+    .fc-track-short { display: block; margin: 0 0 var(--space-4); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-panel); font-size: var(--text-sm); color: var(--text-muted); text-decoration: none; }
+    .fc-track-short b { color: var(--text); }
+    .fc-widest a { margin-left: 0; }
+    .fc-tools { font-size: var(--text-xs); }
+    .mock-strip .seg { margin-left: 0; }
+    .fc-card { padding: var(--space-3); }
+    .fc-card__head { grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2) var(--space-3); }
+    .fc-card__n { display: none; }
+    .fc-card__q { grid-column: 1; grid-row: 1; }
+    .fc-card__gap { grid-column: 2; grid-row: 1; }
+    .fc-card__status { grid-column: 1 / -1; grid-row: 2; }
+    .fc-card__gap .num { font-size: var(--text-lg); }
+    .fc-card__foot a { margin-left: 0; }
+    /* Design B, phone form: one two-line block per outcome. */
+    .fc-table thead { display: none; }
+    .fc-table, .fc-table tbody, .fc-table tr, .fc-table td, .fc-table th { display: block; border: 0; padding: 0; text-align: left !important; }
+    .fc-table caption { display: block; }
+    .fc-table tr { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 4px var(--space-3); align-items: center; padding: var(--space-2) 0; border-bottom: 1px solid var(--border); }
+    .fc-table tr > th { grid-column: 1 / -1; max-width: none; }
+    .fc-out-lbl { display: inline; color: var(--text-faint); font-family: var(--font-ui); font-weight: 400; }
+  }
+</style>
+</head>
+<body>
+<div class="mock-strip"><div class="container mock-strip__in"><span>Design mock for <code>docs/FORECAST_PAGE.md</code>. Sample markets, no chain reads; the colonies run the real sim from a sample seed. Track record numbers are placeholders.</span>
+  <span class="seg" role="group" aria-label="Mock only: preview the round at">
+    <button type="button" data-phase="posting">Staking</button><button type="button" data-phase="agents">Agents post</button><button type="button" data-phase="ready">Seed</button><button type="button" data-phase="running">Colonies run</button><button type="button" data-phase="done">Result</button>
+  </span></div></div>
+
+<header class="fc-top"><div class="container"><b>Antonomy</b><nav><a aria-current="page">Forecasts</a><a>Burn</a><a>Recruit</a><a>Replay</a><a>Docs</a></nav></div></header>
+
+<div class="fc-line" role="note"><div class="container">
+  <span class="fc-line__g">◇</span>
+  <span class="fc-line__long">Forecast display, not betting. Swarm belief is how the colonies' trails split, not a probability. Not advice.</span>
+  <span class="fc-line__short">Forecast, not betting · not advice · belief ≠ probability</span>
+</div></div>
+
+<main class="container">
+  <section class="fc-round" id="round" aria-label="Round timeline"></section>
+
+  <div class="fc-grid">
+    <div class="fc-main">
+      <div class="fc-head">
+        <h1>Forecasts</h1>
+        <p class="lede">Three ant colonies read each market and lay trails. The gap is where their trails split from the market's odds.</p>
+      </div>
+
+      <a class="fc-track-short" href="#track"><b>Track record:</b> the market's own odds scored better than the swarm (Brier 0.171 vs 0.214, 48 markets, sample backtest) ›</a>
+
+      <section class="fc-widest" id="widest" aria-label="Widest gap"></section>
+
+      <div class="fc-tools">
+        <div class="seg" role="group" aria-label="Show">
+          <button type="button" aria-pressed="true" data-show="all">All</button>
+          <button type="button" aria-pressed="false" data-show="top">Top 10</button>
+          <button type="button" aria-pressed="false" data-show="yours">Community</button>
+        </div>
+        <label>Sort <select id="sort"><option value="gap">Gap, widest first</option><option value="res">Resolves soonest</option><option value="rank">Trending rank</option></select></label>
+      </div>
+      <p class="fc-legend">Three colonies per market: <b>Momentum</b> reads the odds and their 6h move, <b>Community</b> reads $ANTO stakes, <b>Agents</b> reads the agents' median odds. Click a map to watch it on the market page.</p>
+
+      <div data-sec="top">
+        <div class="fc-sec"><h2>Top 10 trending</h2><p>Picked by 24-hour volume on Polymarket, read by three keepers.</p></div>
+        <ul class="fc-list" id="list-top"></ul>
+        <details class="fc-left-out">
+          <summary>Left out this round: <span class="num">3</span></summary>
+          <table>
+            <tr><td>Topic not allowed (violence, deaths or private individuals)</td><td>title withheld</td></tr>
+            <tr><td>As good as decided (top outcome ≥ 97%)</td><td>“Will the Fed hold in November?”</td></tr>
+            <tr><td>Ends within a day</td><td>“Lakers vs Celtics, Oct 30”</td></tr>
+          </table>
+        </details>
+      </div>
+
+      <div data-sec="yours">
+        <div class="fc-sec"><h2>Community markets</h2><p>Requested by anyone for a 100 $ANTO fee.</p></div>
+        <ul class="fc-list" id="list-yours"></ul>
+      </div>
+    </div>
+
+    <aside class="fc-side">
+      <section class="panel track" id="track">
+        <h2>Track record <span class="track__sample">Sample backtest</span></h2>
+        <p class="track__head">The market's own odds scored better than the swarm.</p>
+        <dl>
+          <dt class="track__metric">Brier score, lower is better</dt>
+          <dt>Market odds</dt><dd>0.171</dd><dd><div class="track__bar" style="width: 68%"></div></dd>
+          <dt>Swarm belief</dt><dd>0.214</dd><dd><div class="track__bar" style="width: 86%"></div></dd>
+        </dl>
+        <p class="track__counts">48 scored · 6 waiting (2 disputed) · 1 resolved 50-50</p>
+        <p>Markets from {dates}, replayed with the round rules and scored against the resolution the keepers posted on chain. Scored as if the trail shares were odds, only to compare them. Disputed and unresolved markets aren't scored. <a class="what" href="#">How we score</a></p>
+      </section>
+
+      <section class="panel fc-add" aria-labelledby="add-h">
+        <h2 id="add-h">Add a market</h2>
+        <form onsubmit="return false">
+          <div class="field">
+            <label class="field__label" for="add-in">Polymarket link or market ID</label>
+            <input id="add-in" value="eurovision-2027-winner" autocomplete="off">
+          </div>
+          <div>
+            <p style="margin: 0 0 4px; font-weight: 500">Eurovision 2027 winner</p>
+            <p class="text-xs" style="margin: 0 0 var(--space-2); color: var(--text-faint)"><span class="opt" data-opt="0">Sweden</span> · <span class="opt" data-opt="1">Ukraine</span> · <span class="opt" data-opt="2">France</span> · <span class="opt" data-opt="3">Italy</span> · <span class="opt" data-opt="4">Other</span> · resolves May 2027</p>
+            <ul class="fc-add__checks"><li>Open</li><li>Not decided</li><li>Allowed topic</li><li>Not already in the top 10</li></ul>
+          </div>
+          <div class="fc-add__cost">
+            <span>Fee <span class="num">100 $ANTO</span> · you have <span class="num">150 $ANTO</span></span>
+          </div>
+          <button class="btn btn--primary" type="submit">Request forecast · 100 $ANTO</button>
+          <p class="fc-add__note">Pays keepers, agents and crankers for their work. Nobody is paid for being right. Refunded if the keepers don't agree.</p>
+        </form>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<script type="module">
+import {
+  Colony, FORECAST_ANTS, FORECAST_TICKS, MOMENTUM, colonySeed, seedFromInt,
+  oddsRichness, stakeRichness, agentRichness, trailShares, voters,
+} from "../../sim/js/antosim.mjs";
+import { ColonyThumb } from "./colony-thumb.mjs";
+
+// Sample markets, made up. Odds in whole %; w = Community stake weights (milli
+// sqrt-tokens, null = nobody staked, so it sits out); ag = the agents' median
+// odds (null = no agent posted, so Agents sits out). The colony shares are not
+// made up: each market's three colonies run in this page with the real sim,
+// from a sample round seed.
+const TOP = [
+  { rank: 1, q: "Will the Fed cut rates in December?", slug: "fed-cut-december", out: ["Yes", "No"], m: [62, 38], m6: [55, 45], w: null, ag: [52, 48], end: "2026-12-10", res: "open" },
+  { rank: 2, q: "Champions League winner 2026–27", slug: "ucl-winner-2027", out: ["Real Madrid", "Man City", "Arsenal", "Bayern", "Other"], other: true, m: [18, 16, 14, 12, 40], m6: [18, 17, 13, 12, 40], w: [9000, 2000, 6000, 0, 3000], ag: [20, 18, 14, 13, 35], end: "2027-05-29", res: "open" },
+  { rank: 3, q: "Bitcoin above $150k on Dec 31?", slug: "btc-150k-dec-31", out: ["Yes", "No"], m: [23, 77], m6: [25, 75], w: [14000, 6000], ag: [28, 72], end: "2026-12-31", res: "open" },
+  { rank: 4, q: "Best Picture at the 2027 Oscars", slug: "oscars-2027-best-picture", out: ["The Long Field", "Harbor Lights", "Paper Moons", "Northbound", "Other"], other: true, m: [31, 22, 14, 9, 24], m6: [27, 24, 14, 10, 25], w: null, ag: [28, 24, 15, 9, 24], end: "2027-03-14", res: "open" },
+  { rank: 5, q: "Starship reaches orbit by Oct 31?", slug: "starship-orbit-oct-31", out: ["Yes", "No"], m: [48, 52], m6: [50, 50], w: [7000, 5000], ag: [50, 50], end: "2026-10-31", res: "disputed" },
+  { rank: 6, q: "ETH price on Dec 31", slug: "eth-price-dec-31", out: ["Under $3k", "$3k–4k", "$4k–5k", "Over $5k"], m: [15, 40, 33, 12], m6: [12, 38, 36, 14], w: [3000, 3000, 3000, 8000], ag: [14, 41, 33, 12], end: "2026-12-31", res: "open" },
+  { rank: 7, q: "GTA VI released before June 2027?", slug: "gta-vi-before-june-2027", out: ["Yes", "No"], m: [71, 29], m6: [70, 30], w: [20000, 2000], ag: [66, 34], end: "2027-06-01", res: "open" },
+  { rank: 8, q: "Foldable iPhone announced by Sep 2027?", slug: "foldable-iphone-sep-2027", out: ["Yes", "No"], m: [34, 66], m6: [30, 70], w: null, ag: [39, 61], end: "2027-09-30", res: "open" },
+  { rank: 9, q: "Bitcoin hits $120k or $90k first?", slug: "btc-120k-or-90k-first", out: ["$120k first", "$90k first"], m: [44, 56], m6: [39, 61], w: [6000, 6000], ag: null, end: "2027-01-31", res: "open" },
+  { rank: 10, q: "SpaceX IPO in 2026?", slug: "spacex-ipo-2026", out: ["Yes", "No"], m: [12, 88], m6: [11, 89], w: [5000, 9000], ag: [15, 85], end: "2026-12-31", res: "open" },
+];
+// Requests run on their own clock, not the round's.
+const YOURS = [
+  { rank: "R13", req: 13, mine: true, q: "Eurovision 2027 winner", slug: "eurovision-2027-winner", out: ["Sweden", "Ukraine", "France", "Italy", "Other"], other: true, end: "2027-05-15", res: "open", st: "keepers" },
+  { rank: "R12", req: 12, q: "Will ETH close above $4,000 on Nov 30?", slug: "eth-above-4000-nov-30", out: ["Yes", "No"], m: [47, 53], m6: [52, 48], w: [4000, 4000], ag: [45, 55], end: "2026-11-30", res: "open", cranked: 2 },
+  { rank: "R10", req: 10, q: "Arsenal top of the Premier League at Christmas?", slug: "arsenal-top-christmas", out: ["Yes", "No"], m: [41, 59], m6: [38, 62], w: [16000, 3000], ag: [45, 55], end: "2026-12-25", res: "open", cranked: 3 },
+  { rank: "R11", req: 11, mine: true, q: "nba-finals-2027-winner", slug: "nba-finals-2027-winner", out: [], end: null, res: null, st: "skipped" },
+];
+
+// The round's clock (UTC) and the mock's phase.
+const ROUND = 41, ROUND_SEED = seedFromInt(ROUND);
+const T = { start: "13:55", close: "14:15", publish: "14:20", result: "14:23", next: "14:25", drand: 5203117 };
+const PHASES = [["posting", "Staking"], ["agents", "Agents post"], ["ready", "Seed"], ["running", "Colonies run"], ["done", "Result"]];
+let phase = "running";
+
+const GLYPHS = ["▲", "■", "◆", "●", "★"];
+const NAMES = ["Momentum", "Community", "Agents"];
+const READS = ["Market odds and their 6h move", "$ANTO stakes", "The agents' median odds"];
+const SITS = ["", "out · nobody staked", "out · no agent posted"];
+const TPS = 48; // 4×: a 300-tick colony plays in about 6 s
+const still = matchMedia("(prefers-reduced-motion: reduce)");
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const sign = (g) => (g > 0 ? "+" : g < 0 ? "−" : "±") + Math.abs(g);
+const date = (d) => new Date(d + "T00:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+const domId = (mk) => `mk-${String(mk.rank).toLowerCase()}`;
+const bps = (xs) => xs.map((x) => x * 100);
+const pts = (b) => Math.round(b / 100);
+
+// Each market's three colonies: seed, food richness, and their final trail shares.
+function setup(mk, colony, seed) {
+  if (!mk.m) return;
+  const n = mk.out.length, w = mk.w ?? Array(n).fill(0), ag = mk.ag ? bps(mk.ag) : Array(n).fill(0);
+  mk.counted = voters(w, ag);
+  mk.rich = [oddsRichness(MOMENTUM, bps(mk.m), bps(mk.m6)), stakeRichness(w), agentRichness(ag)];
+  mk.seeds = [0, 1, 2].map((k) => colonySeed(seed, colony, k));
+  mk.shares = [0, 1, 2].map((k) => { const c = colonyOf(mk, k); while (c.step()); return trailShares(c.result()); });
+}
+const colonyOf = (mk, k) => new Colony(mk.seeds[k], mk.out.length, mk.rich[k], FORECAST_ANTS, FORECAST_TICKS);
+TOP.forEach((mk, i) => setup(mk, 1 + i, ROUND_SEED));
+YOURS.forEach((mk) => setup(mk, 0x8000 + mk.req, seedFromInt(9000 + mk.req)));
+
+// How many of a market's colonies have been cranked at this phase.
+const crankedOf = (mk) => mk.req ? (mk.cranked ?? 0)
+  : phase === "done" ? 3 : phase === "running" ? (mk.rank === 10 ? 2 : 3) : 0;
+
+// What the page shows for a market now: null before any colony ran.
+function view(mk) {
+  const c = crankedOf(mk);
+  if (!c) return null;
+  const done = [0, 1, 2].map((k) => k < c), use = done.map((d, k) => d && mk.counted[k]);
+  const k = use.filter(Boolean).length;
+  const swarm = mk.out.map((_, o) => pts(mk.shares.reduce((s, sh, j) => s + (use[j] ? sh[o] : 0), 0) / k));
+  const gap = swarm.map((s, o) => s - mk.m[o]);
+  // Two outcomes mirror each other, so name the first; otherwise the widest |gap|.
+  const lead = mk.out.length === 2 ? 0 : gap.reduce((b, g, o) => (Math.abs(g) > Math.abs(gap[b]) ? o : b), 0);
+  return { done, swarm, gap, lead, widest: Math.abs(gap[lead]), partial: c < 3, ran: k,
+    sat: done.filter((d, j) => d && !mk.counted[j]).length };
+}
+
+// ---- the round timeline ----
+function roundHTML() {
+  const cur = PHASES.findIndex(([p]) => p === phase);
+  const at = { posting: `${T.start}–${T.close}`, agents: `until ${T.publish}`, ready: `drand #${T.drand}`, running: "one colony per call", done: phase === "done" ? T.result : "" };
+  const steps = PHASES.map(([key, label], i) => {
+    const st = phase === "done" || i < cur ? "past" : i === cur ? "now" : "next";
+    return `<li data-state="${st}"${st === "now" ? ' aria-current="step"' : ""}><b>${label}</b><span class="stepper__at">${at[key]}</span></li>`;
+  }).join("");
+  const cranked = TOP.reduce((a, mk) => a + crankedOf(mk), 0);
+  const [label, value, sub] = {
+    posting: ["Staking closes in", "06:12", `at ${T.close} UTC`],
+    agents: ["Agents' window ends in", "02:40", `at ${T.publish} UTC`],
+    ready: ["Waiting for the seed", `#${T.drand}`, "drand round, drawn by the first crank"],
+    running: ["Colonies cranked", `${cranked} / 30`, "on chain, one per call"],
+    done: ["Result", "✓ final", `all 30 colonies · next round ${T.next}`],
+  }[phase];
+  const what = {
+    posting: "Keepers have posted the odds. Stake $ANTO on an outcome to feed the Community colony.",
+    agents: "Staking is closed. Agents post their own odds for the Agents colony.",
+    ready: `Inputs are frozen. The seed comes from drand round #${T.drand}, which nobody knows yet.`,
+    running: "The seed is drawn and checked on chain. Each crank runs one colony.",
+    done: "Every colony has run. Your browser re-runs them and checks the hashes.",
+  }[phase];
+  return `<div class="fc-round__head"><b>Round ${ROUND}</b><span>${what}</span></div>
+    <div class="stepper"><ol class="stepper__steps" aria-label="Round ${ROUND} timeline">${steps}</ol>
+    <div class="stepper__clock"><span class="fc-round__label">${label}</span><span class="num-lg">${value}</span><span class="fc-round__label">${sub}</span></div></div>`;
+}
+
+// ---- rows ----
+const seedAt = () => `after the seed at ${T.publish} UTC`;
+function statusOf(mk, v) {
+  if (mk.st === "keepers") return `<span class="pill" data-state="pending">Waiting for keepers</span>`;
+  if (mk.st === "skipped") return `<span class="pill" data-state="skipped">Skipped</span>`;
+  if (!mk.req && !v) return {
+    posting: `<span class="pill" data-state="pending">Staking until ${T.close}</span>`,
+    agents: `<span class="pill" data-state="pending">Agents post until ${T.publish}</span>`,
+    ready: `<span class="pill" data-state="pending">Waiting for drand</span>`,
+  }[phase];
+  return v.partial ? `<span class="pill" data-state="running">${crankedOf(mk)} of 3 colonies</span>` : `<span class="pill" data-state="match">Verified</span>`;
+}
+const res = (mk) => !mk.res ? "" : mk.res === "disputed"
+  ? `<span class="res" data-state="disputed" title="Disputed · not scored until the result is final">Disputed</span>`
+  : `<span class="res" data-state="open" title="Resolves">${date(mk.end)}</span>`;
+
+// The card's headline gap: the outcome with the widest |gap| (the first of two).
+function headGap(mk, v) {
+  if (mk.st === "skipped") return "";
+  if (mk.st === "keepers") return `<small class="fc-card__later">Gap once the keepers post</small>`;
+  if (!v) return `<span class="num" style="color: var(--text-faint)">–</span><small>gap ${seedAt()}</small>`;
+  const o = v.lead;
+  return `<span class="num">${sign(v.gap[o])}</span><small><span class="opt" data-opt="${o}">${esc(mk.out[o])}</span> · pts${v.partial ? " so far" : ""}</small>`;
+}
+
+// The three colonies: a map each, its leader or why it has none. Each opens the market page on that colony.
+function colsHTML(mk, v) {
+  return `<ul class="fc-cols" aria-label="The three colonies">${NAMES.map((name, k) => {
+    let lead;
+    if (!v) lead = `<span class="fc-cols__wait">${mk.req && !mk.m ? "Waiting for the keepers" : "Scouts waiting for the seed"}</span>`;
+    else if (!v.done[k]) lead = `<span class="fc-cols__wait">○ not cranked yet</span>`;
+    else if (!mk.counted[k]) lead = `<span class="fc-cols__wait">○ ${SITS[k]}</span>`;
+    else { const sh = mk.shares[k], o = sh.indexOf(Math.max(...sh)); lead = `<span class="opt" data-opt="${o}">${esc(mk.out[o])}</span> <span class="num">${pts(sh[o])}</span>`; }
+    return `<li><a href="#" title="${READS[k]}" aria-label="${name} colony for ${esc(mk.q)}, on the market page"><canvas width="144" height="96" aria-hidden="true"></canvas><b>${name}</b><span class="fc-cols__lead">${lead}</span></a></li>`;
+  }).join("")}</ul>`;
+}
+
+function table(mk, v) {
+  if (!mk.m) return `<p class="fc-card__later">The keepers haven't posted odds yet. The colonies run once two of three agree.</p>`;
+  const rows = mk.out.map((label, o) => {
+    const isOther = mk.other && o === mk.out.length - 1;
+    const lbl = isOther
+      ? `<span class="opt fc-other" data-opt="${o}">Other <small>· the rest</small></span>`
+      : `<span class="opt" data-opt="${o}">${esc(label)}</span>`;
+    const market = `<td class="num"><span class="fc-out-lbl">Market </span><span class="fc-table__move">${mk.m6[o]} →</span> ${mk.m[o]}</td>`;
+    if (!v) return `<tr><th scope="row">${lbl}</th>${market}<td class="num fc-table__none">–</td><td class="fc-table__none">${o ? "" : "after the seed"}</td></tr>`;
+    const g = v.gap[o];
+    const gap = mk.out.length === 2 && o === 1
+      ? `<span class="fc-table__mirror">mirrors ${esc(mk.out[0])}</span>`
+      : `<span class="fc-table__gap"><span class="num">${sign(g)}</span><span class="gap-bar" style="--gap: ${g}" aria-hidden="true"></span></span>`;
+    return `<tr><th scope="row">${lbl}</th>${market}
+      <td class="num fc-table__swarm"><span class="fc-out-lbl">Swarm </span>${v.swarm[o]}</td>
+      <td>${gap}</td></tr>`;
+  }).join("");
+  const note = !v ? ` · swarm belief ${seedAt()}` : v.partial ? ` · so far: ${v.ran} colonies counted` : v.sat ? ` · mean of ${v.ran} colonies, ${v.sat} sat out` : "";
+  return `<table class="fc-table">
+    <caption${note ? "" : ' class="visually-hidden"'}><span class="visually-hidden">${esc(mk.q)}, whole points</span>${note.replace(/^ · /, "")}</caption>
+    <thead><tr><th>Outcome</th><th style="text-align: right">Market<small>6h ago → now</small></th><th style="text-align: right">Swarm<small>belief</small></th><th>Gap<small>swarm − market</small></th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
+function card(mk, widest) {
+  const v = mk.m ? view(mk) : null;
+  const skipped = mk.st === "skipped";
+  const outs = skipped ? "Requested market" : mk.out.length === 2 && mk.out[0] === "Yes" ? "Yes or No" : `${mk.out.length} outcomes${mk.other ? ", Other grouped" : ""}`;
+  const meta = [
+    mk === widest ? `<span class="fc-flag">Widest gap</span>` : "",
+    mk.mine ? `<span class="fc-yours">yours</span>` : "",
+    `<span>${outs}</span>`,
+    mk.res ? `<span>resolves ${res(mk)}</span>` : "",
+  ].join("");
+  const body = skipped
+    ? `<p class="fc-card__later">Keepers didn't agree on the odds, so the request was skipped and the 100 $ANTO fee refunded.</p>`
+    : `<div class="fc-card__body">${colsHTML(mk, v)}${table(mk, v)}</div>
+    <div class="fc-card__foot"><span class="tag-forecast">Forecast · not advice</span><span>Polymarket · <code>${esc(mk.slug)}</code></span>${mk.res === "disputed" ? `<span>Disputed · not scored until the result is final</span>` : ""}<a href="#">${mk.req ? "Request page ›" : "Market page: stake, follow an ant ›"}</a></div>`;
+  return `<li class="fc-card${skipped ? " is-skipped" : ""}${mk === widest ? " is-widest" : ""}" id="${domId(mk)}">
+    <div class="fc-card__head">
+      <span class="fc-card__n">${mk.rank}</span>
+      <div class="fc-card__q"><a href="#">${esc(mk.q)}</a><small>${meta}</small></div>
+      <span class="fc-card__status">${statusOf(mk, v)}</span>
+      <div class="fc-card__gap">${headGap(mk, v)}</div>
+    </div>
+    ${body}
+  </li>`;
+}
+
+const widestOf = (mk) => (mk.m ? view(mk)?.widest : null) ?? -1;
+const SORTS = {
+  gap: (a, b) => widestOf(b) - widestOf(a),
+  res: (a, b) => ((a.end ?? "9") < (b.end ?? "9") ? -1 : 1),
+  rank: (a, b) => String(a.rank).localeCompare(String(b.rank), "en", { numeric: true }),
+};
+
+// The widest gap among markets whose three colonies all ran (a partial result
+// never headlines the page). One line; its card carries the maps.
+const widestMarket = () => [...TOP, ...YOURS].filter((m) => m.m && view(m) && !view(m).partial).sort(SORTS.gap)[0];
+function widestHTML(mk) {
+  if (!mk) return `<span class="fc-widest__eyebrow">Widest gap</span><span>No gaps yet this round. The colonies run ${seedAt()}.</span>`;
+  const v = view(mk), o = v.lead;
+  return `<span class="fc-widest__eyebrow">Widest gap now</span>
+    <span class="fc-widest__q">${esc(mk.q)}</span>
+    <span><span class="opt" data-opt="${o}">${esc(mk.out[o])}</span> · market <span class="num">${mk.m[o]}</span> · swarm belief <span class="num">${v.swarm[o]}</span></span>
+    <span class="fc-widest__gap">${sign(v.gap[o])} pts</span>
+    <a href="#${domId(mk)}">See its colonies ↓</a>`;
+}
+
+// ---- colony maps: every card's three maps, stepped only while on screen ----
+let anims = [];
+const onScreen = new Set();
+const seen = new IntersectionObserver((es) => es.forEach((e) => (e.isIntersecting ? onScreen.add(e.target) : onScreen.delete(e.target))), { rootMargin: "100px" });
+function mount(cardEl, mk) {
+  const v = mk.m ? view(mk) : null;
+  cardEl.querySelectorAll(".fc-cols canvas").forEach((cv, k) => {
+    const th = new ColonyThumb(cv, { glyphs: GLYPHS });
+    th.setStakers(null);
+    if (v?.done[k]) {
+      const col = colonyOf(mk, k);
+      if (still.matches) while (col.step());
+      th.attach(col);
+      th.draw(1);
+      anims.push({ card: cardEl, th, col, acc: 0 });
+    } else {
+      th.drawIdle(k, k * 1.3);
+      anims.push({ card: cardEl, th, kind: k, phase: k * 1.3 });
+    }
+  });
+  seen.observe(cardEl);
+}
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  for (const a of anims) {
+    if (!onScreen.has(a.card)) continue;
+    if (!a.col) { if (!still.matches) a.th.drawIdle(a.kind, now / 1000 + a.phase); continue; }
+    if (a.col.t >= FORECAST_TICKS) continue;
+    a.acc += dt * TPS;
+    while (a.acc >= 1 && a.col.t < FORECAST_TICKS) { a.col.step(); a.th.afterStep(); a.acc -= 1; }
+    a.th.draw(a.col.t >= FORECAST_TICKS ? 1 : a.acc);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---- render ----
+function render() {
+  document.getElementById("round").innerHTML = roundHTML();
+  const widest = TOP.some((m) => view(m)) ? widestMarket() : null;
+  document.getElementById("widest").innerHTML = widestHTML(widest);
+  const by = SORTS[document.getElementById("sort").value];
+  seen.disconnect(); onScreen.clear(); anims = [];
+  for (const [id, list] of [["list-top", TOP], ["list-yours", YOURS]]) {
+    const ul = document.getElementById(id), sorted = [...list].sort(by);
+    ul.innerHTML = sorted.map((mk) => card(mk, widest)).join("");
+    sorted.forEach((mk) => mount(document.getElementById(domId(mk)), mk));
+  }
+}
+
+document.addEventListener("click", (e) => {
+  const ph = e.target.closest("[data-phase]");
+  if (!ph) return;
+  phase = ph.dataset.phase;
+  document.querySelectorAll("[data-phase]").forEach((b) => b.setAttribute("aria-pressed", String(b === ph)));
+  render();
+});
+document.getElementById("sort").addEventListener("change", render);
+document.querySelectorAll("[data-show]").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll("[data-show]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  document.querySelectorAll("[data-sec]").forEach((s) => { s.hidden = b.dataset.show !== "all" && s.dataset.sec !== b.dataset.show; });
+}));
+
+// Deep links: #phase-ready, #mk-2, or both: #phase-ready,mk-2.
+const parts = location.hash.slice(1).split(",").filter(Boolean);
+const want = parts.find((p) => p.startsWith("phase-"))?.slice(6);
+if (PHASES.some(([p]) => p === want)) phase = want;
+document.querySelectorAll("[data-phase]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.phase === phase)));
+render();
+const to = parts.find((p) => p.startsWith("mk-"));
+if (to) document.getElementById(to)?.scrollIntoView({ block: "start" });
+</script>
+</body>
+</html>

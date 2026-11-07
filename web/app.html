@@ -3,172 +3,89 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Antonomy · the trending market, forecast by ants</title>
-<meta name="description" content="Antonomy ($ANTO): ant colonies forecast Polymarket's trending market from one public seed, on NEAR testnet. Every result has a hash anyone can check.">
+<title>Antonomy · the nest</title>
+<meta name="description" content="Antonomy ($ANTO): ant colonies forecast Polymarket's trending markets inside a NEAR testnet contract, from a drand seed checked on-chain. The whole project as one ant nest, read live from the chain.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Antonomy ($ANTO): the trending market, forecast by ants">
+<meta property="og:description" content="Ant colonies forecast Polymarket on NEAR from one public seed. Every run has a hash you can check in your browser.">
+<meta property="og:image" content="brand/social-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="brand/favicon.ico" sizes="32x32">
+<link rel="icon" href="brand/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
+<meta name="theme-color" content="#14100c">
 <link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="nest.css">
 </head>
-<body>
+<body class="nest-page">
+<!-- The nest, the app's home (docs/NEST_PAGE.md): the whole project as one cutaway ant
+     base, painted like the colony map. Chambers are the system's parts and
+     read live from the contract; ants carry its flows through the tunnels.
+     Without JS the chamber list below the stage reads on its own. -->
 <div id="topbar"></div>
 
 <main>
-  <section class="hero container" aria-labelledby="hero-title">
-    <div class="hero__copy">
+  <section class="container nest-head" aria-labelledby="nest-title">
+    <div>
       <p class="eyebrow"><span class="anto-mark">$ANTO</span> · Ant Colony Oracle · NEAR testnet</p>
-      <h1 id="hero-title">The trending market, <span class="hero__accent">forecast by ants.</span></h1>
-      <p class="lede">Each round the swarm takes Polymarket's trending market, posted on-chain by keepers, and runs three ant colonies on it inside a NEAR testnet contract from one public seed. Their trails become a swarm belief, set beside the market's odds. $ANTO holders and AI agents steer two of the colonies, and every result has a hash you can check in your browser.</p>
-      <div class="cluster hero__actions">
-        <a class="btn btn--primary btn--lg" href="live.html">Watch the live colonies</a>
-        <a class="btn btn--lg" href="#anto">Get $ANTO</a>
-      </div>
-      <dl class="hero__facts">
-        <div><dt>Forecasters per market</dt><dd class="num">5</dd></div>
-        <div><dt>$ANTO burned so far</dt><dd class="num" id="hf-burned">…</dd></div>
-        <div><dt>Languages, one hash</dt><dd class="num">3</dd></div>
-      </dl>
+      <h1 id="nest-title">One nest, <span class="hero__accent">the whole oracle.</span></h1>
     </div>
-
-    <figure class="chamber hero__live" aria-labelledby="hl-title">
-      <div class="hero__live-head">
-        <span class="chip chip--live">live · round <span class="num" id="hl-round">…</span></span>
-        <span class="text-xs text-faint num" id="hl-status">…</span>
-      </div>
-      <p class="hero__market"><span class="eyebrow" id="hl-topic"></span><b id="hl-title">Reading the chain…</b></p>
-      <p class="text-xs text-faint" id="hl-id" style="margin: 0 0 var(--space-3)"></p>
-      <p class="text-sm text-muted" id="hl-empty" hidden></p>
-      <div class="sim-frame" id="hl-frame">
-        <canvas id="hl-map" width="1080" height="720" aria-label="The Momentum colony for this market, live"></canvas>
-        <div class="sim-frame__hud">
-          <span class="sim-frame__tick">Momentum · tick <strong id="hl-tick">0000</strong>/<span id="hl-ticks">0300</span></span>
-          <span class="sim-frame__tick" id="hl-leader">no trail yet</span>
-        </div>
-      </div>
-      <ul class="belief" id="hl-belief" aria-label="Swarm belief per outcome"></ul>
-      <figcaption class="hero__foot">
-        <span class="tag-forecast">Forecast · not advice</span>
-        <ul class="belief-key" id="hl-key"><li class="belief-key__swarm">swarm belief, all three</li><li class="belief-key__market">market odds</li></ul>
-        <a class="hero__go" id="hl-open" href="live.html#forecasts">Open all three colonies →</a>
-      </figcaption>
-    </figure>
+    <p class="lede">Ant colonies forecast Polymarket's trending markets inside a NEAR contract, from a drand seed nobody picks. Every chamber here is a part of it, live from the chain. Open one, or check the receipts yourself.</p>
   </section>
 
-  <section class="page-section" id="anto" aria-labelledby="anto-title">
-    <div class="container">
-      <div class="section-head">
-        <h2 id="anto-title"><span class="anto-mark">$ANTO</span>: drop sugar</h2>
-        <span class="chip">play token · NEAR testnet</span>
-        <a class="what spacer" href="docs.html#stakes">How stakes work</a>
+  <section class="container nest-main" aria-label="The nest">
+    <div class="nest-stage">
+      <div class="nest-frame" id="frame">
+        <canvas id="nest" width="1200" height="800" role="img" aria-label="The Antonomy nest: a cutaway ant base whose chambers are the contract's parts"></canvas>
+        <div class="nest-hits" id="hits" hidden></div>
       </div>
-      <p class="section-sub">The swarm's token. Stake it and a colony forages your way, spend it and the swarm works for you, and every day a colony picks how much of it burns. Nothing mints after launch, so the supply only goes down.</p>
-      <div class="anto">
-        <dl class="anto__facts" id="anto-facts" aria-live="polite"><div><dt>Reading the contract…</dt><dd class="num">…</dd></div></dl>
-        <div class="chamber anto__me" id="anto-me"><p class="text-sm text-muted">Reading the contract…</p></div>
-      </div>
-      <ol class="anto__uses">
-        <li><h3>Steer a forecast</h3><p>Stake on an outcome of a round's market and its Community colony's food follows the stakes. Weight is the square root: four times the tokens, twice the ants.</p><a href="live.html#forecasts">Pick a market →</a></li>
-        <li><h3>Steer the daily pot</h3><p>Stake on a pot size for the daily Burn colony. At 24:00 UTC its pick, <span id="au-burn-range">0.10% to 2.00% of the treasury</span>, pays the stakers on that size a small share and burns the rest for good.</p><a href="burn.html#sugar">Drop sugar →</a></li>
-        <li><h3>Recruit the swarm</h3><p>Pay <b class="num" id="au-fee">a fee</b> for a forecast on any open market. Keepers, agents and crankers are paid from it for their work; <span id="au-fee-burn">the rest goes to the treasury</span>.</p><a href="recruit.html#request">Make a request →</a></li>
-        <li><h3>Forecast as an agent</h3><p>Lock a refundable <b class="num" id="au-deposit">deposit</b> to post your own odds into each market's Agents colony, and earn a share of request fees for the work.</p><a href="docs.html#recruit-tool">The agent tool →</a></li>
-      </ol>
-      <p class="section-sub anto__note">Stakers get no payouts for being right, and nothing here is for sale: $ANTO is a play token on NEAR testnet, handed out free by the faucet.</p>
+      <p class="nest-legend text-xs text-faint"><span>Ants carry stakes to the granary, burns to the pit, requests past the guard, seeds from the well and results to the gallery.</span> <span class="tag-forecast">Forecast · not advice</span></p>
     </div>
+
+    <aside class="panel nest-panel" id="panel" aria-live="polite" tabindex="-1">
+      <div id="panel-body">
+        <p class="eyebrow">The nest</p>
+        <h2 class="nest-panel__title">Pick a chamber</h2>
+        <p class="text-sm text-muted">Each chamber is a part of the system with its live numbers. Click one in the nest or in the list below, or tab to it and press Enter.</p>
+      </div>
+    </aside>
   </section>
 
-  <section class="page-section" id="colonies" aria-labelledby="colonies-title">
-    <div class="container">
-      <div class="section-head">
-        <h2 id="colonies-title">What the colonies do</h2>
-        <span class="tag-forecast">Forecast · not advice</span>
-        <a class="what spacer" href="docs.html#forecasts">The details</a>
-      </div>
-      <p class="section-sub">They forecast what Polymarket is trading most right now. Every round, a trending market goes in, three colonies forage on it inside the contract, and a swarm belief comes out that anyone can re-run.</p>
-      <ol class="steps steps--four">
-        <li><h3>A trending market</h3><p>A keeper (a trusted, allow-listed account) reads Polymarket's open markets by 24-hour volume and takes the first busy enough to matter: $100k traded in a day, $50k liquidity, ending in 1 to 90 days, no outcome above 97%. Markets about violence, deaths or private people are filtered out.</p></li>
-        <li><h3>Odds on-chain</h3><p>Several keepers post the market's odds independently. The contract takes the median per outcome and stores a hash of each raw API response, so the pages read odds from the chain, never from Polymarket.</p></li>
-        <li><h3>Three colonies forage</h3><p>After staking closes and the agents' window ends, anyone cranks the contract: the first call draws the round's seed (the block's random seed, a stand-in for the drand commit) and each call runs one colony. The seed draws a map for each colony. Every outcome is a food pile, its richness set by that colony's input. 60 ants lay pheromone for 300 ticks; the outcome holding the most trail over the run wins that colony.</p></li>
-        <li><h3>One swarm belief</h3><p>The colonies' trail shares are averaged into a swarm belief per outcome, shown next to the market odds. A market hash pins the three results, and your browser can re-run them and compare.</p></li>
-      </ol>
-
-      <h3 class="sub-head">Three forecasters, one market <span class="text-xs text-faint" id="fx-market"></span></h3>
-      <ul class="forecasters" id="forecasters" aria-label="The three forecasters, live on the market above"></ul>
-      <p class="section-sub forecasters__note">The market comes from the contract (the keepers' pick), and its title is derived from the Polymarket event id the contract stores. To forecast any open market, <a href="recruit.html#request">recruit the swarm</a>.</p>
-    </div>
-  </section>
-
-  <section class="page-section" id="start" aria-labelledby="start-title">
-    <div class="container">
-      <div class="section-head">
-        <h2 id="start-title">Your first five minutes</h2>
-        <span class="chip" id="tour-count" role="status" aria-live="polite">0 of 5 done</span>
-        <button class="btn btn--sm btn--ghost spacer" type="button" id="tour-reset" hidden>Start over</button>
-      </div>
-      <p class="section-sub">Five things to try, in any order. Each opens a page that reads the contract on NEAR testnet; this list ticks them off in this browser.</p>
-      <ol class="tour" id="tour">
-        <li data-step="watch"><a class="chamber tour__card" href="live.html#forecasts">
-          <span class="tour__n" aria-hidden="true"></span>
-          <h3>Watch a forecast</h3>
-          <p>Open the round's market and watch its three colonies forage on their own maps, replayed from the on-chain seed. Their average trail share is the swarm belief.</p>
-          <span class="tour__go">Open a market →<span class="tour__state"></span></span>
-        </a></li>
-        <li data-step="follow"><a class="chamber tour__card" href="replay.html">
-          <span class="tour__n" aria-hidden="true"></span>
-          <h3>Follow one ant</h3>
-          <p>Click any ant to follow it home with its crumb. Replay logs its whole run, trip by trip, and scrubs to any tick.</p>
-          <span class="tour__go">Open Replay →<span class="tour__state"></span></span>
-        </a></li>
-        <li data-step="sugar"><a class="chamber tour__card" href="burn.html#sugar">
-          <span class="tour__n" aria-hidden="true"></span>
-          <h3>Drop sugar on the burn</h3>
-          <p>Stake play tokens on a pot size for the daily Burn colony and preview how your sugar tilts it. Testnet only; a wallet signs the stake.</p>
-          <span class="tour__go">Drop sugar →<span class="tour__state"></span></span>
-        </a></li>
-        <li data-step="recruit"><a class="chamber tour__card" href="recruit.html#request">
-          <span class="tour__n" aria-hidden="true"></span>
-          <h3>Recruit the swarm</h3>
-          <p>Pick any open Polymarket event, add your own odds, and watch keepers, agents and crankers do the work on-chain.</p>
-          <span class="tour__go">Make a request →<span class="tour__state"></span></span>
-        </a></li>
-        <li data-step="verify"><a class="chamber tour__card" href="receipts.html">
-          <span class="tour__n" aria-hidden="true"></span>
-          <h3>Check the receipts</h3>
-          <p>Re-run the contract's latest round in your browser and compare every hash with the chain's. Edit one to watch the check fail.</p>
-          <span class="tour__go">Check a round →<span class="tour__state"></span></span>
-        </a></li>
+  <section class="container nest-below">
+    <div>
+      <h2 class="nest-sub" id="ledger-title">Chambers</h2>
+      <ol class="nest-ledger" id="ledger" aria-labelledby="ledger-title">
+        <li data-id="entrance"><b>Entrance</b> <span class="nest-ledger__v num">wallets and the faucet</span></li>
+        <li data-id="guard"><b>Guard post</b> <span class="nest-ledger__v num">2 to 5 outcomes, blocked topics, caps, keepers' quorum</span></li>
+        <li data-id="nursery"><b>Nursery</b> <span class="nest-ledger__v num">requested markets and agents' odds, waiting to hatch</span></li>
+        <li data-id="queen"><b>Queen's chamber</b> <span class="nest-ledger__v num">the contract: one egg per round, its result hashes</span></li>
+        <li data-id="granary"><b>Granary</b> <span class="nest-ledger__v num">the treasury and the staked pool</span></li>
+        <li data-id="burn"><b>Burn pit</b> <span class="nest-ledger__v num">the daily pot: 0.10% to 2.00% of the treasury</span></li>
+        <li data-id="gallery"><b>Forecast gallery</b> <span class="nest-ledger__v num">the round's markets and the swarm belief</span></li>
+        <li data-id="well"><b>Well</b> <span class="nest-ledger__v num">drand seeds and the randomness service</span></li>
+        <li data-id="workers"><b>Workers' hall</b> <span class="nest-ledger__v num">keepers, agents and crankers, paid for work</span></li>
       </ol>
     </div>
-  </section>
-
-  <section class="page-section" id="roles" aria-labelledby="roles-title">
-    <div class="container">
-      <div class="section-head"><h2 id="roles-title">Two ways in</h2></div>
-      <div class="roles">
-        <div class="chamber roles__card">
-          <p class="eyebrow">Hold $ANTO</p>
-          <h3>Drop sugar</h3>
-          <p>Play-token stakes steer each market's Community colony and the daily Burn colony, which picks a burn from a fixed menu capped at 2%. Weight is the square root of the stake, so four times the tokens hatch twice the ants. Stakers get no payouts for being right.</p>
-          <div class="cluster">
-            <a class="btn btn--sm" href="burn.html">Open Burn</a>
-            <a class="what" href="docs.html#stakes">How stakes work</a>
-          </div>
-        </div>
-        <div class="chamber roles__card">
-          <p class="eyebrow">Run an agent</p>
-          <h3>Work for the swarm</h3>
-          <p>Anyone can pay a fee to have the swarm forecast a market. Agents are paid from it for work, never for being right: keepers post odds, forecasters post their own, crankers run the colonies. One stdlib-only tool, as a command line or an MCP server:</p>
-          <pre class="cmd"><code>python3 -I bots/recruit.py mcp --contract &lt;contract&gt; --account &lt;you.testnet&gt;</code><button class="hash__copy" type="button" aria-label="Copy the MCP server command" data-copy="python3 -I bots/recruit.py mcp --contract &lt;contract&gt; --account &lt;you.testnet&gt;"></button></pre>
-          <div class="cluster">
-            <a class="btn btn--sm" href="recruit.html">Open Recruit</a>
-            <a class="what" href="docs.html#recruit-tool">The agent tool</a>
-          </div>
-        </div>
+    <div class="nest-logbox">
+      <div class="nest-logbox__head">
+        <h2 class="nest-sub" id="log-title">Nest log</h2>
+        <button class="btn btn--sm" type="button" id="receipts">Check the receipts</button>
       </div>
+      <p class="text-xs text-faint" id="receipts-note">Re-runs the round's colonies in your browser from the chain's seed and inputs, and compares every hash.</p>
+      <ol class="nest-log" id="log" aria-labelledby="log-title" aria-live="polite"><li class="text-faint">Reading the chain…</li></ol>
     </div>
   </section>
 
-  <section class="page-section" aria-label="What this is not">
-    <div class="container">
-      <div class="notice notice--forecast">
-        <p><strong>Forecasts, not bets.</strong> Nobody is paid for being right, nothing links to a trading venue, and the token is a play token on NEAR testnet. The contract runs the colonies itself; the seed is the block's random seed (a stand-in for the drand commit)). <a class="what" href="docs.html#demo">Limits</a></p>
+  <section class="container page-section" aria-label="What this is not">
+    <div class="banner">
+      <span class="banner__g" aria-hidden="true">i</span>
+      <div>
+        <b class="banner__title">Forecasts, not bets.</b>
+        <p>Nobody is paid for being right and $ANTO is a testnet play token. Limits: a seed waits while drand is unreachable, and a Burn day is lost if nobody cranks it for about a day.</p>
       </div>
+      <a class="what banner__action" href="docs.html#demo">All limits</a>
     </div>
   </section>
 </main>
@@ -176,272 +93,239 @@
 <div id="footer"></div>
 
 <script type="module">
-import { ColonyView } from "./ds/colony-view.mjs";
-import { ColonyThumb } from "./ds/colony-thumb.mjs";
-import { GLYPHS } from "./round.mjs";
-import { loadRound } from "./roundchain.mjs";
-import { $, esc, pad4, installCopy, liveShares, beliefBoard, shareBars, leaderHTML, topbar, footer, refreshTokenChip } from "./ui.mjs";
-import { chain, wallet } from "./chain.mjs";
-import { loadToken, tokenFacts, fmtAnto, nextStep } from "./token.mjs";
-import { potAmounts } from "./burn.mjs";
+import { NestView } from "./ds/nest-view.mjs";
+import { CHAMBERS, CHAMBER, LAYOUTS, layoutFor, nestScale, deriveNest, diffEvents, logLine, chainLog, nestSummary, shortHash } from "./nest.mjs";
+import { loadNest, loadLastBurn, loadLog } from "./nestchain.mjs";
+import { verifyMarket } from "./roundchain.mjs";
+import { recordedMarket, RECORDED } from "./landing.mjs";
+import { contractId, wallet } from "./chain.mjs";
+import { $, esc, topbar, footer, pillHTML, hashCompareHTML, installCopy } from "./ui.mjs";
+import { marketHref } from "./lv.mjs";
 
+const cid = contractId();
 $("topbar").outerHTML = topbar("home");
 $("footer").outerHTML = footer();
 installCopy();
 
-const LIVE_TPS = 12; // the colonies already ran on-chain; the page plays them back at 1× (12 ticks/s), faster speeds are on the replay page
+const view = new NestView($("nest"));
+const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let reads = null, model = null, open = null, visible = true, lastBurn = null;
+const utc = (ms) => new Date(ms).toISOString().slice(11, 16);
 
-// ---- Hero: the round's first market, read from the contract. The round
-// shown is the current one once its colonies have run, else the previous
-// finished one, else the current market before any run (odds only: there is no
-// seed, so no map yet). The map is the Momentum colony, replayed from the seed.
+// ---- the stage: layout, scale, and one button per chamber over the canvas
 
-const view = new ColonyView($("hl-map"), { labels: [], glyphs: GLYPHS });
-view.selected = -1; // nobody followed here; Live and Replay do that
-let round, m, cols = [], thumbs = [], starts = [], visible = true, busy = true, fxVisible = true, fxBusy = true, sig = "";
-
-// ---- What the colonies do: one card per forecaster, its colony drawn
-// small (the same colonies as the hero) with its live leader. Short rules
-// here; Docs has the long version.
-const READS = ["market odds and their 6-hour move", "$ANTO stakes", "AI agents' odds"];
-const RULES = [
-  "Rides the trend: food is the odds plus twice their change over six hours, with a 2% floor so no outcome starves.",
-  "Ignores the odds: food follows what holders staked, each wallet weighted by the square root of its tokens.",
-  "Reads registered AI agents' own posted odds, their median per outcome: the likelier an outcome, the richer its food.",
-];
-const NAMES = ["Momentum", "Community", "Agents"];
-const ABSTAIN = { 1: "Nobody staked on this market, so Community has no input and sits out of the swarm belief.",
-  2: "No forecaster agent posted, so Agents has no input and sits out of the swarm belief." };
-
-const forecasterHTML = (k, f) => `
-  <li class="chamber forecaster">
-    ${f ? `<canvas width="216" height="144" aria-hidden="true"></canvas>` : ""}
-    <div class="forecaster__head"><h4>${NAMES[k]}</h4>${f && !f.counted ? `<span class="chip" title="${ABSTAIN[k]}">sits out</span>` : ""}${f && !f.cranked ? `<span class="chip">queued</span>` : ""}</div>
-    <p class="forecaster__reads">reads <b>${READS[k]}</b></p>
-    <p class="forecaster__rule">${RULES[k]}</p>
-    <p class="forecaster__lead" data-r="lead">${f ? "no trail yet" : "map once the colonies run"}</p>
-  </li>`;
-
-function forecasters() {
-  $("forecasters").innerHTML = NAMES.map((_, k) => forecasterHTML(k, m?.forecasters?.[k])).join("");
-  $("fx-market").textContent = m ? `· ${m.forecasters ? "replayed from the chain's" : "market on-chain, no"} seed${m.forecasters ? "" : " yet"}` : "";
-  thumbs = [...$("forecasters").querySelectorAll("canvas")].map((cv, k) => {
-    const th = new ColonyThumb(cv, { glyphs: GLYPHS });
-    th.setStakers(m.forecasters[k].stakers);
-    th.attach(cols[k]);
-    return th;
-  });
-  fxBusy = true;
+function layout() {
+  const frame = $("frame"), w = frame.clientWidth * Math.min(2, devicePixelRatio || 1);
+  const name = layoutFor(frame.clientWidth);
+  if (!view.setLayout(name, nestScale(w, name))) return;
+  frame.dataset.layout = name;
+  const L = LAYOUTS[name];
+  frame.style.aspectRatio = `${L.w} / ${L.h}`;
+  $("hits").innerHTML = CHAMBERS.map((c) => {
+    const h = L.chambers[c.id], pad = c.id === "entrance" ? 0 : 0.6;
+    const st = `left:${((h.x - h.rx - pad) / L.w) * 100}%;top:${((h.y - h.ry - pad) / L.h) * 100}%;width:${((2 * h.rx + 2 * pad) / L.w) * 100}%;height:${((2 * h.ry + 2 * pad) / L.h) * 100}%`;
+    // Tags sit over their chamber; the queen's goes under it, clear of the granary's.
+    return `<button type="button" class="nest-hit" data-id="${c.id}"${c.id === "queen" ? ' data-tag="below"' : ""} style="${st}" aria-pressed="${open === c.id}" aria-controls="panel">` +
+      `<span class="nest-tag"><b>${esc(c.name)}</b><span class="nest-tag__v num" data-r="${c.id}">${esc(model?.[c.id]?.headline ?? "")}</span></span></button>`;
+  }).join("");
+  $("hits").hidden = false;
+  if (model) view.setModel(model);
 }
 
-function build(r) {
-  round = r;
-  const src = r.shown;
-  m = src.markets[0] ?? r.markets[0] ?? null;
-  const live = !!m?.forecasters;
-  const label = src === r ? `round ${r.id}` : `previous round ${src.id}`;
-  $("hl-round").textContent = r.id.toLocaleString("en");
-  $("hl-frame").hidden = !live;
-  $("hl-empty").hidden = live;
-  cols = []; thumbs = []; starts = [];
-  if (!m) {
-    $("hl-topic").textContent = "";
-    $("hl-title").textContent = "No market yet";
-    $("hl-id").textContent = "";
-    $("hl-empty").textContent = "Keepers have not posted this round's market on-chain yet. It appears here as soon as they do.";
-    $("hl-status").textContent = `${label} · ${r.phase}`;
-    $("hl-belief").innerHTML = "";
-    $("hl-open").href = "live.html#forecasts";
-    forecasters();
+// ---- the panel: what the chamber is, its live numbers, where to go
+
+function panelHTML(id) {
+  const c = CHAMBER[id], m = model?.[id];
+  const rows = (m?.rows ?? []).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd class="num">${esc(v)}</dd></div>`).join("");
+  let extra = "";
+  if (id === "gallery" && m?.cells?.some(Boolean)) {
+    extra = `<p class="nest-panel__from text-xs text-faint">${esc(m.from ?? "")} · swarm belief is a trail share, not a probability</p><ul class="nest-cells">${m.cells.filter(Boolean).map((cell) => {
+      const lead = cell.swarmLead ?? cell.marketLead;
+      return `<li${cell.differs ? ' class="is-differs"' : ""}><a href="${marketHref(cell.key)}">${esc(cell.title)}</a>` +
+        // One favourite when they agree; market's, then the swarm's, when they differ.
+        `<span class="nest-cells__v"><span class="nest-cells__vs">${cell.differs ? "market" : "favourite"}</span><span class="opt" data-opt="${cell.marketLead}">${esc(cell.outcomes[cell.marketLead])}</span>` +
+        (cell.swarmLead === null ? `<span class="text-faint">· not run yet</span>` : cell.differs ? `<span class="nest-cells__vs">· swarm differs:</span><span class="opt" data-opt="${lead}">${esc(cell.outcomes[lead])}</span>` : `<span class="nest-cells__vs">· the swarm agrees</span>`) +
+        `</span></li>`;
+    }).join("")}</ul><p class="tag-forecast">Forecast · not advice</p>`;
+  }
+  if (id === "queen" && check) extra = `<div class="nest-panel__check">${check}</div>`;
+  return `<p class="eyebrow">Chamber</p><h2 class="nest-panel__title">${esc(c.name)}</h2>
+    <p class="nest-panel__head num">${esc(m?.headline ?? "…")}</p>
+    <p class="text-sm text-muted">${esc(c.is)}</p>
+    ${rows ? `<dl class="nest-panel__rows">${rows}</dl>` : ""}${extra}
+    <p class="nest-panel__go">${c.go.map(([href, label]) => `<a class="what" href="${href}">${esc(label)} →</a>`).join("")}</p>
+    <button class="btn btn--sm btn--ghost" type="button" data-act="close">Back to the nest</button>`;
+}
+
+function openChamber(id, { focus = false } = {}) {
+  open = id;
+  $("panel-body").innerHTML = id ? panelHTML(id) : `<p class="eyebrow">The nest</p><h2 class="nest-panel__title">Pick a chamber</h2><p class="text-sm text-muted">Each chamber is a part of the system with its live numbers. Click one in the nest or in the list below, or tab to it and press Enter.</p>`;
+  document.querySelectorAll(".nest-hit, #ledger li button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.id === id)));
+  view.hover = id;
+  if (focus) $("panel").focus({ preventScroll: matchMedia("(min-width: 1000px)").matches });
+  if (focus && !matchMedia("(min-width: 1000px)").matches) $("panel").scrollIntoView({ block: "nearest", behavior: still ? "auto" : "smooth" });
+}
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest(".nest-hit, #ledger button");
+  if (b) { openChamber(b.dataset.id, { focus: true }); return; }
+  if (e.target.closest('[data-act="close"]')) { const was = open; openChamber(null); document.querySelector(`.nest-hit[data-id="${was}"]`)?.focus(); }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && open) { const was = open; openChamber(null); document.querySelector(`.nest-hit[data-id="${was}"]`)?.focus(); }
+});
+$("hits").addEventListener("pointerover", (e) => { const b = e.target.closest(".nest-hit"); view.hover = b?.dataset.id ?? open; });
+$("hits").addEventListener("pointerleave", () => { view.hover = open; });
+$("hits").addEventListener("focusin", (e) => { const b = e.target.closest(".nest-hit"); if (b) view.hover = b.dataset.id; });
+$("hits").addEventListener("focusout", () => { view.hover = open; });
+
+// The chamber list doubles as the nest's text version: rows become buttons.
+for (const li of $("ledger").children) {
+  const id = li.dataset.id;
+  li.innerHTML = `<button type="button" data-id="${id}" aria-pressed="false" aria-controls="panel">${li.innerHTML}</button>`;
+}
+
+// ---- the nest log
+
+const LOG_MAX = 30;
+let entries = [];     // { ms, text | html, chamber, tx | key, local, state }
+let indexerOk = null; // true: it answered with calls; "empty": it answered with none; false: no answer
+let fromChain = [];   // lines the chain itself dates (chainLog), for when the indexer has none
+
+function paintLog() {
+  const seen = new Set();
+  const all = indexerOk === true ? entries : [...entries, ...fromChain];
+  const list = all.filter((e) => { const k = e.tx ?? e.key; return k ? (seen.has(k) ? false : seen.add(k)) : true; }).sort((a, b) => b.ms - a.ms || (b.seq ?? 0) - (a.seq ?? 0)).slice(0, LOG_MAX);
+  $("log").innerHTML = (list.length ? list.map((e) => `<li${e.state ? ` data-state="${e.state}"` : ""}><time class="num">${utc(e.ms)}</time>` +
+    `<span class="nest-log__where">${esc(CHAMBER[e.chamber]?.name ?? "")}</span><span>${e.html ?? esc(e.text)}</span>` +
+    (e.tx ? `<a class="nest-log__tx" href="https://testnet.nearblocks.io/txns/${e.tx}" target="_blank" rel="noopener" aria-label="Transaction on nearblocks">tx</a>` : "") + `</li>`).join("")
+    : `<li class="text-faint">Nothing yet.</li>`) +
+    (indexerOk === false ? `<li class="text-faint">The nearblocks indexer didn't answer, so this log shows what the chain dates itself and what this page sees change.</li>`
+      : indexerOk === "empty" ? `<li class="text-faint">The nearblocks indexer lists no recent calls for the contract, so this log shows what the chain dates itself and what this page sees change.</li>` : "");
+}
+let seq = 0;
+const note = (e) => { entries.push({ ms: Date.now(), local: true, seq: ++seq, ...e }); paintLog(); };
+
+async function pollLog() {
+  try {
+    const txns = await loadLog({ contract: cid });
+    indexerOk = txns.length ? true : "empty";
+    const lines = txns.map((t) => logLine(t, cid)).filter(Boolean);
+    entries = [...entries.filter((e) => e.local), ...lines];
+  } catch { indexerOk = false; }
+  paintLog();
+}
+
+// ---- reads -> model -> stage, panel, ledger, and ants for what changed
+
+const CHAMBER_OF_FLOW = { stake: "granary", burn: "burn", submit: "guard", admit: "nursery", reject: "guard", crank: "queen", seed: "well", hatch: "gallery", result: "queen" };
+
+function paint() {
+  model = deriveNest({ ...reads, lastBurn }, { contract: cid });
+  view.setModel(model);
+  for (const c of CHAMBERS) {
+    const v = model[c.id]?.headline ?? "";
+    document.querySelectorAll(`[data-r="${c.id}"]`).forEach((el) => { el.textContent = v; });
+    const li = $("ledger").querySelector(`li[data-id="${c.id}"] .nest-ledger__v`);
+    if (li) li.textContent = v;
+  }
+  $("nest").setAttribute("aria-label", `The Antonomy nest, read from the contract. ${nestSummary(model)}`);
+  if (open) $("panel-body").innerHTML = panelHTML(open);
+}
+
+async function poll() {
+  let next;
+  try { next = await loadNest({ contract: cid, account: wallet.accountId }); } catch { next = null; }
+  const dead = !next || [next.token, next.round, next.requests].every((x) => x == null);
+  document.getElementById("banner")?.remove();
+  if (dead) {
+    document.getElementById("frame").insertAdjacentHTML("afterend", `<div class="banner banner--fault" role="alert" id="banner"><span class="banner__g" aria-hidden="true">✗</span><div><b class="banner__title">Couldn't read the contract</b><p>The testnet RPC didn't answer; the public endpoints share one rate limit. The nest shows its chambers without numbers until it does.</p></div><button class="btn btn--sm banner__action" type="button" id="retry">Retry</button></div>`);
+    document.getElementById("retry").addEventListener("click", poll);
+    if (!reads) { reads = {}; paint(); }
     return;
   }
-  $("hl-topic").textContent = `Polymarket event · ${m.outcomes.length} outcomes`;
-  $("hl-title").textContent = m.title;
-  $("hl-id").innerHTML = `Market id <code></code>`;
-  $("hl-id").querySelector("code").textContent = m.marketId;
-  $("hl-open").href = `market.html?m=${m.key}`;
-  if (m.swarm) beliefBoard($("hl-belief"), m.outcomes, m.odds, { compact: true })(m.swarm);
-  else shareBars($("hl-belief"), m.outcomes)(m.odds.map((x) => x / 100));
-  $("hl-key").hidden = !m.swarm;
-  $("hl-belief").className = m.swarm ? "belief belief--compact" : "share-bars share-bars--compact";
-  $("hl-belief").setAttribute("aria-label", m.swarm ? "Swarm belief per outcome" : "Market odds per outcome");
-  if (live) {
-    cols = m.forecasters.map((f) => f.make());
-    starts = cols.map(() => performance.now());
-    view.labels = m.outcomes;
-    view.setStakers(m.forecasters[0].stakers);
-    view.attach(cols[0]);
-    $("hl-ticks").textContent = pad4(cols[0].ticks);
-    $("hl-empty").hidden = true;
-  } else {
-    $("hl-empty").textContent = r.phase === "posting" ? "Staking is open and the market's odds are on-chain. The colonies get their seed at the first crank, after staking closes and the agents' window ends, so there is no map yet."
-      : r.phase === "skipped" ? "This round was skipped: no quorum of keepers posted a market." : "The odds are on-chain. The colonies run when someone cranks the contract; their maps appear here then.";
-  }
-  $("hl-status").textContent = live
-    ? (m.done ? `✓ chain result · ${label}` : `${m.cranked} of ${NAMES.length} cranked · ${label}`)
-    : `${label} · ${r.phase}`;
-  busy = true;
-  forecasters();
+  for (const ev of diffEvents(reads, next)) { view.burst(ev.flow, ev.n); note({ text: ev.text, chamber: CHAMBER_OF_FLOW[ev.flow] }); }
+  reads = next;
+  fromChain = chainLog(reads, cid);
+  paint();
+  paintLog();
 }
 
-function panels() {
-  if (!m?.forecasters) return;
-  const col = cols[0];
-  $("hl-tick").textContent = pad4(col.t);
-  $("hl-leader").innerHTML = leaderHTML(m.outcomes, liveShares(col).lead, col.t === col.ticks);
-  [...$("forecasters").children].forEach((li, k) => {
-    if (!m.forecasters[k].cranked) return;
-    const c = cols[k], { pct, lead } = liveShares(c);
-    li.querySelector('[data-r="lead"]').innerHTML = leaderHTML(m.outcomes, lead, c.t === c.ticks) +
-      (lead < 0 ? "" : ` <span class="num">${pct[lead].toFixed(1)}%</span>`);
-  });
+// The newest paid burn sizes the flame; read once, then hourly (archival).
+async function burnFacts() {
+  lastBurn = await loadLastBurn().catch(() => null);
+  if (reads) paint();
 }
 
-new IntersectionObserver(([e]) => { visible = e.isIntersecting; if (visible) busy = true; }).observe($("hl-map"));
-new IntersectionObserver(([e]) => { fxVisible = e.isIntersecting; if (fxVisible) fxBusy = true; }).observe($("forecasters"));
+// ---- Check the receipts: re-run the round's colonies here and compare.
 
-let lastT = -1;
-function frame(perf) {
-  if (m?.forecasters) {
-    const now = performance.now();
-    let running = false;
-    cols.forEach((col, k) => {
-      if (!m.forecasters[k].cranked) return;
-      const exact = Math.min(col.ticks, ((now - starts[k]) / 1000) * LIVE_TPS), target = Math.floor(exact);
-      const fx = target - col.t <= 2;
-      while (col.t < target) {
-        col.step();
-        thumbs[k].afterStep();
-        if (k === 0) view.afterStep(fx);
-      }
-      if (col.t < col.ticks) running = true;
-      col.frac = col.t < col.ticks ? exact - target : 1;
-    });
-    if (cols[0].t !== lastT) { lastT = cols[0].t; busy = fxBusy = true; panels(); }
-    if (visible && (running || busy)) busy = view.draw(cols[0].frac ?? 1, perf);
-    if (fxVisible && (running || fxBusy)) { thumbs.forEach((th, k) => th.draw(cols[k].frac ?? 1)); fxBusy = false; }
-  }
-  requestAnimationFrame(frame);
-}
-
-// What on the round changes what the hero shows.
-const sigOf = (r) => JSON.stringify([r.id, r.phase, r.shown.id, r.shown.markets.map((x) => [x.marketId, x.odds, x.forecasters?.map((f) => f.chainHash), x.swarm]), r.markets.map((x) => x.marketId)]);
-async function poll() {
-  try {
-    const r = await loadRound();
-    const s = sigOf(r);
-    if (s !== sig) { sig = s; lastT = -1; build(r); }
-  } catch (e) {
-    if (!round) $("hl-title").textContent = "Could not read the contract";
-  }
-}
-poll();
-setInterval(() => { if (!document.hidden) poll(); }, 30_000);
-requestAnimationFrame(frame);
-document.fonts.ready.then(() => { busy = fxBusy = true; }); // pile labels are canvas text
-
-// ---- Your first five minutes: a step is ticked when its link is followed.
-// Kept in this browser only.
-
-const TOUR_KEY = "antonomy:tour:v1";
-const store = (() => { try { return window.localStorage; } catch { return null; } })();
-const steps = [...$("tour").children];
-const read = () => { try { return new Set(JSON.parse(store?.getItem(TOUR_KEY) ?? "[]")); } catch { return new Set(); } };
-const write = (done) => { try { store?.setItem(TOUR_KEY, JSON.stringify([...done])); } catch { /* storage full or blocked */ } };
-
-function tour() {
-  const done = read();
-  for (const li of steps) {
-    const on = done.has(li.dataset.step);
-    li.toggleAttribute("data-done", on);
-    li.querySelector(".tour__state").textContent = on ? " · ✓ done" : "";
-  }
-  const n = steps.filter((li) => done.has(li.dataset.step)).length;
-  $("tour-count").textContent = n === steps.length ? `✓ all ${n} done` : `${n} of ${steps.length} done`;
-  $("tour-reset").hidden = n === 0;
-}
-
-$("tour").addEventListener("click", (e) => {
-  const li = e.target.closest("li[data-step]");
-  if (!li) return;
-  const done = read();
-  done.add(li.dataset.step);
-  write(done);
-  tour();
-});
-$("tour-reset").addEventListener("click", () => { write(new Set()); tour(); });
-addEventListener("pageshow", tour); // coming back with the back button
-addEventListener("storage", (e) => { if (e.key === TOUR_KEY) tour(); });
-tour();
-
-// ---- $ANTO: the token's facts from the contract, and what the connected
-// wallet holds or can claim. The request fee and agent deposit come from the
-// contract's request config.
-
-let tokenBusy = false;
-async function token() {
-  let t, cfg = null;
-  try {
-    [t, cfg] = await Promise.all([loadToken({ account: wallet.accountId }), chain.requestConfig().catch(() => null)]);
-  } catch { return; }
-  const facts = tokenFacts(t);
-  if (facts.length) {
-    $("anto-facts").innerHTML = facts.map(([k, v, note]) =>
-      `<div><dt>${esc(k)}</dt><dd class="num">${esc(v)}</dd><dd class="anto__fact-note">${esc(note)}</dd></div>`).join("");
-  }
-  if (t.burned != null) $("hf-burned").textContent = fmtAnto(t.burned);
-  if (cfg) {
-    const treasuryBps = 10_000 - cfg.keeper_bps - cfg.agent_bps - cfg.crank_bps;
-    $("au-fee").textContent = `${fmtAnto(cfg.fee)} $ANTO`;
-    $("au-fee-burn").textContent = treasuryBps > 0 ? `the other ${treasuryBps / 100}% goes to the treasury` : "none of it goes to the treasury";
-    $("au-deposit").textContent = `${fmtAnto(cfg.agent_deposit)} $ANTO`;
-  }
-  if (t.treasury != null) {
-    $("au-burn-range").textContent = `0.10% to 2.00% of the treasury (${fmtAnto(potAmounts(t.treasury, 0).pot)} to ${fmtAnto(potAmounts(t.treasury, 4).pot)} $ANTO today)`;
-  }
-  const faucet = t.faucet != null ? `${fmtAnto(t.faucet)} $ANTO` : "play $ANTO";
-  const step = nextStep(t);
-  const me = $("anto-me");
-  if (step === "connect") {
-    me.innerHTML = `<p class="eyebrow">Your $ANTO</p>
-      <p class="anto__me-big num">${faucet}</p>
-      <p class="text-sm text-muted">free from the faucet, once per testnet account: enough to stake, request a forecast or register as an agent.</p>
-      <button class="btn" type="button" data-act="connect">Connect a wallet to claim</button>
-      <p class="text-xs text-faint" data-r="msg" role="status"></p>`;
-  } else {
-    const m = t.me;
-    me.innerHTML = `<p class="eyebrow">Your $ANTO · <code>${esc(m.account)}</code></p>
-      <p class="anto__me-big num">${m.balance != null ? fmtAnto(m.balance) : "…"} <small>$ANTO</small></p>
-      <p class="text-sm text-muted">${m.staked ? `${fmtAnto(m.staked)} $ANTO staked across the colonies.` : "Nothing staked yet."}${step === "claim" ? ` The faucet still owes this account ${faucet}.` : ""}</p>
-      ${step === "claim" ? `<button class="btn btn--primary" type="button" data-act="claim">Claim ${faucet}</button>`
-        : `<div class="cluster"><a class="btn btn--sm" href="live.html#forecasts">Stake on a market</a><a class="btn btn--sm btn--ghost" href="burn.html#sugar">Stake on the burn</a></div>`}
-      <p class="text-xs text-faint" data-r="msg" role="status"></p>`;
-  }
-}
-
-$("anto-me").addEventListener("click", async (e) => {
-  const btn = e.target.closest("button[data-act]");
-  if (!btn || tokenBusy) return;
-  tokenBusy = true;
+let check = "", checking = false;
+$("receipts").addEventListener("click", async () => {
+  if (checking) return;
+  checking = true;
+  const btn = $("receipts");
   btn.disabled = true;
-  try {
-    if (btn.dataset.act === "connect") await wallet.connect();
-    else {
-      await wallet.call("claim_play_tokens");
-      refreshTokenChip();
+  btn.textContent = "◌ Checking…";
+  view.verify = "running";
+  const shown = reads?.round?.shown;
+  let markets = (shown?.markets ?? []).filter((m) => m.cranked > 0);
+  let label = shown ? `round ${shown.id}` : null;
+  if (!markets.length) { markets = [recordedMarket()]; label = `round ${RECORDED.round}'s recording`; }
+  note({ text: `Re-running ${label} in your browser: ${markets.length} market${markets.length === 1 ? "" : "s"}`, chamber: "queen" });
+  let bad = 0, matched = 0, pending = 0;
+  const diffs = [];
+  for (const m of markets) {
+    await new Promise((r) => setTimeout(r, 0));
+    const v = await verifyMarket(m);
+    const mis = v.colonies.filter((c) => c.state === "mismatch");
+    const ok = v.colonies.filter((c) => c.state === "match").length;
+    matched += ok; pending += v.colonies.filter((c) => c.state === "pending").length;
+    const marketBad = v.market?.state === "mismatch";
+    if (mis.length || marketBad) {
+      bad++;
+      for (const c of mis) diffs.push([`${m.title} · colony ${c.spec.kind}`, c.expected, c.actual]);
+      if (marketBad) diffs.push([`${m.title} · market hash`, v.market.expected, v.market.actual]);
     }
-    await token();
-  } catch (err) {
-    const msg = $("anto-me").querySelector('[data-r="msg"]');
-    if (msg) msg.textContent = `Not sent: ${String(err.message || err).slice(0, 140)}`;
-    btn.disabled = false;
-  } finally {
-    tokenBusy = false;
+    note({
+      chamber: "queen", state: mis.length || marketBad ? "mismatch" : "match",
+      html: `${mis.length || marketBad ? pillHTML("mismatch", "Mismatch") : pillHTML("match", "Match")} ${esc(m.title)}: ${ok} of ${v.colonies.length} colonies` + (m.marketHash ? ` · market hash <code>${esc(shortHash(m.marketHash))}</code>` : ""),
+    });
   }
+  view.verify = bad ? "mismatch" : "match";
+  check = (bad ? `<p>${pillHTML("mismatch", "Mismatch in your browser")}</p>${diffs.map(([n, a, b]) => `<p class="text-xs">${esc(n)}</p>${hashCompareHTML(a, b)}`).join("")}`
+    : `<p>${pillHTML("match", `Match · ${matched} colonies in your browser`)}</p>`) + (pending ? `<p class="text-xs text-faint">${pending} not cranked yet.</p>` : "");
+  note({ text: bad ? `${bad} market${bad === 1 ? "" : "s"} gave a different hash here. Re-run it in History or report it.` : `Every hash matches the chain (${matched} colonies${pending ? `, ${pending} not cranked yet` : ""}).`, chamber: "queen", state: bad ? "mismatch" : "match" });
+  btn.disabled = false;
+  btn.textContent = "Check the receipts";
+  checking = false;
+  if (open === "queen" || !open) openChamber("queen");
 });
-wallet.onChange(() => token());
-token();
-setInterval(() => { if (!document.hidden) token(); }, 60_000);
+
+// ---- the loop
+
+function frame(now) {
+  if (visible && !document.hidden) view.draw(now);
+  if (!still) requestAnimationFrame(frame);
+}
+new IntersectionObserver(([e]) => { visible = e.isIntersecting; }).observe($("frame"));
+new ResizeObserver(() => { layout(); if (still) view.draw(); }).observe($("frame"));
+layout();
+if (still) { view.draw(); setInterval(() => view.draw(), 1000); } else requestAnimationFrame(frame);
+document.fonts.ready.then(() => { view.contentsKey = ""; view.paintContents(); });
+
+// app.html#queen opens that chamber (the landing page's nest links here).
+const fromHash = () => { const id = location.hash.slice(1); if (CHAMBER[id]) openChamber(id); };
+fromHash();
+addEventListener("hashchange", fromHash);
+
+poll();
+pollLog();
+burnFacts();
+setInterval(() => { if (!document.hidden) poll(); }, 60_000);
+setInterval(() => { if (!document.hidden) pollLog(); }, 90_000);
+setInterval(() => { if (!document.hidden) burnFacts(); }, 3_600_000);
+wallet.onChange(() => poll());
+wallet.restore();
 </script>
 </body>
 </html>

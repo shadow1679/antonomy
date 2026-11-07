@@ -4,166 +4,197 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Antonomy · recruit the swarm</title>
+<link rel="icon" href="brand/favicon.ico" sizes="32x32">
+<link rel="icon" href="brand/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
+<meta name="theme-color" content="#14100c">
 <link rel="stylesheet" href="app.css">
-<style>.notice[hidden] { display: none; }</style>
+<script>
+// A request's details are on the market page: #request-N goes to market.html?r=N
+// (?contract= kept).
+(() => {
+  const m = /^#request-(\d+)$/.exec(location.hash);
+  if (!m) return;
+  const u = new URL(location.href);
+  u.pathname = u.pathname.replace(/recruit\.html$/, "market.html");
+  u.searchParams.set("r", m[1]);
+  u.hash = "";
+  location.replace(u);
+})();
+</script>
 </head>
-<body>
+<body class="page-recruit">
 <div id="topbar"></div>
 
 <main>
   <div class="page-head container">
     <div class="page-head__split">
       <div class="page-head__title">
-        <p class="eyebrow">Recruit the swarm · for agents and anyone</p>
-        <h1>Put the swarm to work.</h1>
+        <p class="eyebrow">Recruit the swarm · for agents, contracts and anyone</p>
+        <h1>Ask the swarm to forecast any Polymarket market.</h1>
       </div>
-      <p class="lede">Pick any market and pay a $ANTO fee: three colonies forecast it. The fee pays the agents who do the work, never anyone for being right. <a class="what" href="docs.html#recruit">How it works</a></p>
+      <p class="lede">Paste a link, pay <span id="lede-fee">the fee</span>, watch three colonies run it, then check the hash yourself. Or ask for a random value nobody could pick. Workers are paid for the work, never for being right. <a class="what" href="docs.html#recruit">How it works</a></p>
     </div>
+    <nav class="rc-tabs" id="rc-tabs" role="tablist" aria-label="Recruit the swarm">
+      <a role="tab" href="#forecast" id="tab-forecast" aria-controls="tab-forecast-panel" aria-selected="true">Forecast on request</a>
+      <a role="tab" href="#random" id="tab-random" aria-controls="tab-random-panel" aria-selected="false" tabindex="-1">Randomness</a>
+      <a role="tab" href="#agents" id="tab-agents" aria-controls="tab-agents-panel" aria-selected="false" tabindex="-1">Answer as an agent</a>
+    </nav>
   </div>
 
-  <section class="page-section" id="request" aria-labelledby="request-title">
+  <section class="page-section rc-tab" id="tab-forecast-panel" role="tabpanel" aria-labelledby="tab-forecast">
     <div class="container">
       <div class="section-head">
-        <h2 id="request-title">Request a forecast</h2>
-        <span class="chip">testnet · play token</span>
-        <a class="what spacer" href="docs.html#demo">What's real here</a>
-      </div>
-      <p class="section-sub">Your wallet pays the fee and the contract takes it from there. A keeper posts the market's odds (usually within a minute or two), registered forecaster agents then have <span id="win-agents">60 seconds</span> to post their own, and three crank calls run the colonies. Expect a few minutes from request to result. Nothing on this page reads the market's odds from Polymarket: they come from the chain once the keeper has posted them.</p>
-      <div id="paused" class="notice notice--warning" role="status" hidden><p>The contract is paused, so new requests, posts and cranks are refused until the guardian unpauses it.</p></div>
-      <form class="rq-compose" id="form" novalidate>
-        <div class="chamber">
-          <fieldset class="rq-step">
-            <legend class="rq-step__title"><span class="rq-step__n">1</span>Pick a market</legend>
-            <div class="field">
-              <label class="field__label" for="q">Search Polymarket, or paste a market link</label>
-              <input class="input" id="q" type="search" placeholder="fed, bitcoin, oscars…" maxlength="160" spellcheck="false" autocomplete="off" aria-describedby="q-status">
-              <p class="field__hint" id="q-status" role="status" aria-live="polite">Any open market. Markets about violence, deaths or private individuals are refused.</p>
-            </div>
-            <div class="rq-group" id="found-group" hidden>
-              <span class="rq-group__label">Found</span>
-              <div class="option-cards rq-markets" id="found"></div>
-            </div>
-            <div class="rq-group" id="popular-group" hidden>
-              <span class="rq-group__label">Popular on Polymarket right now</span>
-              <div class="option-cards rq-markets" id="popular"></div>
-            </div>
-          </fieldset>
-        </div>
-
-        <aside class="chamber rq-compose__aside rq-summary" aria-labelledby="summary-title">
-          <div class="chamber__header" style="margin: 0"><h3 class="chamber__title" id="summary-title">Your request</h3><span class="eyebrow" id="sum-wallet">no wallet</span></div>
-          <dl class="kv">
-            <dt>Market</dt><dd id="sum-market" role="status" aria-live="polite">Pick a market.</dd>
-            <dt>Outcomes</dt><dd id="sum-outcomes">–</dd>
-            <dt>Your balance</dt><dd id="sum-balance">–</dd>
-          </dl>
-          <div class="fee-split" id="fee"></div>
-          <button class="btn btn--primary btn--lg" type="submit" id="go">Connect wallet to request</button>
-          <p class="rq-summary__fine" id="tx-request" role="status" aria-live="polite"></p>
-          <p class="rq-summary__fine">Refunded in full if the keepers don't agree on the market. <a class="what" href="docs.html#recruit-pay">Who is paid what</a></p>
-        </aside>
-      </form>
-    </div>
-  </section>
-
-  <section class="page-section" id="run" aria-labelledby="run-title" hidden>
-    <div class="container">
-      <div class="section-head">
-        <h2 id="run-title">Request <span class="num" id="req-id">#0</span></h2>
-        <span class="chip" id="req-status">loading</span>
+        <h2 id="forecast-title">Forecast on request</h2>
+        <span class="chip" id="fee-chip">reading the fee…</span>
         <a class="what spacer" href="docs.html#recruit-flow">How a request runs</a>
       </div>
-      <p class="section-sub" id="run-sub"></p>
-      <div class="rq-track">
-        <ol class="rq-track__steps" id="steps"></ol>
-        <p class="rq-track__now" id="now" role="status" aria-live="polite"></p>
-      </div>
-      <div class="chamber" id="act" hidden style="margin-bottom: var(--space-5)">
-        <div class="chamber__header"><h3 class="chamber__title" id="act-title">What is next</h3><span class="eyebrow">anyone can do this</span>
-          <label class="text-xs" title="While this tab is open and a wallet is connected, send each finalize and crank as soon as it is due. Your wallet still approves every call; the keeper daemon makes the same calls."><input type="checkbox" id="auto-crank"> Auto-crank this request</label></div>
-        <div id="act-body"></div>
-        <div id="agent-box"></div>
-        <div id="posts-box"></div>
-        <p class="text-sm" id="tx-run" role="status" aria-live="polite" style="margin: var(--space-3) 0 0"></p>
-      </div>
-      <div class="chamber" id="stake-card" hidden style="margin-bottom: var(--space-5)">
-        <div class="chamber__header"><h3 class="chamber__title">Feed Community</h3><span class="eyebrow" id="stake-when">holders</span></div>
-        <div id="stake-body"></div>
-        <p class="text-sm" id="tx-stake" role="status" aria-live="polite" style="margin: var(--space-3) 0 0"></p>
-      </div>
-      <div class="rq-stage">
-        <div class="chamber rq-colony" id="colony">
-          <div class="rq-thumbs" id="thumbs" role="group" aria-label="The three colonies: pick one to show it large"></div>
-          <div class="rq-colony__head">
-            <h3 id="col-name">Three colonies</h3>
-            <span class="chip" id="col-vote" hidden></span>
-            <span class="rq-colony__by" id="col-by"></span>
-            <p id="col-blurb"></p>
-          </div>
-          <div class="sim-frame">
-            <canvas width="1440" height="960" id="col-canvas" aria-label="The selected colony's map"></canvas>
-            <div class="sim-frame__hud"><span class="sim-frame__tick">tick <strong id="col-tick">0000</strong>/<span id="col-ticks">0300</span></span></div>
-            <p class="rq-colony__empty" id="col-empty">Waiting for the first crank.</p>
-          </div>
-          <div class="cluster" style="margin-top: var(--space-3)"><button class="btn btn--sm btn--ghost" type="button" id="col-replay" hidden>Replay this colony</button><a class="btn btn--sm btn--ghost" id="col-open" hidden>Follow its ants in Replay ↗</a></div>
-          <ul class="share-bars" id="col-bars"></ul>
-          <div id="col-roster-box" hidden style="margin-top: var(--space-4)">
-            <p class="text-xs text-faint" id="col-roster-note" style="margin: 0 0 var(--space-2)"></p>
-            <div id="col-roster"></div>
-          </div>
-        </div>
-        <div class="chamber" id="belief-card">
-          <div class="chamber__header">
-            <h3 class="chamber__title">Swarm belief</h3>
-            <span class="tag-forecast">Forecast · not advice</span>
-          </div>
-          <div id="belief-body"><p class="text-sm text-muted" style="margin: 0">Appears once the keepers' odds are on chain.</p></div>
+      <p class="section-sub">Anyone pays the fee to have three colonies forecast a Polymarket market. A keeper posts the market's odds (usually within a minute or two), registered agents then have <span id="win-agents">60 seconds</span> to post their own, and three crank calls run the colonies. Expect a few minutes from request to result.</p>
+      <div id="paused" class="notice notice--warning" role="status" hidden><p>The contract is paused, so new requests, posts and cranks are refused until the guardian unpauses it.</p></div>
+      <div class="panel rc-ask">
+        <section class="rc-ask__col fc-add" id="add" aria-labelledby="add-h">
+          <h3 class="rc-ask__h" id="add-h">Pick a market</h3>
+          <form id="add-form" novalidate>
+            <div class="field">
+              <label class="field__label" for="add-in">Polymarket link, market ID or search</label>
+              <input class="input" id="add-in" type="search" placeholder="polymarket.com/event/…" autocomplete="off" spellcheck="false" maxlength="200" aria-describedby="add-status">
+              <p class="field__hint" id="add-status" role="status" aria-live="polite">Any open market. Not markets about violence, deaths or private individuals.</p>
+            </div>
+            <ul class="fc-add__hits" id="add-hits" aria-label="Markets found" hidden></ul>
+            <div class="fc-add__pick" id="add-pick" aria-live="polite" hidden></div>
+            <p class="fc-add__cost" id="add-cost">Fee read from the contract…</p>
+            <div class="fee-split" id="add-split"></div>
+            <button class="btn" type="submit" id="add-go" aria-describedby="add-why">Request forecast</button>
+            <p class="why" id="add-why"></p>
+            <p class="fc-add__note" id="add-tx" role="status" aria-live="polite"></p>
+          </form>
+        </section>
+        <div class="rc-ask__col">
+          <h3 class="rc-ask__h">Where the fee goes</h3>
+          <div class="fee-split" id="fee"><p class="text-xs text-faint" style="margin: 0">Reading the contract…</p></div>
+          <p class="text-xs text-faint">Pays keepers, agents and crankers for their work; nobody is paid for being right. Refunded in full if the keepers don't agree on the market. <a class="what" href="docs.html#recruit-pay">Who is paid what</a></p>
         </div>
       </div>
-      <div class="rq-after" id="inputs" hidden>
-        <div class="chamber">
-          <div class="chamber__header"><h3 class="chamber__title">What the colonies read</h3><a class="what" href="docs.html#forecasters">The three forecasters</a></div>
-          <div class="table-wrap">
-            <table class="table" id="inputs-table">
-              <caption>Posted odds, %, as stored on chain. Momentum reads the keepers' odds and their six-hour move; Agents reads the agents' median.</caption>
-              <thead></thead>
-              <tbody></tbody>
-            </table>
-          </div>
+
+      <div class="chamber" id="recent">
+        <div class="chamber__header"><h3 class="chamber__title" id="recent-title">Request history</h3><span class="eyebrow" id="recent-count">…</span><a class="what spacer" id="recent-live" href="live.html#requested">As cards on Forecasts</a></div>
+        <div class="table-wrap">
+          <table class="table" id="recent-table">
+            <caption class="visually-hidden">The newest requested forecasts; each opens on the market page</caption>
+            <thead><tr><th scope="col">#</th><th scope="col">Market</th><th scope="col">Requested by</th><th scope="col">State</th><th scope="col">Swarm leads</th></tr></thead>
+            <tbody><tr><td colspan="5" class="text-xs text-faint">Loading…</td></tr></tbody>
+          </table>
         </div>
-        <div class="chamber">
-          <div class="chamber__header"><h3 class="chamber__title">Who got paid</h3><span class="eyebrow">from the fee</span></div>
-          <div class="table-wrap">
-            <table class="table" id="paid"><caption>$ANTO, for work done. Nobody is paid for being right.</caption><tbody></tbody></table>
-          </div>
-        </div>
+      </div>
+
+      <div class="chamber rc-code">
+        <div class="chamber__header"><h3 class="chamber__title">From code</h3><span class="eyebrow">for agents and scripts</span><a class="what spacer" href="docs.html#recruit-tool">Every command, by role</a></div>
+        <p class="text-sm text-muted"><code>bots/recruit.py</code>, standard library only, as a command line or an MCP server (<code>ask_swarm</code>, <code>post_forecast</code>, <code>verify</code>). The same request, paid from your account's key.</p>
+        <div class="rc-cmds" id="ask-cmds"></div>
       </div>
     </div>
   </section>
 
-  <section class="page-section" id="recent" aria-labelledby="recent-title">
+  <section class="page-section rc-tab" id="tab-random-panel" role="tabpanel" aria-labelledby="tab-random" hidden>
     <div class="container">
       <div class="section-head">
-        <h2 id="recent-title">Recent requests</h2>
-        <span class="chip" id="recent-count">…</span>
-        <a class="what spacer" href="live.html#requested">On the Live page</a>
+        <h2 id="random-title">Randomness</h2>
+        <span class="chip" id="rnd-fee-chip">reading the fee…</span>
+        <a class="what spacer" href="docs.html#random">How it works</a>
       </div>
-      <p class="section-sub">Read from the contract. Open one to follow it, or to re-run its three colonies in your browser and check the hashes.</p>
-      <div class="chamber">
+      <p class="section-sub">A value nobody could pick, the asker included. The contract commits to a drand round that isn't out yet, checks drand's signature on chain once it is, and gives your request its own 32-byte hash. Use it for draws and seeding. The fee is burned.</p>
+      <div class="workbench">
+        <div class="workbench__col">
+          <div class="chamber rnd-stage">
+            <div class="chamber__header">
+              <h3 class="chamber__title" id="rnd-title">Request</h3>
+              <span class="text-xs text-faint" id="rnd-note"></span>
+              <span class="eyebrow" id="rnd-stage">reading the contract…</span>
+            </div>
+            <p id="rnd-empty" class="text-sm text-faint" style="margin: 0">Request a value, or open one from the list below. A request is ready a few seconds after its drand round is published and proven.</p>
+            <ol class="rnd-track" id="rnd-steps" aria-label="Where the request stands" hidden></ol>
+            <div class="rnd-result" id="rnd-result" aria-live="polite" hidden></div>
+            <dl class="rnd-facts" id="rnd-facts" hidden>
+              <div><dt>Asked by</dt><dd id="rnd-by"></dd></div>
+              <div><dt>drand round</dt><dd id="rnd-round"></dd></div>
+              <div><dt>drand randomness</dt><dd id="rnd-rand"></dd></div>
+              <div><dt>Value</dt><dd id="rnd-value"></dd></div>
+            </dl>
+            <div class="rnd-check" id="rnd-verify-box" hidden>
+              <div class="verify-panel__result">
+                <span class="verify-badge" data-state="idle" id="rnd-badge" role="status" aria-live="polite">Not checked</span>
+                <button class="btn btn--sm" type="button" id="rnd-verify">Check against drand</button>
+              </div>
+              <div class="table-wrap" id="rnd-verify-rows" hidden>
+                <table class="table">
+                  <caption class="text-xs text-faint">Re-derived in your browser from drand's own signature for the round.</caption>
+                  <thead><tr><th scope="col">What</th><th scope="col">Chain says</th><th scope="col">Here</th></tr></thead>
+                  <tbody id="rnd-vrows"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="workbench__col workbench__col--sticky">
+          <div class="chamber stack rnd-ask">
+            <div class="chamber__header" style="margin: 0"><h3 class="chamber__title">Ask for a value</h3><span class="eyebrow" id="rnd-fee-line">reading…</span></div>
+            <div class="field">
+              <label class="field__label" for="rnd-choices">Draw a winner among (optional)</label>
+              <textarea class="input" id="rnd-choices" rows="5" spellcheck="false" autocomplete="off" aria-describedby="rnd-choices-hint">Ann
+Bo
+Cy
+Dee</textarea>
+              <span class="field__hint" id="rnd-choices-hint">One name per line, up to 100. The winner is the value mod the number of names, so the same list in the same order always gives the same winner. The list never goes on chain.</span>
+            </div>
+            <div class="cluster">
+              <button class="btn btn--primary" type="button" id="rnd-ask">Request a value</button>
+              <button class="btn btn--sm" type="button" id="rnd-share">Copy share link</button>
+            </div>
+            <span class="text-xs text-faint" id="rnd-share-msg" role="status" aria-live="polite"></span>
+            <p class="text-sm" id="rnd-tx" role="status" aria-live="polite" hidden></p>
+            <p class="text-xs text-faint" style="margin-bottom: 0">Testnet play token. The fee is burned. Nothing real is at stake; a draw is not betting.</p>
+          </div>
+          <div class="chamber stack">
+            <div class="chamber__header" style="margin: 0"><h3 class="chamber__title">From a contract</h3></div>
+            <p class="text-sm text-muted" style="margin-bottom: 0">Call <code>request_randomness</code> cross-contract, then read <code>randomness_value(id)</code> once the round is proven.</p>
+            <a class="text-sm" href="docs.html#random-contract">The code to copy, latency and what you trust →</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="chamber" style="margin-top: var(--space-5)">
+        <div class="chamber__header"><h3 class="chamber__title">Recent values</h3><span class="eyebrow" id="rnd-count"></span></div>
         <div class="table-wrap">
-          <table class="table" id="recent-table">
-            <caption class="visually-hidden">The newest requested forecasts</caption>
-            <thead><tr><th scope="col">#</th><th scope="col">Market</th><th scope="col">Requested by</th><th scope="col">State</th><th scope="col">Swarm leads</th></tr></thead>
-            <tbody><tr><td colspan="5" class="text-xs text-faint">Loading…</td></tr></tbody>
+          <table class="table">
+            <thead><tr><th scope="col">#</th><th scope="col">Asked by</th><th scope="col">drand round</th><th scope="col">Status</th><th scope="col">Value</th></tr></thead>
+            <tbody id="rnd-rows"><tr><td colspan="5" class="text-faint">Reading the contract…</td></tr></tbody>
           </table>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="page-section" id="tool" aria-labelledby="tool-title">
+  <section class="page-section rc-tab" id="tab-agents-panel" role="tabpanel" aria-labelledby="tab-agents" hidden>
     <div class="container">
-      <p class="section-sub" id="tool-title" style="margin: 0">Agents come in through <code>bots/recruit.py</code> (Python standard library only), as a command line or an MCP server, against the same contract. <a href="docs.html#recruit-tool">The agent tool, by role, with the commands to copy →</a></p>
+      <div class="section-head">
+        <h2 id="agents-title">Answer as an agent</h2>
+        <span class="chip" id="ag-deposit">reading the deposit…</span>
+        <a class="what spacer" href="docs.html#agents-colony">The Agents colony</a>
+      </div>
+      <p class="section-sub">Forecaster agents post their own odds on each request, and on each round's markets; the Agents colony reads their median. Registering locks a refundable deposit. Posting on time earns a share of the agents' pool from the fee; being right earns nothing.</p>
+      <div class="rc-agents">
+        <div class="chamber stack">
+          <div class="chamber__header" style="margin: 0"><h3 class="chamber__title">You</h3><span class="eyebrow" id="ag-who">no wallet</span></div>
+          <div id="ag-me"></div>
+          <p class="text-sm" id="tx-agent" role="status" aria-live="polite" style="margin: 0"></p>
+        </div>
+        <div class="chamber stack">
+          <div class="chamber__header" style="margin: 0"><h3 class="chamber__title">Open for posts now</h3><span class="eyebrow">requests</span></div>
+          <ul class="rc-open" id="ag-open"><li class="text-sm text-faint">Reading the chain…</li></ul>
+          <p class="text-xs text-faint" id="ag-count" style="margin: 0"></p>
+        </div>
+      </div>
     </div>
   </section>
 </main>
@@ -171,38 +202,31 @@
 <div id="footer"></div>
 
 <script type="module">
-import { trailShares } from "../sim/js/antosim.mjs";
-import { ColonyView } from "./ds/colony-view.mjs";
-import { ColonyThumb } from "./ds/colony-thumb.mjs";
-import { GLYPHS, KIND_BLURB, KIND_NAMES } from "./round.mjs";
 import { walletHue } from "./ds/staker-ants.mjs";
-import {
-  CRANK_CALLS, tokens, parseConfig, feePools, cranked, isOver, forecastersOf, countedOf, verifyRequest, payoutRows,
-  due, agentsMayPost, timeline, SHORT, marketOdds, readOdds, recentRequests, findRequest, failureOf,
-  stakingOpen, stakesLocked, stakesOf,
-} from "./recruit.mjs";
-import { search, readMarket, hit, slugOk, GAMMA } from "./polymarket.mjs";
-import { chain, wallet, ensureTokens, contractId, yocto } from "./chain.mjs";
-import { createAutoCrank } from "./autocrank.mjs";
-import { $, esc, pad4, hashHTML, installCopy, liveShares, shareBars, beliefBoard, topbar, footer, stakerRoster } from "./ui.mjs";
+import { tokens, parseConfig, feeSplitHTML, agentsMayPost, recentRequests, failureOf, commands } from "./recruit.mjs";
+import { chain, wallet, ensureTokens, contractId } from "./chain.mjs";
+import { liveHref, requestHref } from "./lv.mjs";
+import { mountRandom } from "./randompanel.mjs";
+import { mountAddMarket } from "./addmarket.mjs";
+import { $, esc, installCopy, topbar, footer } from "./ui.mjs";
+import { loadRound, slugTitle } from "./roundchain.mjs";
 
 $("topbar").outerHTML = topbar("recruit");
 $("footer").outerHTML = footer();
 installCopy();
 
 const CONTRACT = contractId();
-const POLL_MS = 4000;
-const LIVE_TPS = 12;           // a colony replays at 1× (12 ticks/s); faster speeds are on the replay page
+const RECENT = 20;             // requests in the history, and where the agents' list looks
 const pct = (b) => (b / 100).toFixed(1);
 const walletHTML = (id) => `<span class="wallet" style="--wallet-hue: ${walletHue(id)}">${esc(id)}</span>`;
 const optHTML = (labels, o) => `<span class="opt" data-opt="${o}">${esc(labels[o])}</span>`;
 const mmss = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const STATUS = { odds: "keepers posting", forecasting: "agents posting", running: "cranking", done: "✓ done", skipped: "skipped · refunded" };
+const cmdHTML = (t) => `<pre class="cmd"><code>${esc(t)}</code><button class="hash__copy" type="button" aria-label="Copy the command" data-copy="${esc(t)}"></button></pre>`;
 
-// pick: the market a request would name (slug, title, outcome labels).
-const state = { pick: null, hits: [], cfg: null, keepers: [], quorum: 1, balance: null, isAgent: false, list: [], paused: false };
-// cur: the request being followed. built[k]: colony k re-run in this browser.
-let cur = null, built = [], pollTimer = 0, tickTimer = 0, lastSig = "", replay = null;
+// list: the newest requests, oldest first (loaded: read at least once).
+const state = { cfg: null, balance: null, isAgent: false, list: [], loaded: false, paused: false };
 
 const showError = (el, e) => {
   el.dataset.state = "bad";
@@ -210,163 +234,34 @@ const showError = (el, e) => {
 };
 const showNote = (el, html) => { el.dataset.state = ""; el.innerHTML = html; };
 
-// ---- Config, fee split and the wallet ----
+$("recent-live").href = liveHref("#requested");
+
+// ---- Config, fee split, commands and the wallet ----
 
 function renderFee() {
-  const p = feePools(state.cfg), fee = state.cfg.fee, part = (x) => Number((x * 1000n) / fee);
-  const parts = [
-    ["keepers", "Keepers", p.keepers, "split among the keepers whose odds were accepted"],
-    ["agents", "Forecaster agents", p.agents, "split among on-time posts; the treasury's if none"],
-    ["crank", "Crankers", p.crank, `${tokens(state.cfg.crankBounty)} per call × ${CRANK_CALLS} calls`],
-    ["treasury", "Treasury", p.treasury, "the rest, rounding dust included"],
-  ];
-  $("fee").innerHTML = `<div class="fee-split__head"><span>Fee <b class="num">${tokens(fee)}</b> $ANTO</span><span class="chip">from the contract</span></div>` +
-    `<div class="fee-split__bar" aria-hidden="true">${parts.map(([k, , x]) => `<span data-fee="${k}" style="--part: ${part(x)}"></span>`).join("")}</div>` +
-    `<ul class="fee-split__key">${parts.map(([k, label, x, note]) =>
-      `<li data-fee="${k}"><span>${label}</span><span class="num">${tokens(x)}</span><small>${note}</small></li>`).join("")}</ul>`;
-  $("win-agents").textContent = `${Math.round(state.cfg.forecastWindowMs / 1000)} seconds`;
+  const c = state.cfg;
+  $("fee").innerHTML = feeSplitHTML(c);
+  $("fee-chip").textContent = `fee ${tokens(c.fee)} $ANTO`;
+  $("lede-fee").textContent = `${tokens(c.fee)} $ANTO`;
+  $("win-agents").textContent = `${Math.round(c.forecastWindowMs / 1000)} seconds`;
+  $("ag-deposit").textContent = `${tokens(c.agentDeposit)} $ANTO deposit, refundable`;
+}
+
+// The agent tool's lines for the connected account, or a placeholder one.
+function renderCmds() {
+  const c = commands(CONTRACT, wallet.accountId ?? "you.testnet", "MARKET-SLUG");
+  $("ask-cmds").innerHTML = cmdHTML(c.askSend) + cmdHTML(c.mcp);
 }
 
 async function loadWallet() {
   const a = wallet.accountId;
-  $("sum-wallet").textContent = a ?? "no wallet";
   state.balance = null; state.isAgent = false;
   if (a) {
     try { [state.balance, state.isAgent] = await Promise.all([chain.balance(a), chain.isAgent(a)]); } catch { /* shown as unknown */ }
   }
-  $("sum-balance").innerHTML = !a ? `<span class="text-faint">connect a wallet</span>`
-    : state.balance == null ? `<span class="text-faint">unknown</span>`
-    : state.balance === 0n && !(await chain.hasClaimed(a).catch(() => true)) ? `0 <span class="text-xs text-faint">· the first request claims your free play tokens</span>`
-    : `<b class="num">${tokens(state.balance)}</b> $ANTO`;
-  syncGo();
-  if (cur) { lastSig = ""; renderAct(); stakeSig = ""; if (cur.r) renderStake(cur.r); }
+  renderCmds();
+  renderAgents();
 }
-
-function syncGo() {
-  const a = wallet.accountId;
-  $("go").disabled = !!a && !state.pick;
-  $("go").textContent = !a ? "Connect wallet to request" : state.cfg ? `Request for ${tokens(state.cfg.fee)} $ANTO` : "Request";
-}
-
-// ---- Step 1: pick a market ----
-
-const marketCardHTML = (value, { topic, title, id, body, why = "", checked = false }) =>
-  `<label class="option-card market-card"><input type="radio" name="market" value="${esc(value)}"${checked ? " checked" : ""}${why ? " disabled" : ""}>` +
-  `<span class="text-xs text-faint">${esc(topic)}</span>` +
-  `<span class="option-card__value">${esc(title)}</span>${body}<code>${esc(id)}</code>` +
-  (why ? `<span class="market-card__why">✗ Refused: ${esc(why)}</span>` : "") + `</label>`;
-
-const ends = (iso) => (iso ? ` · ends ${new Date(iso).toISOString().slice(0, 10)}` : "");
-const cardsHTML = (hits, prefix) => hits.map((h, i) => marketCardHTML(`${prefix}${i}`, {
-  topic: `${h.topic}${ends(h.endDate)}`, title: h.title, id: h.slug, why: h.why ?? "",
-  body: `<span class="text-xs text-faint">${h.outcomes || "?"} outcomes${h.question ? ` · forecasts the main question: ${esc(h.question)}` : ""}</span>`,
-})).join("");
-
-const Q_HINT = $("q-status").textContent;
-let searchAbort = null, readAbort = null, searchTimer = 0, popular = [];
-
-function renderHits() {
-  $("found-group").hidden = !state.hits.length;
-  $("found").innerHTML = cardsHTML(state.hits, "h");
-}
-
-// A pasted polymarket.com/event/<slug> link, or a bare slug.
-const slugOf = (q) => {
-  const m = /polymarket\.com\/(?:[a-z]{2}\/)?event\/([a-z0-9-]+)/i.exec(q);
-  const s = (m ? m[1] : q).toLowerCase();
-  return m || (/^[a-z0-9-]{8,}$/.test(s) && s.includes("-")) ? s : null;
-};
-
-async function runSearch(q) {
-  searchAbort?.abort();
-  if (q.length < 2) { state.hits = []; renderHits(); $("q-status").textContent = Q_HINT; return; }
-  searchAbort = new AbortController();
-  $("q-status").textContent = "Searching Polymarket…";
-  try {
-    const slug = slugOf(q);
-    if (slug && slugOk(slug)) {
-      const r = await fetch(`${GAMMA}/events?${new URLSearchParams({ slug })}`, { signal: searchAbort.signal });
-      const found = r.ok ? await r.json() : [];
-      state.hits = found.length ? [hit(found[0])] : [];
-    } else {
-      state.hits = await search(fetch, q, { signal: searchAbort.signal });
-    }
-    const ok = state.hits.filter((h) => !h.why).length;
-    $("q-status").textContent = state.hits.length
-      ? `${state.hits.length} open market${state.hits.length === 1 ? "" : "s"}, ${ok} you can request.`
-      : "No open market matches.";
-  } catch (e) {
-    if (e.name === "AbortError") return;
-    state.hits = [];
-    $("q-status").textContent = `Search failed: ${e.message}.`;
-  }
-  renderHits();
-}
-
-async function loadPopular() {
-  try {
-    const qs = new URLSearchParams({ closed: "false", active: "true", limit: "16", order: "volume24hr", ascending: "false" });
-    const r = await fetch(`${GAMMA}/events?${qs}`);
-    if (!r.ok) return;
-    popular = (await r.json()).filter((e) => e.slug).map(hit).filter((h) => !h.why).slice(0, 6);
-    $("popular-group").hidden = !popular.length;
-    $("popular").innerHTML = cardsHTML(popular, "p");
-  } catch { /* the search still works */ }
-}
-
-// The newest request for this market that isn't skipped, from the recent list.
-const existingFor = (slug) => [...state.list].reverse().find((r) => r.market_id === slug && r.phase !== "skipped");
-
-function setPick(p, note = "") {
-  state.pick = p;
-  $("sum-market").innerHTML = p ? `${esc(p.title)}<br><code class="text-xs text-faint">${esc(p.slug)}</code>` : esc(note || "Pick a market.");
-  $("sum-outcomes").innerHTML = !p ? "–"
-    : p.outcomes.map((o, i) => optHTML(p.outcomes, i)).join(" ") + `<br><span class="text-xs text-faint">the keepers post the odds on chain</span>`;
-  const ex = p && existingFor(p.slug);
-  if (ex) showNote($("tx-request"), `Request <a href="#request-${ex.id}">#${ex.id}</a> already asks about this market (${esc(ex.phase)}). Open it, or pay again for a fresh run.`);
-  else showNote($("tx-request"), "");
-  syncGo();
-}
-
-// Read the market the way a keeper does, only to check it would not be
-// refused (and to name its outcomes). Its odds are not shown or used.
-async function pickHit(h, input) {
-  readAbort?.abort();
-  readAbort = new AbortController();
-  setPick(null, `Checking ${h.title} the way a keeper does…`);
-  try {
-    const r = await readMarket(fetch, h.slug, Date.now(), { signal: readAbort.signal });
-    if (r.why) {
-      h.why = r.why;
-      input.checked = false;
-      renderHits();
-      setPick(null, `Keepers would refuse ${h.title}: ${r.why}. Pick another market.`);
-      return;
-    }
-    setPick({ slug: h.slug, title: h.title, outcomes: r.post.outcomes });
-  } catch (e) {
-    if (e.name === "AbortError") return;
-    setPick(null, `Couldn't check ${h.title}: ${e.message}.`);
-  }
-}
-
-$("q").addEventListener("input", (e) => {
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => runSearch(e.target.value.trim()), 350);
-});
-$("q").addEventListener("keydown", (e) => {
-  if (e.key !== "Enter") return;
-  e.preventDefault();
-  clearTimeout(searchTimer);
-  runSearch(e.target.value.trim());
-});
-$("form").addEventListener("change", (e) => {
-  if (e.target.name !== "market") return;
-  const v = e.target.value, list = v[0] === "p" ? popular : state.hits;
-  pickHit(list[+v.slice(1)], e.target);
-});
-
-// ---- Requesting: the connected wallet pays the fee ----
 
 async function until(test, ms = 30_000, step = 1500) {
   const end = Date.now() + ms;
@@ -385,310 +280,14 @@ async function send(method, args, opts) {
   return out;
 }
 
-const AUTO_GAS = { finalize_request_odds: 30, crank_request: 100 };
-const auto = createAutoCrank({
-  next: () => {
-    const step = wallet.accountId && cur?.r && !isOver(cur.r) ? due(cur.r, Date.now(), state.keepers) : null;
-    return step in AUTO_GAS ? { method: step, args: { request_id: cur.r.id }, gasTgas: AUTO_GAS[step], label: step.replace(/_/g, " ") } : null;
-  },
-  send: (s) => send(s.method, s.args, { gasTgas: s.gasTgas }),
-  refresh: () => refresh(),
-  say: (t) => showNote($("tx-run"), t),
-  wait: sleep,
-});
-$("auto-crank").addEventListener("change", async (e) => {
-  if (e.target.checked && !wallet.accountId) {
-    e.target.checked = false;
-    try { await wallet.connect(); } catch (err) { showError($("tx-run"), err); }
-    return;
-  }
-  await auto.set(e.target.checked);
-  e.target.checked = auto.on;
-});
+// ---- Agents: register, unregister, and the requests open for posts ----
 
-$("form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const out = $("tx-request"), btn = $("go");
-  if (!wallet.accountId) {
-    try { await wallet.connect(); } catch (err) { showError(out, err); }
-    return;
-  }
-  if (!state.pick) return;
-  btn.disabled = true;
-  try {
-    const me = wallet.accountId, fee = state.cfg.fee;
-    if (state.paused || await chain.paused()) throw new Error("the contract is paused");
-    showNote(out, "Checking your balance…");
-    if (await ensureTokens(me)) showNote(out, "Claimed your free play tokens. Waiting for them to land…");
-    const have = await until(async () => { const b = await chain.balance(me); return b >= fee ? b : null; }, 30_000);
-    if (!have) throw new Error(`you need ${tokens(fee)} $ANTO to request and have ${tokens(await chain.balance(me))}`);
-    const before = await chain.requestCount();
-    showNote(out, "Approve the request in your wallet…");
-    await send("request_forecast", { market_id: state.pick.slug }, { gasTgas: 30 });
-    showNote(out, "Sent. Waiting for the request to show on chain…");
-    const r = await until(() => findRequest(state.pick.slug, me, Math.max(0, before - 1)), 30_000);
-    if (!r) throw new Error("the transaction went through but the request isn't visible yet; check Recent requests below");
-    showNote(out, `Requested as #${r.id}.`);
-    location.hash = `#request-${r.id}`;
-    loadWallet();
-  } catch (err) {
-    showError(out, err);
-  } finally {
-    btn.disabled = false;
-    syncGo();
-  }
-});
-
-// ---- The run: one colony large, all three as thumbnails ----
-
-$("thumbs").innerHTML = KIND_NAMES.map((name, k) =>
-  `<button class="rq-thumb" type="button" data-k="${k}" aria-pressed="false" disabled>` +
-  `<canvas width="216" height="144" aria-hidden="true"></canvas><b>${name}</b><span data-r="state">crank ${k + 1}</span></button>`).join("");
-const thumbs = [...$("thumbs").children].map((btn) => ({
-  btn, state: btn.querySelector('[data-r="state"]'),
-  view: new ColonyThumb(btn.querySelector("canvas"), { glyphs: GLYPHS }),
-}));
-const stage = { view: new ColonyView($("col-canvas"), { labels: [], glyphs: GLYPHS }), k: -1, col: null, busy: false, bars: null };
-const colRoster = stakerRoster($("col-roster"), (w) => { stage.view.spotlight = w; stage.busy = true; });
-stage.view.selected = -1; // no ant followed here
-
-const SITS_OUT = ["", "Nobody staked on this request during the agents' window, so it sits out of the swarm belief.", "No agent posted, so it sits out of the swarm belief."];
-
-function thumbState(k) {
-  const t = thumbs[k], b = built[k], r = cur?.r;
-  t.btn.disabled = !b;
-  t.btn.dataset.state = b ? "done" : "";
-  if (!b) { t.state.textContent = r?.phase === "skipped" ? "skipped" : `crank ${k + 1}`; return; }
-  const sh = trailShares(b.res), w = b.res.winner_option, out = countedOf(r)[k] ? "" : " · out";
-  t.state.innerHTML = `${b.match ? "✓" : "✗"} ${optHTML(r.market.outcomes, w)} ${pct(sh[w])}%${out}`;
-}
-
-// Colony k re-run in this browser once the chain has its hash: fast-forward
-// to the last tick, keep the result and whether its hash matches the chain's.
-function buildColony(r, k, fs) {
-  const col = fs[k].make();
-  thumbs[k].view.setStakers(fs[k].stakers);
-  thumbs[k].view.attach(col);
-  while (col.step()) thumbs[k].view.afterStep();
-  const res = col.result();
-  built[k] = { res, match: res.hash === r.colony_hashes[k] };
-  thumbs[k].view.draw(1);
-  thumbState(k);
-}
-
-function showColony(k) {
-  const r = cur.r, f = cur.fs[k];
-  stage.k = k; replay = null;
-  thumbs.forEach((t, j) => t.btn.setAttribute("aria-pressed", String(j === k)));
-  $("col-name").textContent = f.name;
-  const counted = countedOf(r)[k];
-  $("col-blurb").textContent = `${KIND_BLURB[k]} ${counted ? "" : SITS_OUT[k]}`;
-  $("col-by").innerHTML = r.crankers[k] ? `cranked by ${walletHTML(r.crankers[k])}` : "";
-  $("col-vote").hidden = false;
-  $("col-vote").textContent = counted ? "votes" : "sits out";
-  $("col-empty").hidden = true;
-  $("col-replay").hidden = false;
-  $("col-open").hidden = false;
-  $("col-open").href = `replay.html?request=${r.id}&colony=${encodeURIComponent(f.key)}`;
-  // Staker ants on Community, agent ants on Agents: tinted on the map, with a
-  // roster that lights up one wallet's or agent's ants.
-  stage.view.setStakers(f.stakers);
-  $("col-roster-box").hidden = !f.stakers?.total;
-  $("col-roster-note").innerHTML = f.stakers?.kind === "agent"
-    ? "Each forecaster agent's ants hatch in its colour, an equal share each, since the median weighs every post the same. Hover an agent to light up its ants."
-    : "Each wallet's stake on this request spawns ants in its colour. Hover a wallet to light up its ants.";
-  colRoster(f.stakers, r.market.outcomes);
-  const c = f.make();
-  stage.view.attach(c);
-  while (c.step()) stage.view.afterStep(false);
-  stage.col = c;
-  stage.view.labels = r.market.outcomes;
-  stage.bars = shareBars($("col-bars"), r.market.outcomes);
-  stage.bars(trailShares(built[k].res).map((x) => x / 100), built[k].res.winner_option);
-  $("col-ticks").textContent = pad4(c.ticks);
-  $("col-tick").textContent = pad4(c.t);
-  stage.busy = true;
-}
-
-$("thumbs").addEventListener("click", (e) => {
-  const b = e.target.closest(".rq-thumb");
-  if (b && !b.disabled) showColony(+b.dataset.k);
-});
-
-$("col-replay").addEventListener("click", () => {
-  if (stage.k < 0) return;
-  const c = cur.fs[stage.k].make();
-  stage.view.attach(c);
-  stage.col = c;
-  stage.bars(new Array(cur.r.market.outcomes.length).fill(0));
-  replay = { started: performance.now(), frac: 1 };
-  $("col-tick").textContent = pad4(0);
-  stage.busy = true;
-});
-
-function frame(now) {
-  requestAnimationFrame(frame);
-  if (!replay || stage.k < 0 || !stage.col) {
-    if (stage.busy && stage.col) stage.busy = stage.view.draw(1, now);
-    return;
-  }
-  const c = stage.col, exact = Math.min(c.ticks, ((now - replay.started) / 1000) * LIVE_TPS), target = Math.floor(exact);
-  if (c.t < target) {
-    while (c.t < target) { c.step(); stage.view.afterStep(true); }
-    stage.bars(liveShares(c).pct);
-    $("col-tick").textContent = pad4(c.t);
-  }
-  replay.frac = c.t < c.ticks ? exact - target : 1;
-  const busy = stage.view.draw(replay.frac, now);
-  if (c.t === c.ticks) {
-    const res = c.result();
-    stage.bars(trailShares(res).map((x) => x / 100), res.winner_option);
-    if (!busy) replay = null;
-  }
-}
-
-// ---- Following one request ----
-
-function liveSwarm(r) {
-  const n = r.market.outcomes.length, counted = countedOf(r);
-  const sh = built.map((b, j) => (b && counted[j] ? trailShares(b.res) : null)).filter(Boolean);
-  if (!sh.length) return new Array(n).fill(0);
-  return Array.from({ length: n }, (_, o) => Math.round(sh.reduce((a, s) => a + s[o], 0) / sh.length));
-}
-
-const STATUS = { odds: "keepers posting", forecasting: "agents posting", running: "cranking", done: "✓ done", skipped: "skipped · refunded" };
-
-function renderBelief(r) {
-  const labels = r.market?.outcomes;
-  if (!labels) return;
-  const key = `${r.id}:${labels.join("|")}`;
-  if (cur.beliefKey !== key) {
-    cur.beliefKey = key;
-    $("belief-body").innerHTML = `<ul class="belief" id="belief"></ul>
-      <div class="cluster" style="justify-content: space-between; margin-top: var(--space-5)">
-        <ul class="belief-key"><li class="belief-key__swarm">swarm belief</li><li class="belief-key__market">market odds on chain</li></ul>
-        <span class="chip" id="belief-status"></span>
-      </div>
-      <div id="result" style="margin-top: var(--space-4)"></div>`;
-    cur.board = beliefBoard($("belief"), labels, r.market.odds);
-    cur.board(labels.map(() => 0));
-  }
-  const done = r.phase === "done";
-  cur.board(done ? r.swarm : liveSwarm(r));
-  $("belief-status").textContent = done ? "✓ final, from the chain" : cranked(r) ? `${cranked(r)} of ${CRANK_CALLS} colonies` : `0 of ${CRANK_CALLS} colonies`;
-}
-
-function renderResult(r) {
-  const el = $("result");
-  if (!el) return;
-  if (r.phase !== "done") { el.innerHTML = ""; cur.resultKey = ""; return; }
-  if (cur.resultKey === "done") return;
-  cur.resultKey = "done";
-  el.innerHTML = `<dl class="kv"><dt>Market hash</dt><dd>${hashHTML(r.market_hash, "market hash")}</dd><dt>Seed</dt><dd>${hashHTML(r.seed, "request seed")}</dd></dl>
-    <div class="verify-panel__result" style="margin-top: var(--space-4)"><button class="btn btn--sm" type="button" id="verify">Verify from seed</button>
-    <span class="verify-badge" data-state="idle" id="badge" role="status" aria-live="polite">Not verified</span></div>
-    <p class="text-xs text-faint" style="margin: var(--space-4) 0 0">Verify re-runs all three colonies here from the seed and the odds on chain, and compares each colony hash, the market hash and the swarm belief with the contract's. The seed is the NEAR block's random seed at the first crank, a stand-in for the drand round. Pick any colony above the map to see it again.</p>`;
-  $("verify").addEventListener("click", () => {
-    const b = $("badge"), id = cur.r.id;
-    b.dataset.state = "pending";
-    b.textContent = "Re-running three colonies…";
-    setTimeout(() => {
-      const v = verifyRequest(cur.r);
-      if (cur.r.id !== id) return;
-      b.dataset.state = v.ok ? "match" : "mismatch";
-      b.textContent = v.ok ? "Match: all colony hashes, the market hash and the swarm belief" : `Mismatch: ${[
-        ...v.colonies.filter((c) => !c.match).map((c) => `${c.name} hash`),
-        ...(v.market && !v.market.match ? ["market hash"] : []), ...(v.swarm === false ? ["swarm belief"] : []),
-        ...(!v.oddsHash ? ["odds snapshot hash"] : []), ...(!v.agentsHash ? ["agent snapshot hash"] : []),
-      ].join(", ")}`;
-    }, 30);
-  });
-}
-
-function renderInputs(r) {
-  const m = r.market;
-  $("inputs").hidden = !m;
-  if (!m) return;
-  const labels = m.outcomes;
-  const head = `<tr><th scope="col">Posted by</th>${labels.map((_, o) => `<th scope="col" class="num">${optHTML(labels, o)}</th>`).join("")}</tr>`;
-  const line = (who, xs) => `<tr><th scope="row">${who}</th>${xs.map((x) => `<td class="num">${pct(x)}</td>`).join("")}</tr>`;
-  const kept = m.raw_hashes.map(([k, h]) =>
-    `<tr><th scope="row">${walletHTML(k)}</th><td colspan="${labels.length}" class="text-xs">raw Polymarket response hash ${hashHTML(h, "keeper raw hash")}</td></tr>`).join("");
-  const ags = r.agents ?? cur.preview;
-  const agentRows = ags?.posts?.length
-    ? ags.posts.map(([id, odds]) => line(walletHTML(id), odds)).join("") + line(`<b>Agents colony</b> · agent median${r.agents ? "" : " so far"}`, ags.odds)
-    : `<tr><th scope="row"><b>Agents colony</b></th><td colspan="${labels.length}" class="text-xs text-faint">${r.phase === "forecasting" ? "no agent has posted yet" : "no agent posted: an even map, zero snapshot hash"}</td></tr>`;
-  $("inputs-table").querySelector("thead").innerHTML = head;
-  $("inputs-table").querySelector("tbody").innerHTML = kept +
-    line("<b>Market odds</b> · keeper median", m.odds) + line("<b>Six hours earlier</b> · keeper median", m.odds_6h) + agentRows +
-    `<tr><th scope="row">Odds snapshot hash</th><td colspan="${labels.length}">${hashHTML(m.odds_hash, "odds snapshot hash")}</td></tr>`;
-}
-
-const ROLE = { keeper: "Keeper", agent: "Agent", cranker: "Cranker", treasury: "Treasury", refund: "Refunded to requester" };
-function renderPaid(r) {
-  const rows = payoutRows(r), tb = $("paid").querySelector("tbody");
-  if (!rows.length) { tb.innerHTML = `<tr><td colspan="3" class="text-xs text-faint">Paid once the third colony is cranked.</td></tr>`; return; }
-  const by = new Map();
-  for (const p of rows) {
-    const key = p.role === "treasury" ? "treasury" : `${p.role} ${p.account}`;
-    const e = by.get(key) ?? { ...p, amount: 0n, calls: 0 };
-    e.amount += p.amount; e.calls += p.role === "cranker" ? 1 : 0;
-    by.set(key, e);
-  }
-  const total = rows.reduce((a, p) => a + p.amount, 0n);
-  tb.innerHTML = [...by.values()].map((e) => `<tr><th scope="row">${ROLE[e.role]}${e.calls ? ` · ${e.calls} call${e.calls === 1 ? "" : "s"}` : ""}</th>` +
-    `<td>${e.account ? walletHTML(e.account) : "treasury"}</td><td class="num">${tokens(e.amount, 4)}</td></tr>`).join("") +
-    `<tr><th scope="row">Total</th><td></td><td class="num"><b>${tokens(total)}</b></td></tr>`;
-}
-
-function renderSteps(r) {
-  const list = timeline(r, state.cfg, Date.now());
-  const sig = list.map((s) => s.state).join(",") + r.keepers_posted.length + r.crankers.join();
-  if (sig === cur.stepsSig) return;
-  cur.stepsSig = sig;
-  const at = Math.max(0, list.findIndex((s) => s.state === "now"));
-  $("steps").innerHTML = list.map((s) =>
-    `<li data-state="${s.state}" title="${esc(`${s.title}: ${s.text}`)}">` +
-    `<span class="rq-track__dot" aria-hidden="true"></span><span>${esc(SHORT[s.key] ?? s.title.replace(/^Crank \d+: /, ""))}</span></li>`).join("");
-  const strip = $("steps"), c = strip.children[Math.min(at, list.length - 1)];
-  if (c) strip.scrollLeft = c.offsetLeft - (strip.clientWidth - c.offsetWidth) / 2;
-}
-
-// The line under the steps, with a live countdown.
-function renderNow() {
-  if (!cur) return;
-  const r = cur.r, now = Date.now(), n = cranked(r);
-  let t;
-  if (r.phase === "odds") {
-    const k = state.keepers.length;
-    t = `<b>Waiting for the keepers.</b> ${r.keepers_posted.length} of ${k} keeper${k === 1 ? "" : "s"} posted${r.keepers_posted.length ? "" : " yet"}. The odds are accepted once every keeper has posted or the window closes (${mmss(r.odds_by_ms - now)} left); if too few agree, the request is skipped and refunded.`;
-  } else if (r.phase === "forecasting") {
-    t = now < r.forecast_by_ms
-      ? `<b>Agents' window is open.</b> Registered forecaster agents can post their own odds for ${mmss(r.forecast_by_ms - now)} more. The odds are final: ${r.market.outcomes.map((o, i) => `${esc(o)} ${pct(r.market.odds[i])}%`).join(", ")}.`
-      : `<b>The window has closed.</b> Next: crank 1 of ${CRANK_CALLS} draws the seed and runs the ${KIND_NAMES[0]} colony.`;
-  } else if (r.phase === "running") {
-    t = `<b>${n} of ${CRANK_CALLS} colonies have run.</b> Next: crank ${n + 1}, the ${KIND_NAMES[n]} colony.`;
-  } else if (r.phase === "done") {
-    t = `<b>Done.</b> All three colonies have run on the contract and the swarm belief is stored.`;
-  } else {
-    t = `<b>Skipped.</b> Too few keepers agreed on this market, so nothing ran. The ${tokens(r.fee)} $ANTO fee went back to ${walletHTML(r.requester)}.`;
-  }
-  $("now").innerHTML = t;
-}
-
-// ---- What is next: finalize, crank, agent form ----
-
-function actionBtn(id, label) { return `<button class="btn btn--primary" type="button" id="${id}">${label}</button>`; }
-
-async function act(el, label, fn) {
-  const out = $("tx-run");
+async function act(el, label, fn, out) {
   el.disabled = true;
   try {
     showNote(out, `${label}: approve it in your wallet…`);
     await fn();
     showNote(out, `${label}: sent.`);
-    await refresh();
-    for (let i = 0; i < 3; i++) { await sleep(2500); await refresh(); }
   } catch (e) {
     showError(out, e);
   } finally {
@@ -696,305 +295,172 @@ async function act(el, label, fn) {
   }
 }
 
-function renderAct() {
-  const r = cur.r, me = wallet.accountId, now = Date.now();
-  const step = due(r, now, state.keepers);
-  const mayPost = agentsMayPost(r, now);
-  const sig = [r.id, r.phase, cranked(r), step, mayPost, me, state.isAgent, r.market?.outcomes.join("|")].join("~");
-  $("act").hidden = isOver(r);
-  if (isOver(r) || sig === lastSig) return;
-  lastSig = sig;
-  const body = [];
-  if (step === "finalize_request_odds") {
-    body.push(`<p class="text-sm">The keepers' window is over (or every keeper has posted). Anyone can accept the odds. The keeper daemon does this too.</p>${me ? actionBtn("do-final", "Finalize the odds") : connectLine()}`);
-  } else if (step === "crank_request") {
-    const n = cranked(r);
-    body.push(`<p class="text-sm"><b>Crank ${n + 1} of ${CRANK_CALLS}:</b> runs the ${KIND_NAMES[n]} colony on the contract${n === 0 ? " and draws the seed" : ""}, and pays the cranker ${tokens(state.cfg.crankBounty)} $ANTO from the fee. The keeper daemon cranks too; the first call to land wins.</p>${me ? actionBtn("do-crank", `Crank ${n + 1}: ${KIND_NAMES[n]}`) : connectLine()}`);
-  } else if (r.phase === "odds") {
-    body.push(`<p class="text-sm text-muted">Nothing to do yet: keepers are allow-listed accounts. Once the odds are final, registered forecaster agents can post theirs.</p>`);
-  } else if (mayPost) {
-    body.push(`<p class="text-sm text-muted">The agents' window is open. The crank calls begin when it closes.</p>`);
-  }
-  $("act-body").innerHTML = body.join("");
-  $("act-title").textContent = step === "finalize_request_odds" ? "Finalize the odds" : step === "crank_request" ? "Crank the colonies" : r.phase === "forecasting" ? "Post your forecast" : "What is next";
-  $("do-final")?.addEventListener("click", (e) => act(e.target, "Finalize", () => send("finalize_request_odds", { request_id: r.id }, { gasTgas: 30 })));
-  $("do-crank")?.addEventListener("click", (e) => act(e.target, "Crank", () => send("crank_request", { request_id: r.id }, { gasTgas: 100 })));
-  renderAgentBox(r, mayPost);
-  $("act").hidden = !body.length && !$("agent-box").innerHTML;
+async function registerAgent(me) {
+  if (await ensureTokens(me)) await until(async () => (await chain.balance(me)) > 0n, 20_000);
+  const bal = await chain.balance(me);
+  if (bal < state.cfg.agentDeposit) throw new Error(`the deposit is ${tokens(state.cfg.agentDeposit)} $ANTO and you have ${tokens(bal)}`);
+  await send("register_agent", {}, { gasTgas: 30 });
+  await until(async () => (await chain.isAgent(me)) || null, 15_000);
+  await loadWallet();
+  loadAgents();
 }
 
-const connectLine = () => `<p class="text-sm text-faint">Connect a wallet (top right) to do this yourself.</p>`;
+async function unregisterAgent(me) {
+  await send("unregister_agent", {}, { gasTgas: 30 });
+  await until(async () => !(await chain.isAgent(me)) || null, 15_000);
+  await loadWallet();
+  loadAgents();
+}
 
-function renderAgentBox(r, mayPost) {
-  const box = $("agent-box"), me = wallet.accountId;
-  if (r.phase !== "forecasting" || !mayPost) { box.innerHTML = ""; return; }
-  const labels = r.market.outcomes;
-  if (!me) { box.innerHTML = `<h4 style="margin: var(--space-4) 0 var(--space-2)">Post your own odds</h4><p class="text-sm text-muted">Forecaster agents post their own odds into the Agents colony. Connect a wallet to register as one (a ${tokens(state.cfg.agentDeposit)} $ANTO refundable deposit), or use <a href="docs.html#recruit-tool">the agent tool</a>.</p>`; return; }
+function renderAgents() {
+  const me = wallet.accountId, box = $("ag-me"), dep = state.cfg ? `${tokens(state.cfg.agentDeposit)} $ANTO` : "a";
+  $("ag-who").textContent = me ?? "no wallet";
+  if (!me) {
+    box.innerHTML = `<p class="text-sm text-muted" style="margin: 0">Connect a wallet (top right) to register here, or register from code:</p>${cmdHTML(commands(CONTRACT, "you.testnet", "MARKET-SLUG").register)}`;
+    return;
+  }
   if (!state.isAgent) {
-    box.innerHTML = `<h4 style="margin: var(--space-4) 0 var(--space-2)">Post your own odds</h4>
-      <p class="text-sm text-muted">Only registered forecaster agents' posts reach the Agents colony. Registering locks a ${tokens(state.cfg.agentDeposit)} $ANTO deposit, refundable when you unregister. Posting on time earns a share of the agents' pool; being right earns nothing. <a class="what" href="docs.html#agents-colony">Agents colony</a></p>
-      <div class="cluster">${actionBtn("do-reg", `Register as a forecaster agent (${tokens(state.cfg.agentDeposit)} $ANTO)`)}</div>`;
-    $("do-reg").addEventListener("click", (e) => act(e.target, "Register", async () => {
-      if (await ensureTokens(me)) await until(async () => (await chain.balance(me)) > 0n, 20_000);
-      const bal = await chain.balance(me);
-      if (bal < state.cfg.agentDeposit) throw new Error(`the deposit is ${tokens(state.cfg.agentDeposit)} $ANTO and you have ${tokens(bal)}`);
-      await send("register_agent", {}, { gasTgas: 30 });
-      await until(async () => (await chain.isAgent(me)) || null, 15_000);
-      await loadWallet();
-    }));
+    box.innerHTML = `<p class="text-sm" style="margin: 0">Not registered. Registering locks a ${dep} deposit, refunded when you unregister. Only registered agents' posts reach the Agents colony.</p>
+      <div class="cluster"><button class="btn" type="button" id="ag-reg">Register as an agent</button></div>`;
+    $("ag-reg").addEventListener("click", (e) => act(e.target, "Register", () => registerAgent(me), $("tx-agent")));
     return;
   }
-  const mine = (cur.preview?.posts ?? []).find(([id]) => id === me);
-  box.innerHTML = `<h4 style="margin: var(--space-4) 0 var(--space-2)">Post your own odds as ${walletHTML(me)}</h4>
-    <p class="text-sm text-muted" style="margin: 0 0 var(--space-3)">${mine ? `You posted ${labels.map((o, i) => `${esc(o)} ${pct(mine[1][i])}%`).join(", ")}. Posting again replaces it.` : "Percent per outcome, adding up to 100. Your own model decides; the Agents colony reads the agents' median."}</p>
-    <div class="mine-grid" id="mine-grid">${labels.map((o, i) =>
-      `<div class="field"><label class="field__label" for="mine-${i}">${optHTML(labels, i)}</label>` +
-      `<div class="input-group"><input class="input num" id="mine-${i}" type="number" inputmode="decimal" min="0" max="100" step="0.1" placeholder="–" value="${mine ? mine[1][i] / 100 : ""}">` +
-      `<span class="input-group__suffix">%</span></div></div>`).join("")}</div>
-    <div class="cluster" style="margin-top: var(--space-3)">
-      <button class="btn btn--sm btn--ghost" type="button" id="mine-fill">Start from the market odds</button>
-      ${actionBtn("do-post", "Post my forecast")}
-      <button class="btn btn--sm btn--ghost" type="button" id="do-unreg">Unregister (refund deposit)</button>
-      <span class="mine-sum" id="mine-status" role="status" aria-live="polite"></span>
-    </div>`;
-  const inputs = () => [...$("mine-grid").querySelectorAll("input")];
-  const check = () => {
-    const x = readOdds(inputs().map((i) => i.value)), s = $("mine-status");
-    s.dataset.state = x.why ? "bad" : x.odds ? "ok" : "";
-    s.textContent = x.why ? `! Can't post: ${x.why}.` : x.odds ? "✓ Adds up to 100%." : "";
-    $("do-post").disabled = !x.odds;
-    return x;
-  };
-  $("mine-grid").addEventListener("input", check);
-  $("mine-fill").addEventListener("click", () => {
-    const o = marketOdds(r.market.odds);
-    inputs().forEach((x, i) => { x.value = (o[i] / 100).toFixed(2).replace(/\.?0+$/, ""); });
-    check();
-  });
-  $("do-post").addEventListener("click", (e) => {
-    const { odds } = check();
-    if (odds) act(e.target, "Post", () => send("post_forecast", { colony: r.colony, odds }, { gasTgas: 30 }));
-  });
-  $("do-unreg").addEventListener("click", (e) => act(e.target, "Unregister", async () => {
-    await send("unregister_agent", {}, { gasTgas: 30 });
-    await until(async () => !(await chain.isAgent(me)) || null, 15_000);
-    await loadWallet();
-  }));
-  check();
+  box.innerHTML = `<p class="text-sm" style="margin: 0">Registered: your posts reach the Agents colony. ${dep} deposit locked. Open a request beside this to post your odds on its market page, or post from code.</p>
+    <div class="cluster"><button class="btn btn--sm btn--ghost" type="button" id="ag-unreg">Unregister (refund deposit)</button></div>`;
+  $("ag-unreg").addEventListener("click", (e) => act(e.target, "Unregister", () => unregisterAgent(me), $("tx-agent")));
 }
 
-// ---- Feed Community: holders stake on the request's colony ----
-
-let stakeSig = "";
-async function renderStake(r) {
-  const card = $("stake-card"), me = wallet.accountId, now = Date.now();
-  const m = r.market, open = stakingOpen(r, now), locked = stakesLocked(r, now);
-  if (!m) { card.hidden = true; return; }
-  const n = m.outcomes.length, labels = m.outcomes;
-  let totals = new Array(n).fill(0n), mine = [];
-  try {
-    const [t, s] = await Promise.all([
-      chain.stakeTotals(r.colony, n),
-      me ? chain.stakesOf(me) : Promise.resolve([]),
-    ]);
-    totals = t.map(BigInt);
-    mine = s.filter(([c]) => c === r.colony).map(([, o, v]) => ({ option: o, amount: BigInt(v) }));
-  } catch { /* shown as nothing staked */ }
-  if (!cur || cur.r !== r) return;
-  const frozen = r.stakes ? stakesOf(r) : null;
-  // Nothing to show once the request is over and nobody (or not you) staked.
-  card.hidden = !open && !locked && !mine.length && !frozen?.wallets.length;
-  if (card.hidden) return;
-  const sig = JSON.stringify([r.id, r.phase, open, locked, me, totals.map(String), mine.map((x) => [x.option, String(x.amount)]), frozen?.weights]);
-  if (sig === stakeSig) return;
-  stakeSig = sig;
-  $("stake-when").textContent = open ? `open for ${mmss(r.forecast_by_ms - now)}` : locked ? "locked while the colonies run" : "closed";
-  const staked = totals.some((t) => t > 0n);
-  const totalLine = staked
-    ? `<p class="text-sm" style="margin: 0 0 var(--space-3)">Staked so far: ${labels.map((o, i) => `${optHTML(labels, i)} <b class="num">${tokens(totals[i])}</b>`).join(" · ")} $ANTO.</p>`
-    : `<p class="text-sm text-faint" style="margin: 0 0 var(--space-3)">${open ? "Nobody has staked yet: without stakes Community sits out of the swarm belief." : "Nobody staked: Community ran on an even map and sat out of the swarm belief."}</p>`;
-  const frozenLine = frozen
-    ? `<p class="text-xs text-muted" style="margin: 0 0 var(--space-3)">Frozen at the seed: weights ${frozen.weights.map((w, i) => `${optHTML(labels, i)} ${(w / 1000).toFixed(2)}`).join(" · ")} sqrt-$ANTO from ${frozen.wallets.length} wallet${frozen.wallets.length === 1 ? "" : "s"}${frozen.wallets.length ? `: ${frozen.wallets.map((w) => walletHTML(w.id)).join(" ")}` : ""}. Stake hash ${hashHTML(r.stakes.hash, "stake hash")}</p>`
-    : "";
-  const intro = `<p class="text-sm text-muted" style="margin: 0 0 var(--space-3)">Holders stake $ANTO on an outcome while the agents' window is open. Community reads the square root of each wallet's stake, so every wallet's ants feed it. Stakes are locked until the third colony has run, then you withdraw them. Nothing pays you for being right. <a class="what" href="docs.html#stakes">How stakes work</a></p>`;
-  const mineList = mine.length ? `<ul aria-label="Your stakes on this request" style="list-style: none; padding: 0; margin: var(--space-3) 0 0; display: grid; gap: var(--space-2)">${mine.map((x) =>
-    `<li class="cluster">${optHTML(labels, x.option)} <span class="num">${tokens(x.amount)} $ANTO</span>${locked ? "" :
-      `<button class="btn btn--sm btn--ghost" type="button" data-unstake="${x.option}" data-amt="${x.amount}">Withdraw</button>`}</li>`).join("")}</ul>` : "";
-  let form = "";
-  if (open && !me) form = connectLine();
-  else if (open) form = `<div class="cluster">
-      <div class="field"><label class="field__label" for="st-opt">Outcome</label>
-        <select class="input" id="st-opt">${labels.map((o, i) => `<option value="${i}">${GLYPHS[i]} ${esc(o)}</option>`).join("")}</select></div>
-      <div class="field"><label class="field__label" for="st-amt">$ANTO</label>
-        <input class="input num" id="st-amt" type="number" min="1" step="1" value="10"></div>
-      ${actionBtn("do-stake", "Stake on this request")}</div>`;
-  const keep = [$("st-opt")?.value, $("st-amt")?.value];
-  $("stake-body").innerHTML = (open ? intro : "") + totalLine + frozenLine + form + mineList;
-  if (keep[0] != null && $("st-opt")) { $("st-opt").value = keep[0]; $("st-amt").value = keep[1]; }
-  $("do-stake")?.addEventListener("click", (e) => stakeAct(e.target, "Stake", async () => {
-    const amt = +$("st-amt").value, opt = +$("st-opt").value;
-    if (!(amt > 0)) throw new Error("enter an amount above zero");
-    if (await ensureTokens(me)) await until(async () => (await chain.balance(me)) > 0n, 20_000);
-    await send("stake", { colony: r.colony, option: opt, amount: yocto(amt) }, { gasTgas: 30 });
-  }));
-  $("stake-body").querySelectorAll("[data-unstake]").forEach((b) => b.addEventListener("click", (e) =>
-    stakeAct(e.target, "Withdraw", () => send("unstake", { colony: r.colony, option: +b.dataset.unstake, amount: b.dataset.amt }, { gasTgas: 30 }))));
+let openSig = "";
+function renderOpen() {
+  const now = Date.now();
+  const open = state.list.filter((r) => agentsMayPost(r, now)).reverse();
+  const sig = open.map((r) => `${r.id}:${mmss(r.forecast_by_ms - now)}`).join() + state.loaded;
+  if (sig === openSig) return;
+  openSig = sig;
+  const win = state.cfg ? `${Math.round(state.cfg.forecastWindowMs / 1000)} seconds` : "a short window";
+  $("ag-open").innerHTML = open.length
+    ? open.map((r) => `<li><a href="${esc(requestHref(r.id))}">#${r.id}</a> <code>${esc(r.market_id)}</code><span class="num">${mmss(r.forecast_by_ms - now)} left</span></li>`).join("")
+    : `<li class="text-sm text-faint">${state.loaded ? `No request is in its agents' window right now. Each one opens for ${win} once the keepers' odds are final.` : "Reading the chain…"}</li>`;
 }
 
-async function stakeAct(el, label, fn) {
-  const out = $("tx-stake");
-  el.disabled = true;
+async function loadAgents() {
   try {
-    showNote(out, `${label}: approve it in your wallet…`);
-    await fn();
-    showNote(out, `${label}: sent.`);
-    stakeSig = "";
-    await sleep(2500);
-    if (cur?.r) await renderStake(cur.r);
-    await loadWallet();
+    const ids = await chain.agents();
+    $("ag-count").innerHTML = ids.length
+      ? `${ids.length} registered agent${ids.length === 1 ? "" : "s"}: ${ids.map(walletHTML).join(" ")}`
+      : "No agent is registered yet.";
   } catch (e) {
-    showError(out, e);
-  } finally {
-    el.disabled = false;
+    $("ag-count").textContent = `Couldn't read the agents: ${e.message}`;
   }
 }
 
-function renderPosts(r) {
-  const ags = r.agents ?? cur.preview;
-  const box = $("posts-box");
-  if (r.phase !== "forecasting" || !ags) { box.innerHTML = ""; return; }
-  box.innerHTML = `<p class="text-xs text-faint" style="margin: var(--space-4) 0 0">${ags.posts.length
-    ? `${ags.posts.length} forecaster agent${ags.posts.length === 1 ? "" : "s"} posted so far: ${ags.posts.map(([id]) => walletHTML(id)).join(" ")}`
-    : "No forecaster agent has posted yet."}</p>`;
-}
+// ---- Tabs: one section at a time. The hash picks it (#forecast, #random,
+// #agents; #request and #recent are Forecast's; ?rnd= alone is Randomness).
+// The panels' ids differ from those names so the browser doesn't scroll past
+// the tabs.
 
-// ---- The request, from the chain ----
-
-async function refresh() {
-  if (!cur) return;
-  const id = cur.id;
-  let r;
-  try { r = await chain.request(id); } catch (e) { showError($("tx-run"), e); return; }
-  if (!cur || cur.id !== id) return;
-  if (!r) {
-    $("req-status").textContent = "not found";
-    $("run-sub").textContent = `There is no request #${id} on ${CONTRACT}.`;
-    $("act").hidden = true; $("steps").innerHTML = ""; $("now").textContent = "";
-    clearTimeout(pollTimer);
-    return;
-  }
-  cur.preview = null;
-  if (r.phase === "forecasting" && !r.agents) {
-    try { cur.preview = await chain.agentSnapshot(r.colony); } catch { /* shown without the preview */ }
-  }
-  if (!cur || cur.id !== id) return;
-  cur.r = r;
-  const sig = JSON.stringify([r.phase, r.colony_hashes, r.keepers_posted, r.swarm, cur.preview?.posts]);
-  const changed = sig !== cur.sig;
-  cur.sig = sig;
-  $("req-status").textContent = STATUS[r.phase] ?? r.phase;
-  $("run-sub").innerHTML = `<b>${esc(r.market_id)}</b>, requested by ${walletHTML(r.requester)} · fee ${tokens(r.fee)} $ANTO · colony <code>${r.colony}</code>. The contract holds everything here; this page only reads it and re-runs the sim.`;
-  renderSteps(r);
-  renderNow();
-  if (changed) {
-    // Colonies the chain has run, re-run here.
-    if (r.seed && r.agents) {
-      cur.fs = forecastersOf(r);
-      for (let k = 0; k < cranked(r); k++) if (!built[k]) buildColony(r, k, cur.fs);
-      if (stage.k < 0 && built[0]) showColony(0);
-    }
-    renderBelief(r);
-    renderResult(r);
-    renderInputs(r);
-    renderPaid(r);
-    renderPosts(r);
-    if (r.phase === "skipped") { $("colony").hidden = true; }
-    $("col-empty").textContent = r.phase === "skipped" ? "Skipped: nothing ran." : "Waiting for the first crank.";
-  }
-  renderAct();
-  renderStake(r);
-  auto.poll();
-  clearTimeout(pollTimer);
-  if (!isOver(r)) pollTimer = setTimeout(refresh, POLL_MS);
+const TABS = ["forecast", "random", "agents"];
+function tabOf(hash) {
+  const id = hash.slice(1);
+  if (TABS.includes(id)) return id;
+  if (id === "recent" || id === "request") return "forecast";
+  return !id && new URLSearchParams(location.search).has("rnd") ? "random" : null;
 }
-
-function open(id) {
-  clearTimeout(pollTimer);
-  cur = { id, r: null, fs: null, preview: null, sig: "", stepsSig: "", board: null, beliefKey: "", resultKey: "" };
-  built = []; replay = null; lastSig = "";
-  stage.k = -1; stage.col = null; stage.bars = null; stage.busy = false;
-  $("run").hidden = false;
-  $("colony").hidden = false;
-  $("req-id").textContent = `#${id}`;
-  $("req-status").textContent = "loading";
-  $("run-sub").textContent = "";
-  $("steps").innerHTML = ""; $("now").textContent = "";
-  $("act").hidden = true; $("tx-run").textContent = "";
-  $("stake-card").hidden = true; $("tx-stake").textContent = ""; stakeSig = "";
-  $("belief-body").innerHTML = `<p class="text-sm text-muted" style="margin: 0">Appears once the keepers' odds are on chain.</p>`;
-  $("inputs").hidden = true;
-  $("col-name").textContent = "Three colonies";
-  $("col-blurb").textContent = "Each crank call runs one colony on the contract, on its own map from the request seed: 60 ants, 300 ticks. Pick one to see it here, re-run from the chain's inputs.";
-  $("col-by").textContent = ""; $("col-vote").hidden = true; $("col-replay").hidden = true; $("col-open").hidden = true; $("col-roster-box").hidden = true; stage.view.setStakers(null);
-  $("col-empty").hidden = false; $("col-empty").textContent = "Waiting for the first crank.";
-  $("col-tick").textContent = "0000"; $("col-bars").innerHTML = "";
-  const ctx = stage.view.cv.getContext("2d");
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, stage.view.cv.width, stage.view.cv.height);
-  thumbs.forEach((t, k) => { t.btn.setAttribute("aria-pressed", "false"); t.view.ctx.clearRect(0, 0, t.view.cv.width, t.view.cv.height); thumbState(k); });
-  refresh();
+function showTab(id) {
+  for (const t of TABS) {
+    const on = t === id, tab = $(`tab-${t}`);
+    $(`tab-${t}-panel`).hidden = !on;
+    tab.setAttribute("aria-selected", String(on));
+    tab.tabIndex = on ? 0 : -1;
+  }
 }
+$("rc-tabs").addEventListener("click", (e) => {
+  const tab = e.target.closest('[role="tab"]');
+  if (!tab || e.metaKey || e.ctrlKey || e.shiftKey) return;
+  e.preventDefault();
+  history.replaceState(null, "", tab.hash);
+  showTab(tab.hash.slice(1));
+});
+$("rc-tabs").addEventListener("keydown", (e) => {
+  const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+  if (!step) return;
+  const i = TABS.findIndex((t) => !$(`tab-${t}-panel`).hidden);
+  const tab = $(`tab-${TABS[(i + step + TABS.length) % TABS.length]}`);
+  tab.focus();
+  tab.click();
+});
+showTab(tabOf(location.hash) ?? "forecast");
 
 function route() {
-  const h = /^#request-(\d+)$/.exec(location.hash);
-  if (h) { open(+h[1]); $("run").scrollIntoView({ block: "start" }); }
+  const t = tabOf(location.hash);
+  if (t) showTab(t);
+  if (TABS.includes(location.hash.slice(1))) $("rc-tabs").scrollIntoView({ block: "nearest" });
 }
 
-// ---- Recent requests ----
+// ---- Request history: a list; each request opens on the market page ----
 
 async function loadRecent() {
   try {
-    const [list, count] = await Promise.all([recentRequests(12), chain.requestCount()]);
+    const [list, count] = await Promise.all([recentRequests(RECENT), chain.requestCount()]);
     state.list = list;
-    $("recent-count").textContent = `${count} so far`;
+    state.loaded = true;
+    $("recent-count").textContent = count > list.length ? `newest ${list.length} of ${count}` : `${count} so far`;
+    const me = wallet.accountId;
     const rows = [...list].reverse().map((r) => {
       const lead = r.swarm ? r.swarm.indexOf(Math.max(...r.swarm)) : -1;
-      const oc = r.market?.outcomes;
-      return `<tr><th scope="row"><a href="#request-${r.id}">#${r.id}</a></th><td><code>${esc(r.market_id)}</code></td><td>${walletHTML(r.requester)}</td>` +
+      const oc = r.market?.outcomes, href = esc(requestHref(r.id));
+      return `<tr><th scope="row"><a href="${href}">#${r.id}</a></th><td><a href="${href}">${esc(slugTitle(r.market_id))}</a></td>` +
+        `<td>${walletHTML(r.requester)}${me && r.requester === me ? ' <span class="chip">yours</span>' : ""}</td>` +
         `<td><span class="chip">${esc(STATUS[r.phase] ?? r.phase)}</span></td>` +
         `<td>${lead >= 0 && oc ? `${optHTML(oc, lead)} <b class="num">${pct(r.swarm[lead])}%</b>` : `<span class="text-faint">–</span>`}</td></tr>`;
     });
     $("recent-table").querySelector("tbody").innerHTML = rows.join("") ||
-      `<tr><td colspan="5" class="text-xs text-faint">No requests yet. Be the first.</td></tr>`;
+      `<tr><td colspan="5" class="text-xs text-faint">No requests yet. Be the first: pick a market above.</td></tr>`;
   } catch (e) {
     $("recent-table").querySelector("tbody").innerHTML = `<tr><td colspan="5" class="text-xs"><span class="text-faint">Couldn't read the contract: ${esc(e.message)}</span></td></tr>`;
   }
+  renderOpen();
 }
 
 // ---- Start ----
 
-wallet.onChange(() => loadWallet());
-requestAnimationFrame(frame);
-clearInterval(tickTimer);
-tickTimer = setInterval(() => { if (cur?.r) { renderNow(); renderSteps(cur.r); renderAct(); } }, 1000);
+wallet.onChange(() => { loadWallet(); loadRecent(); });
+setInterval(renderOpen, 1000);
 window.addEventListener("hashchange", route);
-document.fonts.ready.then(() => { stage.busy = true; built.forEach((_, k) => built[k] && thumbs[k].view.draw(1)); });
+renderCmds();
+renderAgents();
+mountRandom();
+
+// Pick a market and pay: the same panel as Live's Add a market. A new request
+// joins the history below and opens on the market page. The round's markets are read once, so a market already in
+// the round is caught (and linked on Live) instead of paid for.
+let roundMarkets = [];
+const addPanel = mountAddMarket({
+  cfg: () => state.cfg,
+  markets: () => roundMarkets,
+  followHref: (id) => requestHref(id),
+  roundHref: (a) => liveHref(`#${a}`),
+  onRequested: () => loadRecent(),
+});
+loadRound().then((r) => { roundMarkets = r?.markets ?? []; addPanel.refresh(); }).catch(() => {});
+// ?q= (the old form's links, and Live's) fills the field and looks it up.
+const q0 = new URLSearchParams(location.search).get("q");
+if (q0) addPanel.lookup(q0);
+if (q0 || location.hash === "#request") $("add-in").focus({ preventScroll: true });
 
 (async () => {
-  loadPopular();
   try {
-    const [cfg, keepers, paused] = await Promise.all([chain.requestConfig(), chain.keepers(), chain.paused()]);
+    const [cfg, paused] = await Promise.all([chain.requestConfig(), chain.paused()]);
     state.cfg = parseConfig(cfg);
-    [state.keepers, state.quorum] = keepers;
     state.paused = !!paused;
     $("paused").hidden = !state.paused;
     renderFee();
+    addPanel.refresh();
   } catch (e) {
     $("fee").innerHTML = `<p class="text-xs text-faint">Couldn't read the contract (${esc(e.message)}).</p>`;
   }
-  syncGo();
-  await Promise.all([loadRecent(), loadWallet()]);
-  setInterval(loadRecent, 20_000);
+  await Promise.all([loadRecent(), loadWallet(), loadAgents()]);
+  setInterval(() => { if (!document.hidden) loadRecent(); }, 20_000);
   route();
 })();
 </script>

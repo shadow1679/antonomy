@@ -3,74 +3,105 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Antonomy · live colonies</title>
+<title>Antonomy · forecasts</title>
+<link rel="icon" href="brand/favicon.ico" sizes="32x32">
+<link rel="icon" href="brand/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
+<meta name="theme-color" content="#14100c">
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="live.css">
 </head>
 <body class="lv">
 <div id="topbar"></div>
 
+<div class="fc-line" role="note"><div class="container">
+  <span class="fc-line__g" aria-hidden="true">◇</span>
+  <span class="fc-line__long">Forecast display, not betting. Swarm belief is how the colonies' trails split, not a probability. Not advice.</span>
+  <span class="fc-line__short">Forecast, not betting · not advice · belief ≠ probability</span>
+</div></div>
+
 <main>
-  <section class="lv-round" aria-labelledby="rc-title">
+  <section class="fc-round" aria-labelledby="rc-title">
     <div class="container">
-      <div class="lv-round__row">
-        <div>
-          <p class="eyebrow">Forecast round · NEAR testnet</p>
-          <h1 id="rc-title">Round <span class="num" id="rc-id">…</span></h1>
-          <p class="lv-round__lede">Three ant colonies forecast each trending Polymarket market inside the contract, from one public seed, and your browser re-runs every one. <a class="what" href="docs.html#how">How it works</a></p>
+      <div class="fc-round__head">
+        <p><b id="rc-title">Round <span class="num" id="rc-id">…</span></b><span id="rc-line" aria-live="polite">Reading the contract…</span></p>
+        <p class="fc-round__clock"><span class="fc-round__label" id="rc-next-label">Reading the chain</span><span class="num fc-round__value" id="rc-next">…</span><span class="fc-round__label num" id="rc-next-at"></span></p>
+      </div>
+      <ol class="stepper__steps" id="rc-phases" aria-label="Round timeline"></ol>
+      <div class="fc-round__foot">
+        <div class="fc-round__facts">
+          <span class="lv-round__seed">Seed <span id="round-seed">drawn at the first crank</span></span>
+          <a id="rc-receipts" href="replay.html#check" hidden>Receipts →</a>
+          <span id="rc-staked" hidden></span>
         </div>
-        <ol class="lv-steps" id="rc-phases" aria-label="Round phases"></ol>
-        <div class="lv-round__clock">
-          <span class="eyebrow" id="rc-next-label">Reading the chain</span>
-          <span class="lv-clock num" id="rc-next">…</span>
-          <span class="text-xs text-faint num" id="rc-next-at"></span>
+        <div class="fc-round__acts">
+          <a class="what" href="docs.html#demo">Demo limits</a>
+          <label class="text-xs" id="auto-wrap" title="While this tab is open and a wallet is connected, send each crank as soon as it is due (nothing happens until one is). Your wallet still approves every call; the keeper daemon cranks too."><input type="checkbox" id="auto-crank"> Auto-crank</label>
+          <button class="btn btn--primary btn--sm" type="button" id="crank-btn" title="Each call runs one colony on-chain. Needs a connected wallet and a little testnet NEAR for gas." hidden>Crank a colony</button>
         </div>
       </div>
-      <div class="lv-round__foot">
-        <p id="rc-line" aria-live="polite">Reading the contract…</p>
-        <span class="lv-round__seed">Seed <span id="round-seed">drawn at the first crank</span></span>
-        <a id="rc-receipts" href="receipts.html" hidden>Receipts →</a>
-        <button class="btn btn--primary btn--sm" type="button" id="crank-btn" title="Each call runs one colony on-chain. Needs a connected wallet and a little testnet NEAR for gas." hidden>Crank a colony</button>
-        <label class="text-xs" id="auto-wrap" title="While this tab is open and a wallet is connected, send each crank as soon as it is due (nothing happens until one is). Your wallet still approves every call; the keeper daemon cranks too."><input type="checkbox" id="auto-crank"> Auto-crank</label>
-        <a class="what" href="docs.html#demo">Demo limits</a>
-      </div>
     </div>
   </section>
 
-  <section class="lv-anto" aria-label="$ANTO">
-    <div class="container lv-anto__row">
-      <a class="anto-mark lv-anto__mark" href="index.html#anto">$ANTO</a>
-      <dl class="lv-anto__facts" id="tk-facts" aria-live="polite"><div><dt>Reading the contract…</dt><dd></dd></div></dl>
-      <div class="lv-anto__me" id="tk-me"></div>
-    </div>
-  </section>
+  <section class="lv-section" id="forecasts" aria-labelledby="fc-h1">
+    <div class="container fc-grid">
+      <div class="fc-main">
+        <div class="fc-head">
+          <h1 id="fc-h1">Forecasts</h1>
+          <p class="lede">Three ant colonies read each market and lay trails. The gap is where their trails split from the market's odds. <a class="what" href="docs.html#forecasts">How forecasts work</a></p>
+        </div>
 
-  <section class="lv-section" id="forecasts" aria-labelledby="fc-title">
-    <div class="container">
-      <div class="lv-head">
-        <h2 id="fc-title">Markets</h2>
-        <span class="lv-head__count" id="fc-count">…</span>
-        <span class="tag-forecast">Forecast · not advice</span>
-        <a class="what" href="docs.html#forecasts">How forecasts work</a>
-      </div>
-      <p class="lv-empty" id="fc-empty" hidden></p>
-      <div id="fc-cur"></div>
-      <div id="fc-prev-wrap" hidden>
-        <h3 class="lv-subhead" id="fc-prev-head"></h3>
-        <div id="fc-prev"></div>
-      </div>
-    </div>
-  </section>
+        <section class="fc-widest" id="widest" aria-label="Widest gap" aria-live="polite"><span class="fc-widest__eyebrow">Widest gap</span><span>Reading the chain…</span></section>
 
-  <section class="lv-section" id="requested" aria-labelledby="rq-title">
-    <div class="container">
-      <div class="lv-head">
-        <h2 id="rq-title">Requested forecasts</h2>
-        <span class="lv-head__count" id="rq-count">…</span>
-        <span class="tag-forecast">Forecast · not advice</span>
-        <a class="what" href="docs.html#recruit">Recruit the swarm</a>
+        <div class="fc-tools">
+          <div class="seg" role="group" aria-label="Show">
+            <button type="button" aria-pressed="true" data-show="all">All</button>
+            <button type="button" aria-pressed="false" data-show="top">Trending</button>
+            <button type="button" aria-pressed="false" data-show="yours">Community</button>
+          </div>
+          <label>Sort <select id="sort"><option value="gap">Gap, widest first</option><option value="rank">Trending rank</option></select></label>
+        </div>
+        <p class="fc-legend">Three colonies per market: <b>Momentum</b> reads the odds and their 6h move, <b>Community</b> reads $ANTO stakes, <b>Agents</b> reads the agents' median odds. Click a map to watch it on the market page.</p>
+
+        <div data-sec="top">
+          <div class="fc-sec"><h2 id="fc-title">Trending this round</h2><p id="fc-count">Picked by 24-hour volume on Polymarket, read by three keepers.</p></div>
+          <p class="lv-empty" id="fc-empty" hidden></p>
+          <ul class="fc-list" id="fc-cur" aria-labelledby="fc-title"></ul>
+          <div id="fc-prev-wrap" hidden>
+            <div class="fc-sec"><h2 id="fc-prev-head">Previous round</h2><p>Finished, swarm belief final. This round's gaps appear after its seed. <a class="what" id="fc-prev-hist" href="replay.html">Every past round in History</a></p></div>
+            <ul class="fc-list" id="fc-prev" aria-labelledby="fc-prev-head"></ul>
+          </div>
+        </div>
+
+        <div data-sec="yours" id="requested">
+          <div class="fc-sec"><h2 id="rq-title">Community markets</h2><p id="rq-count">Reading the chain…</p><a class="what" id="rq-all" href="recruit.html#recent">All requests</a></div>
+          <ul class="fc-list" id="rq-board" aria-labelledby="rq-title"></ul>
+        </div>
+
+        <section class="fc-track" id="track" aria-label="Track record"></section>
       </div>
-      <div id="rq-board"></div>
+
+      <aside class="fc-side">
+        <section class="panel fc-add" id="add" aria-labelledby="add-h">
+          <h2 id="add-h">Recruit</h2>
+          <form id="add-form" novalidate>
+            <div class="field">
+              <label class="field__label" for="add-in">Polymarket link, market ID or search</label>
+              <input class="input" id="add-in" type="search" placeholder="polymarket.com/event/…" autocomplete="off" spellcheck="false" maxlength="200" aria-describedby="add-status">
+              <p class="field__hint" id="add-status" role="status" aria-live="polite">Any open market. Not markets about violence, deaths or private individuals.</p>
+            </div>
+            <ul class="fc-add__hits" id="add-hits" aria-label="Markets found" hidden></ul>
+            <div class="fc-add__pick" id="add-pick" aria-live="polite" hidden></div>
+            <p class="fc-add__cost" id="add-cost">Fee read from the contract…</p>
+            <div class="fee-split" id="add-split"></div>
+            <button class="btn" type="submit" id="add-go" aria-describedby="add-why">Request forecast</button>
+            <p class="why" id="add-why"></p>
+            <p class="fc-add__note" id="add-tx" role="status" aria-live="polite"></p>
+            <p class="fc-add__note">Pays keepers, agents and crankers for their work. Nobody is paid for being right. Refunded if the keepers don't agree.</p>
+          </form>
+          <p class="fc-add__more"><a href="recruit.html#forecast" id="add-more">From code, every request, randomness: Recruit ›</a></p>
+        </section>
+      </aside>
     </div>
   </section>
 
@@ -114,9 +145,9 @@ keeper/launchd.sh install    # keep it running after you log out of the terminal
           <p class="text-sm text-faint" id="bt-empty" style="margin: 0" hidden></p>
         </div>
         <div class="lv-burn__actions">
-          <a class="btn" href="burn.html" id="bt-watch">Open the Burn page</a>
-          <a class="btn btn--sm btn--ghost" href="burn.html#sugar" id="bt-sugar" hidden>Drop sugar for tomorrow</a>
-          <a class="what" href="burn.html#history">Burn history</a>
+          <a class="btn" href="pot.html" id="bt-watch">Open the Burn page</a>
+          <a class="btn btn--sm btn--ghost" href="pot.html#sugar" id="bt-sugar" hidden>Drop sugar for tomorrow</a>
+          <a class="what" href="replay.html#pots">Burn history</a>
         </div>
       </div>
       <p class="lv-note" id="bt-note"></p>
@@ -129,15 +160,21 @@ keeper/launchd.sh install    # keep it running after you log out of the terminal
 <script type="module">
 import { ColonyThumb } from "./ds/colony-thumb.mjs";
 import { GLYPHS, BURN_MENU, KIND_NAMES } from "./round.mjs";
-import { loadRound, verifyMarket, buildMarket, slugTitle } from "./roundchain.mjs";
+import { loadRound, buildMarket } from "./roundchain.mjs";
+import { stakesOf, parseConfig, tokens as rqTokens } from "./recruit.mjs";
+import { mountAddMarket } from "./addmarket.mjs";
 import { loadBurnCard, burnColonyFor } from "./burncard.mjs";
-import { chain, wallet, tokens, ZERO_HASH } from "./chain.mjs";
-import { loadToken, fmtAnto, burnedPct, nextStep } from "./token.mjs";
+import { chain, wallet, tokens } from "./chain.mjs";
+import { loadToken, fmtAnto } from "./token.mjs";
 import { burnAmount } from "./burn.mjs";
 import { createAutoCrank } from "./autocrank.mjs";
 import { automationRows } from "./automation.mjs";
-import { $, esc, hms, hashHTML, installCopy, liveShares, shareBars, topbar, footer, refreshTokenChip } from "./ui.mjs";
-import { LIVE_TPS, pct, utc, wait, tick0, sumBig, argmax, deltaCls, gl, stackHTML, marketHref, stepsHTML, clockOf, finished, sigOf, makeVerifier, marketState, colonyCache } from "./lv.mjs";
+import { $, esc, hms, hashHTML, installCopy, liveShares, shareBars, topbar, footer } from "./ui.mjs";
+import { utc, wait, sumBig, argmax, marketHref, recruitHref, requestHref, historyHref, clockOf, finished, sigOf, makeVerifier, colonyCache } from "./lv.mjs";
+import {
+  roundCard, requestCard, cardHTML, cardParts, sortCards, widestCard, widestHTML,
+  stepperStepsHTML, roundLine, trackHTML, trackLineHTML, trackFull, trackFromTally,
+} from "./forecasts.mjs";
 
 // Old links opened a market under the rows (#market-m3, or #market-3 for the
 // first round's); markets now have their own page.
@@ -152,230 +189,181 @@ $("topbar").outerHTML = topbar("live", `<span class="chip chip--live" id="live-c
 $("footer").outerHTML = footer();
 installCopy();
 
-const PAGE = 6; // market cards per page
+// The track record, from the scorebook on chain (docs/FORECAST_QUALITY.md §2).
+// Until enough markets are scored it is one quiet line under the lists; then
+// the full panel takes its place.
+function showTrack(t) {
+  $("track").className = trackFull(t) ? "panel track" : "fc-track";
+  $("track").innerHTML = trackFull(t) ? trackHTML(t) : trackLineHTML(t);
+}
+showTrack(null);
+(async () => {
+  try {
+    const [tally, open] = await Promise.all([chain.scoreTally(), chain.openMarkets().catch(() => null)]);
+    showTrack(trackFromTally(tally, open));
+  } catch { /* a contract without the scorebook: the quiet line stays */ }
+})();
+
+const SHOW_REQUESTS = 6; // newest requests shown as cards; every one is on the Recruit page
+const TPS = 48;          // a map replays its 300-tick run at 4× (about 6 s), once, then holds
+const still = matchMedia("(prefers-reduced-motion: reduce)");
 
 // ---- state ----
 let round = null;               // the normalized round from the chain
-let groups = [];                // [{ id: "cur" | "prev", rd, items: [{ m, rd }], page }]
-const pages = { cur: 0, prev: 0 };
-let cards = [];                 // the mini colonies on screen: { m, el, cols, thumbs, starts, lastT, visible }
-let idles = [];                 // cards before the seed, their colonies idling: { gid, el, thumbs, phase, visible }
-const colonyFor = colonyCache();
-const verifyOf = makeVerifier((m) => paintCardState(m));
-
-// Draw a card's mini colonies only while it is on screen; they still step.
-const io = new IntersectionObserver((es) => {
-  for (const e of es) {
-    const c = cards.find((x) => x.el === e.target) ?? idles.find((x) => x.el === e.target);
-    if (c) c.visible = e.isIntersecting;
-  }
-});
-
-// ---- market cards ----
-
-const ABSTAIN_LONG = { 1: "Nobody staked on this market, so Community sits out of the swarm belief.",
-  2: "No forecaster agent posted, so Agents sits out of the swarm belief." };
-
-// Before the seed there is no map: the bare plot with its scouts idling
-// (ColonyThumb.drawIdle), and what the colony will read.
-function waitSlot(m, k, phase, at) {
-  const t = m.stakes ? sumBig(m.stakes) : null;
-  const out = k === 1 && !t && phase !== "posting";
-  const note = ["reads odds moves", out ? "no stakes: out" : "reads stakes", "reads agents"][k];
-  return `<li class="lv-cols__slot"><canvas width="144" height="96" data-idle title="Scouts waiting: the map is drawn from the seed${at}" aria-hidden="true"></canvas>
-    <span class="lv-cols__name">${KIND_NAMES[k]}</span><span class="lv-cols__lead"${out ? ' data-state="out"' : ""}>${note}</span></li>`;
-}
-
-function colSlot(f, k) {
-  return `<li class="lv-cols__slot"><canvas width="144" height="96" aria-hidden="true"></canvas>
-    <span class="lv-cols__name">${f.name}</span>
-    <span class="lv-cols__lead"><span data-r="lead-${k}">${f.cranked ? "starting…" : "○ not cranked"}</span>${f.counted ? "" : ` <small title="${ABSTAIN_LONG[f.kind]}">out</small>`}</span></li>`;
-}
-
-const seedAt = (rd) => (Number.isFinite(rd.publishMs) ? ` after ${utc(rd.publishMs)}` : " soon");
-
-function cardHTML(it, i) {
-  const { m, rd } = it;
-  const shares = m.swarm ?? m.odds;
-  const o = argmax(shares);
-  const d = m.swarm ? m.swarm[o] - m.odds[o] : 0;
-  const spoken = m.outcomes.map((l, k) => `${l} ${pct(shares[k])}%`).join(", ");
-  const [s, a, b] = marketState(m, rd.phase, verifyOf(m)?.v ?? null);
-  return `<li class="lv-card" data-key="${m.key}">
-    <div class="lv-card__top">
-      <span class="lv-card__n num">${String(i + 1).padStart(2, "0")}</span>
-      <h3 class="lv-card__title"><a href="${marketHref(m.key)}">${esc(m.title)}</a></h3>
-      <span class="lv-card__state" data-state="${s}" data-r="state">${gl(a)}</span>
-    </div>
-    <div class="lv-card__lead">
-      <span class="opt" data-opt="${o}">${esc(m.outcomes[o])}</span><b class="lv-card__pct num">${pct(shares[o])}%</b>
-      <span class="lv-card__sub" data-r="sub">${m.swarm ? `swarm belief · market ${pct(m.odds[o])} <span class="delta ${deltaCls(d)}">${pct(Math.abs(d))}</span>` : `market odds · ${m.outcomes.length} outcomes`}${b ? ` · ${gl(b)}` : ""}${m.forecasters ? "" : ` · maps${seedAt(rd)}`}</span>
-    </div>
-    <span class="lv-card__bar" title="${esc(spoken)}">${stackHTML(shares)}<span class="visually-hidden">${m.swarm ? "Swarm belief" : "Market odds"}: ${esc(spoken)}.</span></span>
-    ${m.forecasters ? `<ul class="lv-cols" aria-label="The three colonies">${m.forecasters.map(colSlot).join("")}</ul>`
-      : `<ul class="lv-cols lv-cols--idle" aria-label="The three colonies, before the seed">${KIND_NAMES.map((_, k) => waitSlot(m, k, rd.phase, seedAt(rd))).join("")}</ul>`}
-    <span class="lv-card__go" aria-hidden="true">Open →</span>
-  </li>`;
-}
-
-function paintCardState(m) {
-  for (const el of document.querySelectorAll(`.lv-card[data-key="${m.key}"]`)) {
-    const it = groups.flatMap((g) => g.items).find((i) => i.m.key === m.key);
-    if (!it) continue;
-    const [s, a] = marketState(it.m, it.rd.phase, verifyOf(it.m)?.v ?? null);
-    const st = el.querySelector('[data-r="state"]');
-    st.dataset.state = s;
-    st.innerHTML = gl(a);
-  }
-}
-
-function pagerHTML(g) {
-  const n = Math.ceil(g.items.length / PAGE);
-  if (n < 2) return "";
-  const p = pages[g.id], from = p * PAGE + 1, to = Math.min(g.items.length, from + PAGE - 1);
-  return `<nav class="lv-pager" aria-label="${g.id === "cur" ? "Pages of this round's markets" : "Pages of the previous round's markets"}">
-    <button class="btn btn--sm btn--ghost" type="button" data-page="${g.id}:${p - 1}"${p === 0 ? " disabled" : ""}>← Previous</button>
-    <ol>${Array.from({ length: n }, (_, k) => `<li><button type="button" data-page="${g.id}:${k}"${k === p ? ' aria-current="page"' : ""} aria-label="Page ${k + 1}">${k + 1}</button></li>`).join("")}</ol>
-    <span class="lv-pager__of num">${from}–${to} of ${g.items.length}</span>
-    <button class="btn btn--sm btn--ghost" type="button" data-page="${g.id}:${p + 1}"${p === n - 1 ? " disabled" : ""}>Next →</button>
-  </nav>`;
-}
-
-function dropCards(gid) {
-  const keep = (c) => { if (c.gid !== gid) return true; io.unobserve(c.el); return false; };
-  cards = cards.filter(keep);
-  idles = idles.filter(keep);
-}
-
-// Render one group's current page and attach its mini colonies.
-function renderGroup(g) {
-  const host = $(g.id === "cur" ? "fc-cur" : "fc-prev");
-  dropCards(g.id);
-  const n = Math.max(1, Math.ceil(g.items.length / PAGE));
-  pages[g.id] = Math.min(pages[g.id], n - 1);
-  const p = pages[g.id], shown = g.items.slice(p * PAGE, p * PAGE + PAGE);
-  host.innerHTML = g.items.length ? `<ol class="lv-cards" aria-label="${g.id === "cur" ? "This round's markets" : "The previous round's markets"}">${shown.map((it, i) => cardHTML(it, p * PAGE + i)).join("")}</ol>${pagerHTML(g)}` : "";
-  host.querySelectorAll(".lv-card").forEach((el, i) => {
-    const cvs = el.querySelectorAll("canvas[data-idle]");
-    if (!cvs.length) return;
-    // Each card starts its scouts at a different point, so cards don't move in step.
-    const c = { gid: g.id, el, thumbs: [...cvs].map((cv) => new ColonyThumb(cv, { glyphs: GLYPHS })), phase: i * 3.7, visible: false };
-    c.thumbs.forEach((th, k) => th.drawIdle(k, c.phase));
-    idles.push(c);
-    io.observe(el);
-  });
-  for (const it of shown) {
-    const { m } = it;
-    if (!m.forecasters) continue;
-    const el = host.querySelector(`.lv-card[data-key="${m.key}"]`);
-    const cs = m.forecasters.map((f) => colonyFor(f, m.run.seed));
-    const cols = cs.map((c) => c.col);
-    const thumbs = [...el.querySelectorAll(".lv-cols canvas")].map((cv, k) => {
-      const th = new ColonyThumb(cv, { glyphs: GLYPHS });
-      th.setStakers(m.forecasters[k].stakers);
-      th.attach(cols[k]);
-      return th;
-    });
-    const c = { gid: g.id, m, el, cols, thumbs, starts: cs.map((x) => x.startedAt), lastT: [], visible: false, busy: true };
-    cards.push(c);
-    io.observe(el);
-  }
-}
-
-document.addEventListener("click", (e) => {
-  const b = e.target.closest?.("[data-page]");
-  if (!b) return;
-  const [gid, p] = b.dataset.page.split(":");
-  const g = groups.find((x) => x.id === gid);
-  if (!g) return;
-  pages[gid] = +p;
-  renderGroup(g);
-  const host = $(gid === "cur" ? "fc-cur" : "fc-prev");
-  if (host.getBoundingClientRect().top < 0) host.scrollIntoView({ block: "start" });
-  host.querySelector(`[data-page="${gid}:${p}"][aria-current]`)?.focus();
-});
-
+let reqs = [];                  // the newest requests: [{ r, m }]
+let reqTotal = null;            // how many requests exist
+let rqCfg = null;               // the request fee and split, from request_config
+let lists = { cur: [], prev: [], req: [] }; // the cards on screen
 let boardSig = "";
-function build() {
-  const cur = { id: "cur", rd: round, items: round.markets.map((m) => ({ m, rd: round })) };
+let jumped = false;             // the first render scrolls to a #mk-… link
+const colonyFor = colonyCache();
+const verifyOf = makeVerifier((m) => repaint(m));
+const vOf = (m) => (m ? verifyOf(m)?.v ?? null : null);
+
+// ---- the list ----
+
+const feeText = () => (rqCfg ? rqTokens(rqCfg.fee, 0) : "");
+const sortBy = () => $("sort").value;
+
+// The widest gap: this round's once it has run, else the last round's.
+function widestOfPage() {
+  const prd = lists.prev.length ? lists.prev[0].rd : null;
+  const pool = round.hasRun || !prd ? lists.cur : lists.prev;
+  return { card: widestCard(pool, vOf), label: pool === lists.prev ? `Widest gap · round ${prd.id.toLocaleString("en")}` : "Widest gap now" };
+}
+
+function paintWidest(w) {
+  const seedLine = round.phase === "running" ? "The colonies are running; the first finished market shows here."
+    : !round.hasRun && Number.isFinite(round.publishMs) && round.phase !== "skipped" ? `The colonies run after the seed at ${utc(round.publishMs)}.` : "";
+  $("widest").innerHTML = widestHTML(w.card, vOf(w.card?.m), { seedLine, label: w.label });
+}
+
+function fill(id, cards, widest) {
+  const ul = $(id), now = Date.now();
+  const sorted = sortCards(cards, sortBy(), vOf);
+  ul.innerHTML = sorted.map((c) => cardHTML(c, vOf(c.m), { widest: c === widest, fee: feeText(), now })).join("");
+  for (const c of sorted) mount($(c.id), c);
+}
+
+function renderBoard(force = false) {
+  if (!round) return;
+  const me = wallet.accountId;
   const prd = !round.hasRun ? finished(round.previous) : null;
-  const prev = prd ? { id: "prev", rd: prd, items: prd.markets.map((m) => ({ m, rd: prd })) } : null;
-  const sig = JSON.stringify([round.id, round.phase, [cur, prev].map((g) => g && g.items.map((i) => sigOf(i.m)))]);
-  if (sig === boardSig) return;
-  if (round.id !== groups[0]?.rd.id) { pages.cur = 0; pages.prev = 0; }
+  const cur = round.markets.map((m) => roundCard(m, round));
+  const prev = prd ? prd.markets.map((m) => roundCard(m, prd)) : [];
+  const req = reqs.map(({ r, m }) => requestCard(r, m, me));
+  const sig = JSON.stringify([round.id, round.phase, sortBy(), me, feeText(), [...cur, ...prev].map((c) => sigOf(c.m)), req.map((c) => [c.req.phase, c.m && sigOf(c.m)])]);
+  if (!force && sig === boardSig) return;
   boardSig = sig;
-  groups = [cur, prev].filter(Boolean);
-  const n = cur.items.length;
-  $("fc-count").textContent = n ? `${n} market${n === 1 ? "" : "s"} · ${n * KIND_NAMES.length} colonies${round.proposed ? " · posted by the keepers, final when staking closes" : ""}` : "no market yet";
+  lists = { cur, prev, req };
+  for (const c of [...cur, ...prev, ...req]) verifyOf(c.m ?? {});
+
+  const n = cur.length;
+  $("fc-title").textContent = n ? `Top ${n} trending` : "Trending this round";
+  $("fc-count").textContent = `Picked by 24-hour volume on Polymarket, read by three keepers${!round.proposed ? "" : round.phase === "posting" ? "; final when staking closes" : "; staking has closed, waiting for the call that accepts them"}.`;
   $("fc-empty").hidden = !!n;
   $("fc-empty").textContent = n ? "" : round.phase === "skipped" ? "No market was posted for this round." : "The keepers have not posted this round's markets yet. They appear here as soon as they do.";
-  renderGroup(cur);
-  $("fc-prev-wrap").hidden = !prev;
-  $("fc-prev-head").innerHTML = prev ? `Previous round ${prev.rd.id.toLocaleString("en")} <span>· finished, swarm belief final</span>` : "";
-  if (prev) renderGroup(prev); else { dropCards("prev"); $("fc-prev").innerHTML = ""; }
-  for (const g of groups) for (const it of g.items) verifyOf(it.m);
-}
+  $("fc-prev-wrap").hidden = !prev.length;
+  if (prd) $("fc-prev-head").textContent = `Previous round ${prd.id.toLocaleString("en")}`;
+  if (prd) $("fc-prev-hist").href = historyHref(`round=${prd.id}`);
 
-// Every frame: replay the mini colonies on screen at LIVE_TPS. A card
-// scrolled back into view catches up a few ticks a frame.
-const CATCH_UP = 24;
-function stepCards() {
-  const now = performance.now();
-  for (const c of cards) {
-    if (!c.visible) continue;
-    let running = false;
-    const fracs = c.cols.map((col, k) => {
-      if (!c.m.forecasters[k].cranked) return 1;
-      const exact = Math.min(col.ticks, ((now - c.starts[k]) / 1000) * LIVE_TPS), target = Math.floor(exact);
-      for (let n = 0; col.t < target && n < CATCH_UP; n++) { col.step(); c.thumbs[k].afterStep(); }
-      if (col.t < col.ticks) running = true;
-      return col.t < target ? 1 : col.t < col.ticks ? exact - target : 1;
-    });
-    if (!running && !c.busy) continue;
-    c.busy = false;
-    c.thumbs.forEach((th, k) => th.draw(fracs[k]));
-    c.m.forecasters.forEach((f, k) => {
-      const col = c.cols[k];
-      if (!f.cranked || c.lastT[k] === col.t || (col.t % 10 && col.t < col.ticks)) return;
-      c.lastT[k] = col.t;
-      const { lead, pct: p } = liveShares(col);
-      const el = c.el.querySelector(`[data-r="lead-${k}"]`);
-      el.innerHTML = lead < 0 ? "no trail yet" : `${col.t === col.ticks ? '<span class="lv-g">✓</span> ' : ""}<span class="opt" data-opt="${lead}">${p[lead].toFixed(0)}%</span>`;
-    });
+  const w = widestOfPage();
+  paintWidest(w);
+  seen.disconnect(); onScreen.clear(); anims = [];
+  fill("fc-cur", cur, w.card);
+  fill("fc-prev", prev, w.card);
+  fill("rq-board", req, w.card);
+  if (!req.length) $("rq-board").innerHTML = reqTotal === 0 ? `<li class="lv-empty">No requested forecasts yet. Paste a Polymarket link under Recruit to request one.</li>` : "";
+
+  if (!jumped) {
+    jumped = true;
+    const to = /^#(mk-[a-z0-9]+)$/.exec(location.hash)?.[1];
+    if (to) $(to)?.scrollIntoView({ block: "start" });
   }
 }
 
-// Every frame: the idle scouts on cards still waiting for the seed.
-const stillMotion = matchMedia("(prefers-reduced-motion: reduce)");
-function stepIdle() {
-  if (stillMotion.matches) return;
-  const t = performance.now() / 1000;
-  for (const c of idles) if (c.visible) c.thumbs.forEach((th, k) => th.drawIdle(k, t + c.phase));
+// A market's verification landed: repaint its card's status, gap, table and leaders.
+function repaint(m) {
+  for (const c of [...lists.cur, ...lists.prev, ...lists.req]) {
+    if (!c.m || c.m.key !== m.key || sigOf(c.m) !== sigOf(m)) continue;
+    const el = $(c.id);
+    if (!el) continue;
+    const p = cardParts(c, vOf(c.m));
+    const set = (sel, html) => { const x = el.querySelector(sel); if (x) x.innerHTML = html; };
+    set('[data-r="status"]', p.status);
+    set('[data-r="gap"]', p.gap);
+    set('[data-r="table"]', p.table);
+    p.leads.forEach((h, k) => set(`[data-r="lead-${k}"]`, h));
+  }
 }
 
-// ---- round bar ----
+// ---- colony maps: every card's three maps, stepped only while on screen ----
+
+let anims = [];
+const onScreen = new Set();
+const seen = new IntersectionObserver((es) => es.forEach((e) => (e.isIntersecting ? onScreen.add(e.target) : onScreen.delete(e.target))), { rootMargin: "100px" });
+
+// A cranked colony replays its run from the round seed (the same Colony
+// across re-renders, so a replay never restarts); the rest idle as scouts.
+function mount(el, c) {
+  el.querySelectorAll(".fc-cols canvas").forEach((cv, k) => {
+    const th = new ColonyThumb(cv, { glyphs: GLYPHS });
+    const f = c.m?.forecasters?.[k];
+    if (f?.cranked) {
+      const { col } = colonyFor(f, c.m.run.seed);
+      if (still.matches) while (col.t < col.ticks) col.step();
+      th.setStakers(f.stakers);
+      th.attach(col);
+      th.draw(1);
+      anims.push({ card: el, th, col, acc: 0 });
+    } else {
+      const ph = (c.m?.index ?? 0) * 3.7 + k * 1.3; // cards don't move in step
+      th.drawIdle(k, ph);
+      anims.push({ card: el, th, kind: k, phase: ph });
+    }
+  });
+  seen.observe(el);
+}
+
+let last = performance.now();
+function stepMaps(now) {
+  const dt = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  for (const a of anims) {
+    if (!onScreen.has(a.card)) continue;
+    if (!a.col) { if (!still.matches) a.th.drawIdle(a.kind, now / 1000 + a.phase); continue; }
+    if (a.col.t >= a.col.ticks) continue;
+    a.acc += dt * TPS;
+    while (a.acc >= 1 && a.col.t < a.col.ticks) { a.col.step(); a.th.afterStep(); a.acc -= 1; }
+    a.th.draw(a.col.t >= a.col.ticks ? 1 : a.acc);
+  }
+}
+
+$("sort").addEventListener("change", () => renderBoard(true));
+document.querySelectorAll("[data-show]").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll("[data-show]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  document.querySelectorAll("[data-sec]").forEach((s) => { s.hidden = b.dataset.show !== "all" && s.dataset.sec !== b.dataset.show; });
+}));
+
+// ---- round timeline ----
 
 function header(now = Date.now()) {
   if (!round) return;
   $("rc-id").textContent = round.id.toLocaleString("en");
-  const p = round.phase, n = round.markets.length;
-  $("rc-phases").innerHTML = stepsHTML(round);
-  [$("rc-next-label").textContent, $("rc-next").textContent, $("rc-next-at").textContent] = clockOf(round, now);
-  const lines = {
-    posting: n ? `Stake $ANTO on a market's outcome to feed its Community colony.${round.proposed ? " The keepers have posted the markets; they become final when staking closes." : ""}` : "The keepers have not posted this round's markets yet.",
-    agents: "Staking is closed. Registered forecaster agents post their odds; then anyone can crank the colonies.",
-    ready: "Anyone can crank: the first call draws the seed, then each call runs one colony inside the contract.",
-    running: "The colonies are running on-chain. Each finished one is replayed and checked here.",
-    done: "Every colony ran and the result is final. The next round opens when anyone calls start_round.",
-    skipped: "No quorum of keepers posted by the publish time, so this round was skipped.",
-  };
-  if (!$("rc-line").dataset.hold) $("rc-line").textContent = lines[p] ?? "";
+  const p = round.phase;
+  $("rc-phases").innerHTML = stepperStepsHTML(round);
+  [$("rc-next-label").textContent, $("rc-next").textContent, $("rc-next-at").textContent] = p === "ready" && round.drandRound
+    ? ["Waiting for the seed", `#${round.drandRound}`, "drand round, drawn by the first crank"] : clockOf(round, now);
+  if (!$("rc-line").dataset.hold) $("rc-line").textContent = roundLine(round);
   $("crank-btn").hidden = !(p === "ready" || p === "running");
   $("round-seed").innerHTML = round.seed ? hashHTML(round.seed, "round seed") : "drawn at the first crank";
   const shown = round.shown;
   $("rc-receipts").hidden = !shown?.seed;
-  $("rc-receipts").href = `receipts.html?round=${shown?.id ?? round.id}`;
+  $("rc-receipts").href = historyHref(`round=${shown?.id ?? round.id}`, "#check");
   $("rc-receipts").textContent = shown && shown !== round ? `Round ${shown.id} receipts →` : "Receipts →";
+  const staked = round.markets.length && round.markets.every((m) => m.stakes) ? round.markets.reduce((a, m) => a + sumBig(m.stakes), 0n) : null;
+  $("rc-staked").hidden = staked === null;
+  if (staked !== null) $("rc-staked").innerHTML = `<span class="num">${esc(fmtAnto(staked))}</span> $ANTO staked`;
   $("live-chip").innerHTML = `live<span class="topbar__round"> · round ${round.id.toLocaleString("en")}</span>`;
 }
 
@@ -420,67 +408,46 @@ function say(t) {
   say.t = setTimeout(() => { delete el.dataset.hold; header(); }, 8000);
 }
 
-// ---- Requested forecasts (Recruit the swarm), read from the contract.
-// Finished ones are re-run here once from their on-chain inputs and checked.
+// ---- Community markets (Recruit the swarm), read from the contract ----
 
-const SHOW_REQUESTS = 6;
-let rqSig = "";
-
+// A request as a market: the same card and in-browser check as a round's.
 function requestMarket(r) {
   if (!r.market) return null;
-  const n = r.market.outcomes.length;
+  const st = stakesOf(r);
   const run = r.seed ? {
-    seed: r.seed, stakeHash: ZERO_HASH, weights: new Array(n).fill(0),
-    agents: r.agents ?? { odds: new Array(n).fill(0), hash: ZERO_HASH, posts: [] },
+    seed: r.seed, stakeHash: st.hash, weights: st.weights, agents: r.agents ?? undefined,
     colonyHashes: r.colony_hashes, crankers: r.crankers, swarm: r.swarm, marketHash: r.market_hash,
   } : null;
-  return buildMarket(r.market, run, { index: r.id, tag: "r" });
+  return buildMarket({ ...r.market, colony: r.colony }, run, { index: r.id, tag: "r", wallets: st.wallets });
 }
 
-const RQ_PHASE = { odds: "◌ keepers posting odds", forecasting: "◌ agents may post", running: "◌ colonies running", done: "◌ re-running here", skipped: "✗ skipped, fee refunded" };
-
-function reqRowHTML(r, m) {
-  const title = m ? m.title : slugTitle(r.market_id);
-  const shares = r.swarm ?? m?.odds ?? null;
-  const o = shares ? argmax(shares) : -1;
-  const when = new Date(r.created_at_ms).toISOString().slice(0, 16).replace("T", " ");
-  return `<li><a class="lv-grid lv-row" href="recruit.html#request-${r.id}" data-req="${r.id}">
-    <span class="lv-row__n">#${r.id}</span>
-    <span class="lv-row__title"><b>${esc(title)}</b><code>by ${esc(r.requester)} · ${when} UTC</code></span>
-    <span class="lv-row__lead">${shares ? `<span class="opt" data-opt="${o}">${esc(m.outcomes[o])}</span><span class="lv-row__pct">${pct(shares[o])}%</span>
-      <span class="lv-row__sub">${r.swarm ? "swarm belief" : "market odds"}</span>` : `<span class="text-faint text-sm">odds not in yet</span>`}</span>
-    <span class="lv-row__bar">${shares ? stackHTML(shares) : ""}</span>
-    <span class="lv-row__state" data-r="state"><b>${gl(RQ_PHASE[r.phase] ?? esc(r.phase))}</b><span>${m ? `${m.outcomes.length} outcomes` : ""}</span></span>
-    <span class="lv-row__go" aria-hidden="true">→</span>
-  </a></li>`;
-}
-
-async function buildRequested() {
-  let n;
-  try { n = await chain.requestCount(); } catch { $("rq-count").textContent = "unreadable"; return; }
-  if (!n) {
-    $("rq-count").textContent = "none yet";
-    $("rq-board").innerHTML = `<p class="lv-empty">Nobody has requested a forecast yet. <a href="recruit.html#request">Pick a Polymarket event and recruit the swarm</a>.</p>`;
-    rqSig = "";
-    return;
+async function loadRequested() {
+  try {
+    if (!rqCfg) rqCfg = parseConfig(await chain.requestConfig());
+    reqTotal = await chain.requestCount();
+    const list = reqTotal ? (await chain.requests(Math.max(0, reqTotal - SHOW_REQUESTS), SHOW_REQUESTS)).reverse() : [];
+    reqs = list.map((r) => ({ r, m: requestMarket(r) }));
+    $("rq-count").textContent = `Requested by anyone for a ${feeText()} $ANTO fee; each runs on its own seed, outside the round.${reqTotal > SHOW_REQUESTS ? ` Newest ${SHOW_REQUESTS} of ${reqTotal}.` : ""}`;
+  } catch (e) {
+    $("rq-count").textContent = `Could not read the requests: ${String(e.message || e).slice(0, 80)}`;
   }
-  const list = (await chain.requests(Math.max(0, n - 50), 50)).reverse();
-  const shown = list.slice(0, SHOW_REQUESTS);
-  const sig = JSON.stringify(shown.map((r) => [r.id, r.phase, r.colony_hashes.length, r.swarm]));
-  $("rq-count").textContent = `${n} on-chain${n > SHOW_REQUESTS ? ` · newest ${SHOW_REQUESTS}` : ""} · each runs on its own seed, outside the round`;
-  if (sig === rqSig) return;
-  rqSig = sig;
-  const built = shown.map((r) => ({ r, m: requestMarket(r) }));
-  $("rq-board").innerHTML = `<div class="lv-table"><ol class="lv-rows">${built.map((b) => reqRowHTML(b.r, b.m)).join("")}</ol></div>`;
-  for (const { r, m } of built) {
-    if (!(r.phase === "done" && m?.forecasters)) continue;
-    const v = await verifyMarket(m, { yieldTo: tick0 });
-    const el = $("rq-board").querySelector(`[data-req="${r.id}"] [data-r="state"]`);
-    if (!el) continue;
-    el.dataset.state = v.ok ? "ok" : "bad";
-    el.querySelector("b").innerHTML = gl(v.ok ? "✓ re-run matches" : "✗ re-run differs");
-  }
+  $("rq-all").href = recruitHref("#recent");
+  addPanel.refresh();
+  renderBoard();
 }
+
+// ---- Recruit: look it up, check it the way a keeper does, pay the fee ----
+
+const addPanel = mountAddMarket({
+  cfg: () => rqCfg,
+  markets: () => round?.markets ?? [],
+  followHref: (id) => requestHref(id),
+  onRequested: () => loadRequested(),
+});
+$("add-more").href = recruitHref("#forecast");
+// Old Recruit links (recruit.html?q=…) and anyone's ?q= land here.
+const q0 = new URLSearchParams(location.search).get("q")?.trim().slice(0, 200);
+if (q0) { addPanel.lookup(q0); $("add").scrollIntoView({ block: "start" }); }
 
 // ---- Today's burn, from the chain ----
 
@@ -526,7 +493,7 @@ function paintBurnStatic() {
   const note = $("bt-note");
   if (data.state === "staking") {
     $("bt-when").textContent = "Stakes close at 12:00 UTC";
-    setBurnAction("Drop sugar", "burn.html#sugar");
+    setBurnAction("Drop sugar", "pot.html#sugar");
     const t = data.totals;
     const sum = t ? t.reduce((a, x) => a + x, 0n) : 0n;
     $("bt-tick").textContent = sum ? "Staking open · leading by stake" : "Staking open · seed at 12:00 UTC";
@@ -543,14 +510,14 @@ function paintBurnStatic() {
     if (data.last?.done) note.textContent += ` Last burn (day ${data.last.day}): ${BURN_MENU[data.last.winner_option]}.`;
   } else if (data.state === "waiting") {
     $("bt-when").textContent = "Burns at 24:00 UTC";
-    setBurnAction("Open the Burn page", "burn.html");
+    setBurnAction("Open the Burn page", "pot.html");
     $("bt-tick").textContent = "Stakes frozen · run not started";
     $("bt-value").innerHTML = `<span class="text-faint">Waiting</span>`;
     burnEmpty("Anyone can start today's run on-chain; the colony begins as soon as someone does.");
     note.textContent = "";
   } else {
     $("bt-when").textContent = run.done ? "Burned at 24:00 UTC" : "Burns at 24:00 UTC";
-    setBurnAction("Watch the colony", "burn.html");
+    setBurnAction("Watch the colony", "pot.html");
     burnEmpty(data.weights ? "" : "The stake snapshot is no longer readable, so this colony cannot be replayed here.");
     note.textContent = data.weights
       ? `Replayed here from the on-chain day seed and stake snapshot${data.snapshotOk ? " (✓ snapshot hash matches)" : " (✗ snapshot hash differs)"}; the chain's tick follows the clock, one a second.` : "";
@@ -582,18 +549,16 @@ function burnFrame(now) {
 async function refresh() {
   try {
     round = await loadRound();
-    build();
+    renderBoard();
     header();
-    $("fc-cur").dataset.ready = "1";
     auto.poll();
   } catch (e) {
     $("rc-line").textContent = `Could not read the contract: ${String(e.message || e).slice(0, 160)}. Retrying.`;
   }
 }
 
-function frame() {
-  stepCards();
-  stepIdle();
+function frame(now) {
+  stepMaps(now);
   burnFrame(Date.now());
   requestAnimationFrame(frame);
 }
@@ -607,45 +572,15 @@ setInterval(() => {
   if (bc) $("bt-left").textContent = hms((bc.data.state === "staking" ? bc.data.sched.run_at_ms : bc.data.sched.end_at_ms) - now);
 }, 500);
 
-// ---- $ANTO strip: burned since launch, supply, the stakes feeding this
-// round's Community colonies, and the connected wallet's balance or claim ----
+// ---- $ANTO: the treasury, for the burn card (burn and supply sit in the top
+// bar's chip; Recruit reads your balance itself) ----
 
-let antoNow = null; // the last loadToken(), for the burn card's amounts
-let antoBusy = false;
+let antoNow = null; // the last loadToken()
 async function refreshAnto() {
   try { antoNow = await loadToken({ account: wallet.accountId }); } catch { return; }
-  const t = antoNow;
-  const staked = round?.markets.length && round.markets.every((m) => m.stakes) ? round.markets.reduce((a, m) => a + sumBig(m.stakes), 0n) : null;
-  const facts = [];
-  if (t.burned != null) facts.push(["burned since launch", fmtAnto(t.burned), burnedPct(t.burned, t.genesis)]);
-  if (t.supply != null) facts.push(["supply", fmtAnto(t.supply, { compact: true }), ""]);
-  if (t.treasury != null) facts.push(["treasury", fmtAnto(t.treasury, { compact: true }), ""]);
-  if (staked !== null) facts.push([`staked on round ${round.id}`, fmtAnto(staked), ""]);
-  if (facts.length) $("tk-facts").innerHTML = facts.map(([k, v, x]) => `<div><dt>${esc(k)}</dt><dd class="num">${esc(v)}${x ? ` <small>${esc(x)}</small>` : ""}</dd></div>`).join("");
-  const faucet = t.faucet != null ? fmtAnto(t.faucet) : "";
-  const step = nextStep(t);
-  $("tk-me").innerHTML = step === "connect" ? `<a class="btn btn--sm" href="index.html#anto">Get ${faucet} free $ANTO</a>`
-    : step === "claim" ? `<button class="btn btn--sm" type="button" id="tk-claim">Claim ${faucet} $ANTO</button>`
-    : `<span class="text-sm">You hold <b class="num">${t.me.balance != null ? fmtAnto(t.me.balance) : "…"}</b>${t.me.staked ? ` · <span class="num">${fmtAnto(t.me.staked)}</span> staked` : ""}</span>`;
   if (bc?.data.state === "staking") paintBurnStatic(); // the pick's amount needs the treasury
 }
-$("tk-me").addEventListener("click", async (e) => {
-  const btn = e.target.closest("#tk-claim");
-  if (!btn || antoBusy) return;
-  antoBusy = true;
-  btn.disabled = true;
-  try {
-    await wallet.call("claim_play_tokens");
-    refreshTokenChip();
-    await refreshAnto();
-  } catch (err) {
-    btn.disabled = false;
-    btn.title = String(err.message || err);
-  } finally {
-    antoBusy = false;
-  }
-});
-wallet.onChange(() => refreshAnto());
+wallet.onChange(() => { refreshAnto(); renderBoard(); });
 
 // ---- who keeps it moving ----
 
@@ -677,7 +612,7 @@ async function refreshAuto() {
 async function poll() {
   await refresh();
   refreshAnto();
-  buildRequested().catch(() => {});
+  loadRequested();
   refreshAuto();
 }
 poll();
@@ -685,7 +620,6 @@ refreshBurn();
 setInterval(() => { if (!document.hidden) poll(); }, 20_000); // public RPCs rate-limit by IP
 setInterval(() => { if (!document.hidden) refreshBurn(); }, 30_000);
 requestAnimationFrame(frame);
-document.fonts.ready.then(() => { for (const c of cards) c.busy = true; });
 </script>
 </body>
 </html>

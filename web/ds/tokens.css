@@ -1,47 +1,83 @@
-/* Antonomy design tokens. Theme: Underground nest. Dark only.
-   Contrast figures are WCAG ratios, checked against --surface-raised (the
-   lightest surface) unless noted. See docs/DESIGN_SYSTEM.md. */
+/* Antonomy design tokens, v1 ("Nest and ledger"). Dark only.
+   Every colour does one job: amber is pheromone and brand, green and red are
+   status only, the five options take the hues left over, every other status
+   is neutral grey with a glyph. Contrast figures are WCAG ratios on
+   --surface-raised (#28211a) unless noted. See docs/DESIGN_SYSTEM.md. */
 
 :root {
   color-scheme: dark;
 
   /* ---- Soil: neutrals, darkest to lightest ---- */
-  --soil-950: #0d0a07;   /* sim canvas */
+  --soil-950: #0d0a07;   /* map background */
   --soil-900: #14100c;   /* page */
-  --soil-800: #1d1812;   /* chamber (card) */
+  --soil-800: #1d1812;   /* panel */
   --soil-700: #28211a;   /* raised, hover */
-  --soil-600: #3a3026;   /* hairline border */
-  --soil-500: #7a6852;   /* strong border, 3.3:1 on chamber */
+  --soil-600: #3a3026;   /* hairline */
+  --soil-500: #7a6852;   /* input border, 3.3:1 on panel */
 
-  /* ---- Scenery: sim canvas only. Dark and low-chroma on purpose, so no
+  /* ---- Scenery: the map only. Dark and low-chroma on purpose, so no
      plant or leaf can be mistaken for an option colour ---- */
   --scene-grass: #3c4228;
   --scene-leaf:  #4a3526;
 
-  --bone-100: #efe6d8;   /* text, 12.8:1 */
-  --bone-300: #b8aa95;   /* muted text, 7.0:1 */
+  /* ---- Earth: the map's ground only (and the nest's cutaway), darkest
+     to lightest. A mid loam, so brown ants and the amber trail both read
+     on it. Same steps as --soil-*: the canvas swaps one scale for the other ---- */
+  --earth-950: #64503b;  /* ground, deep */
+  --earth-900: #6b5640;  /* ground */
+  --earth-800: #7d6549;  /* mottle */
+  --earth-700: #866e52;  /* pebbles */
+  --earth-600: #937b5e;  /* packed road, grains */
+  --earth-500: #a8916f;  /* excavated subsoil, highlights */
+
+  /* ---- Ants: brown, as in the field. Wallet tints and carried crumbs
+     still colour them (staker ants, foragers) ---- */
+  --ant-body: #2b1a10;
+  --ant-leg:  #1c110a;
+
+  /* ---- Bone: text, focus ---- */
+  --bone-100: #efe6d8;   /* text, focus ring, 12.8:1 */
+  --bone-300: #b8aa95;   /* muted text, neutral status, 7.0:1 */
   --bone-500: #9a8b76;   /* faint text, 4.8:1 */
 
-  /* ---- Pheromone: brand and primary action. Reserved, see docs ---- */
-  --amber-300: #ffc070;
-  --amber-400: #f2a541;  /* 7.7:1 */
-  --amber-600: #b8741f;
+  /* ---- Amber: brand and the one primary action. Reserved ---- */
+  --amber-300: #ffc070;  /* primary hover */
+  --amber-400: #f2a541;  /* oklch(0.78 0.144 69), 7.7:1 */
+  --amber-600: #b8741f;  /* primary pressed */
   --amber-ink: #1a1006;  /* text on amber, 9.1:1 */
 
-  /* ---- Status. Always paired with a glyph and a word ---- */
-  --lichen-400: #93cf6e; /* match / success */
-  --ember-400:  #ff7a66; /* mismatch / danger */
-  --pollen-400: #e9cd5b; /* warning */
-  --water-400:  #86b7dc; /* info */
+  /* ---- Pheromone: one amber ramp, lighter and more opaque = stronger.
+     The map only, never a mark. The canvas reads --pher-lo and --pher-hi
+     (hex) and scales alpha by trail strength; the four steps are for CSS. ---- */
+  --pher-1: oklch(0.62 0.126 66 / 0.35);  /* faint trail */
+  --pher-2: oklch(0.62 0.126 66 / 0.7);   /* weak trail */
+  --pher-3: oklch(0.78 0.144 69 / 0.85);  /* trail */
+  --pher-4: oklch(0.85 0.121 72);         /* strong trail, at the cap of 20 */
+  --pher-lo: #b97521;                     /* oklch(0.62 0.126 66) */
+  --pher-hi: #ffc170;                     /* oklch(0.85 0.121 72) */
 
-  /* ---- Option palette: food sources 0..4. Earth tones tuned so every pair
-     stays apart under deutan/protan/tritan simulation (min OKLab dE 0.09).
-     Always shown with the matching glyph. ---- */
-  --opt-0: #9bb860;  --opt-0-glyph: "▲";  /* moss */
-  --opt-1: #cf6e4e;  --opt-1-glyph: "■";  /* clay */
-  --opt-2: #5d8dc8;  --opt-2-glyph: "◆";  /* slate */
-  --opt-3: #e0a9c4;  --opt-3-glyph: "●";  /* heather */
-  --opt-4: #efe2b6;  --opt-4-glyph: "★";  /* sand */
+  /* ---- Options 0..4: never green, red or amber, always with the glyph.
+     Worst pair under colour-blindness simulation: aqua vs lilac, OKLab
+     dE 0.090 (deutan). Contrast 5.1 to 10.9. ---- */
+  --opt-0: #5eeae5;  --opt-0-glyph: "▲";  /* aqua,    oklch(0.86 0.12 192). Yes in binaries */
+  --opt-1: #da69b9;  --opt-1-glyph: "■";  /* magenta, oklch(0.68 0.17 340). No in binaries */
+  --opt-2: #439bf7;  --opt-2-glyph: "◆";  /* blue,    oklch(0.68 0.16 252) */
+  --opt-3: #92ac18;  --opt-3-glyph: "●";  /* olive,   oklch(0.70 0.16 120) */
+  --opt-4: #bcb2fd;  --opt-4-glyph: "★";  /* lilac,   oklch(0.80 0.105 290) */
+
+  /* ---- Status. Green and red only here, always with a glyph and a word.
+     Everything that is neither a match nor a fault is --hold (neutral). ---- */
+  --ok:    #6ed889;   /* oklch(0.80 0.15 150). Match, 9.0:1 */
+  --fault: #f45246;   /* oklch(0.66 0.20 28). Mismatch, error, 4.6:1 */
+  --hold:  var(--bone-300); /* paused, stalled, default, running, pending */
+  --ok-tint:    rgb(110 216 137 / 0.12);
+  --fault-tint: rgb(244 82 70 / 0.12);
+  --hold-tint:  rgb(184 170 149 / 0.10);
+  /* Mismatch, stalled, locked stake. Set `color` on the element (or use
+     the --hatch-color hook) and the stripes follow it, at 25%. */
+  --pattern-hatch: repeating-linear-gradient(135deg,
+    color-mix(in srgb, var(--hatch-color, currentColor) 25%, transparent) 0 1px,
+    transparent 1px 6px);
 
   /* ---- Semantic aliases: components use these, not the raw scales ---- */
   --bg:             var(--soil-900);
@@ -57,35 +93,30 @@
   --accent-hover:   var(--amber-300);
   --accent-press:   var(--amber-600);
   --on-accent:      var(--amber-ink);
-  --success:        var(--lichen-400);
-  --danger:         var(--ember-400);
-  --warning:        var(--pollen-400);
-  --info:           var(--water-400);
-  --focus-ring:     var(--amber-300);
+  --accent-tint:    rgb(242 165 65 / 0.12);
+  /* Focus: a bone ring with a soil gap, never amber, so amber keeps its meaning. */
+  --focus-color:    var(--bone-100);
+  --focus-ring:     0 0 0 2px var(--soil-900), 0 0 0 4px var(--bone-100);
 
-  /* Translucent tints for status and accent backgrounds */
-  --accent-tint:  rgb(242 165 65 / 0.12);
-  --success-tint: rgb(147 207 110 / 0.12);
-  --danger-tint:  rgb(255 122 102 / 0.12);
-  --warning-tint: rgb(233 205 91 / 0.12);
-  --info-tint:    rgb(134 183 220 / 0.12);
-
-  /* ---- Type: Fraunces for display and prose, IBM Plex Mono for UI and data ---- */
+  /* ---- Type. Fraunces for the page and market title only; Plex Sans for
+     UI and prose; Plex Mono for hashes, seeds, ids, numbers, clocks and
+     status glyphs ---- */
   --font-display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* Plex lacks some status glyphs (◌ ‖ ↷ ≠); these fill them in. */
+  --font-symbol: "Apple Symbols", "Segoe UI Symbol", "Noto Sans Symbols 2", "DejaVu Sans", sans-serif;
 
-  --text-xs:   0.75rem;   /* 12 */
-  --text-sm:   0.8125rem; /* 13 */
-  --text-base: 0.9375rem; /* 15, mono UI */
-  --text-prose: 1.0625rem;/* 17, serif prose */
-  --text-lg:   1.25rem;   /* 20 */
-  --text-xl:   1.625rem;  /* 26 */
-  --text-2xl:  2.25rem;   /* 36 */
-  --text-3xl:  3.25rem;   /* 52 */
-
-  --leading-tight: 1.15;
-  --leading-snug:  1.35;
-  --leading-body:  1.6;
+  --text-2xs:  0.6875rem; --lh-2xs:  16px;  /* 11, eyebrows and column heads, mono caps */
+  --text-xs:   0.75rem;   --lh-xs:   16px;  /* 12, hints, pill text */
+  --text-sm:   0.8125rem; --lh-sm:   20px;  /* 13, secondary, hashes in tables */
+  --text-base: 0.9375rem; --lh-base: 24px;  /* 15, UI and body */
+  --text-md:   1.0625rem; --lh-md:   26px;  /* 17, lede */
+  --text-lg:   1.25rem;   --lh-lg:   28px;  /* 20, h3 */
+  --text-xl:   1.625rem;  --lh-xl:   32px;  /* 26, h2 */
+  --text-2xl:  2.125rem;  --lh-2xl:  40px;  /* 34, page and market title (Fraunces) */
+  --text-3xl:  2.875rem;  --lh-3xl:  52px;  /* 46, landing headline (Fraunces) */
+  --num-lg:    2rem;      --lh-num-lg: 36px; /* 32 mono, the big number: swarm belief, round clock */
   --tracking-caps: 0.08em;
 
   /* ---- Space: 4px base ---- */
@@ -97,38 +128,42 @@
   --space-6: 32px;
   --space-7: 48px;
   --space-8: 64px;
+  --space-9: 96px;
 
-  /* ---- Shape: organic-soft ---- */
-  --radius-sm:   6px;   /* chips, small controls */
-  --radius-md:   10px;  /* buttons, inputs */
-  --radius-lg:   16px;  /* chambers */
-  --radius-pill: 999px;
+  /* ---- Grid: 12 columns, content max 1240px, gutter 24 (16 under 600px).
+     Breakpoints are 600, 900 and 1200 (media queries can't read vars). ---- */
+  --content-max: 1240px;
+  --gutter: 24px;
+  --prose-max: 68ch;
+  --sim-aspect: 72 / 48; /* the grid is 3:2; scale by whole pixels per cell */
 
-  /* ---- Depth: dark UI uses borders, inner light and glow, not big shadows ---- */
-  --shadow-chamber: inset 0 1px 0 rgb(255 235 200 / 0.04), 0 10px 30px rgb(0 0 0 / 0.45);
-  --shadow-pop:     inset 0 1px 0 rgb(255 235 200 / 0.06), 0 16px 40px rgb(0 0 0 / 0.6);
-  --glow-accent:    0 0 0 1px rgb(242 165 65 / 0.45), 0 0 24px rgb(242 165 65 / 0.18);
-  --glow-success:   0 0 0 1px rgb(147 207 110 / 0.45), 0 0 20px rgb(147 207 110 / 0.15);
-  --glow-danger:    0 0 0 1px rgb(255 122 102 / 0.5), 0 0 20px rgb(255 122 102 / 0.15);
+  /* ---- Radii by job ---- */
+  --radius-data:  4px;   /* rows, inputs, buttons, option cards */
+  --radius-panel: 8px;   /* panels and cards */
+  --radius-stage: 16px;  /* the stage frame only */
+  --radius-pill:  999px; /* status pills only */
 
-  /* ---- Motion: subtle ---- */
+  /* ---- Rows ---- */
+  --row-compact: 32px;
+  --row:         40px;
+  --row-touch:   48px;
+
+  /* ---- Motion: 120 / 200 / 360ms, ease-out. Nothing outside the stage
+     takes longer than 360ms. Numbers never move. ---- */
   --dur-fast: 120ms;
   --dur-base: 200ms;
   --dur-slow: 360ms;
   --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
-  --ease-in-out: cubic-bezier(0.45, 0, 0.25, 1);
 
-  /* ---- Layout ---- */
-  --content-max: 1120px;
-  --prose-max: 68ch;
-  --sim-aspect: 72 / 48; /* matches the sim grid */
+  /* ---- Wallet tint: oklch(L C h), h from sha256(account). Low chroma, so a
+     staker ant never outshines a trail or a pile; never fills a bar or an
+     area. Canvas code (staker-ants.mjs) uses the same numbers. ---- */
+  --wallet-l: 0.74;
+  --wallet-c: 0.045;
+}
 
-  /* ---- Wallet ant tint: hue comes from the wallet, lightness and chroma are
-     fixed so staker ants never outshine pheromone or food sources.
-     Formula oklch(L C hue). The .wallet class in components.css applies it;
-     canvas code uses the same numbers. ---- */
-  --wallet-l: 0.72;
-  --wallet-c: 0.07;
+@media (max-width: 599px) {
+  :root { --gutter: 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

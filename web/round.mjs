@@ -142,14 +142,17 @@ export const stakesAt = () => [];
 // agentSnapshot: odds, hash and, for agent ants, posts). Requested markets
 // reuse this with their own colony id.
 export function marketForecasters(roundSeed, colony, m, keyPrefix) {
-  const oddsHash = oddsSnapshotHash(m.odds, m.odds6h);
+  // The odds 1 hour and 24 hours ago, when the keepers posted them
+  // (docs/FORECAST_QUALITY.md §5): Momentum reads all three windows.
+  const ext = m.odds1h && m.odds24h ? [m.odds1h, m.odds24h] : null;
+  const oddsHash = oddsSnapshotHash(m.odds, m.odds6h, ext);
   const stakeHash = m.stakeHash ?? ZERO32;
   // A colony with no input (no stakes, no agent posts) runs but abstains.
   const counted = voters(m.weights, m.agentOdds.odds);
   return KINDS.map((k) => {
     const rich = k === COMMUNITY ? stakeRichness(m.weights)
       : k === AGENTS ? agentRichness(m.agentOdds.odds)
-      : oddsRichness(k, m.odds, m.odds6h);
+      : oddsRichness(k, m.odds, m.odds6h, ext);
     // Agents commits the agent-odds snapshot in place of the market odds.
     const commit = k === AGENTS ? m.agentOdds.hash : oddsHash;
     const seed = colonySeed(roundSeed, colony, k);
