@@ -1,0 +1,18 @@
+[package]
+name = "antotoken"
+version = "0.0.0"
+edition = "2021"
+description = "Antonomy $ANTO token logic: NEP-141-shaped ledger, capped burn menu, square-root staking and stake snapshot hash. Pure Rust, no chain SDK; the NEAR contract will wrap it."
+publish = false
+
+[dependencies]
+antosim = { path = "../sim/rust" }
+borsh = { version = "1", features = ["derive", "unstable__schema"], optional = true }
+
+[features]
+# Lets the NEAR contract store these types as contract state.
+borsh = ["dep:borsh"]
+
+[profile.release]
+opt-level = 3
+overflow-checks = true
