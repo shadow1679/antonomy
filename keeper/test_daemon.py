@@ -13,6 +13,7 @@ DAY = 20_000
 NOON = DAY * op.DAY_MS + op.STAKING_MS
 END = (DAY + 1) * op.DAY_MS
 SIG = "ab" * 48
+POST = {"market_id": "x", "outcomes": ["Yes", "No"]}   # a keeper_post entry, odds left out
 
 
 def beacon(rnd):
@@ -71,7 +72,7 @@ class Agent(unittest.TestCase):
         return Fake(**v)
 
     def plan(self, f, now=500):
-        return op.plan(f, K, C, now, agent=A)
+        return op.plan(f, [K], C, now, agent=A)
 
     def test_posts_the_chain_odds_on_each_open_market_once(self):
         s = self.plan(self.fake())
@@ -81,7 +82,7 @@ class Agent(unittest.TestCase):
         self.assertEqual(self.plan(self.fake(agent_snapshot=done)), [])
 
     def test_no_agent_account_means_no_agent_calls(self):
-        self.assertEqual(op.plan(self.fake(), K, C, 500), [])
+        self.assertEqual(op.plan(self.fake(), [K], C, 500), [])
 
     def test_the_round_window_closes_at_publish_time(self):
         self.assertEqual(self.plan(self.fake(), now=1000), [])
@@ -100,7 +101,7 @@ class Agent(unittest.TestCase):
     def test_posts_on_a_request_only_while_its_agents_window_is_open(self):
         r = {"id": 4, "colony": 0x8004, "phase": "forecasting", "market_id": "y", "keepers_posted": [],
              "odds_by_ms": 0, "forecast_by_ms": 900, "market": {"odds": [6000, 4000]}}
-        f = self.fake(round_status={"phase": "posting", "close_at_ms": 0, "markets": None}, keeper_post=[{}],
+        f = self.fake(round_status={"phase": "posting", "close_at_ms": 0, "markets": None}, keeper_post=[POST],
                       forecast_request_count=5, forecast_requests=[r])
         s = self.plan(f)
         self.assertEqual(methods(s), [(A, "post_forecast")])
@@ -129,7 +130,7 @@ class Agent(unittest.TestCase):
                       round_status={"phase": "agents", "close_at_ms": 0, "publish_at_ms": 100_000,
                                     "markets": [{}]})
         clock = [50_000]
-        o = op.Operator(f, "c.t", K, C, "testnet", send=True, run=lambda cmd: True,
+        o = op.Operator(f, "c.t", [K], C, ["testnet"], send=True, run=lambda cmd: True,
                         now_ms=lambda: clock[0], log=lambda m: None, agent=A)
         self.assertEqual(o.tick(), [("post_forecast", True), ("crank_request", True)])
         clock[0] = 100_000 - op.DEADLINE_MARGIN_MS
@@ -146,15 +147,36 @@ def burn_run(day=DAY, t=0, done=False):
 
 class Round(unittest.TestCase):
     def plan(self, fake, now=0, beacon=beacon):
-        return op.plan(fake, K, C, now, beacon=beacon)
+        return op.plan(fake, [K], C, now, beacon=beacon)
 
     def test_keeper_posts_once_while_the_round_is_open(self):
         f = Fake(round_status={"phase": "posting", "close_at_ms": 5, "markets": None})
         s = self.plan(f)
         self.assertEqual(methods(s), [(K, "post_trending")])
         self.assertEqual(s[0]["read"], ("trending",))
-        f.v["keeper_post"] = [{"market_id": "x"}]
+        f.v["keeper_post"] = [POST]
         self.assertEqual(self.plan(f), [])
+
+    def test_each_keeper_posts_on_its_own_read(self):
+        K2 = "k2.t"
+        posts = {K: [{"market_id": "x", "outcomes": ["Yes", "No"]}], K2: None}
+        f = Fake(round_status={"phase": "posting", "close_at_ms": 5, "markets": None},
+                 keepers=[[K, K2, "k3.t"], 2], keeper_post=lambda a: posts[a["account_id"]])
+        s = op.plan(f, [K, K2], C, 0, beacon=beacon)
+        self.assertEqual(methods(s), [(K2, "post_trending")])
+        self.assertEqual(s[0]["read"], ("trending",))
+        posts[K2] = list(posts[K])
+        self.assertEqual(op.plan(f, [K, K2], C, 0, beacon=beacon), [])
+
+    def test_a_keeper_whose_list_differs_reads_again(self):
+        yes_no = ["Yes", "No"]
+        x, y = {"market_id": "x", "outcomes": yes_no}, {"market_id": "y", "outcomes": yes_no}
+        self.assertEqual(op.to_repost({"a": [x, y], "b": [y, x], "c": [x, y]}, 2), [])
+        self.assertEqual(op.to_repost({"a": [x, y], "b": [y, x], "c": [y]}, 2), ["b", "c"])
+        self.assertEqual(op.to_repost({"a": [x], "b": [y]}, 2), ["b"])
+        self.assertEqual(op.to_repost({"a": [x], "b": None}, 2), ["b"])
+        # One keeper of ours can't reach a quorum of two alone: post once, no more.
+        self.assertEqual(op.to_repost({"a": [x]}, 2), [])
 
     def test_finalize_only_after_close_and_only_without_markets(self):
         f = Fake(round_status={"phase": "agents", "close_at_ms": 100, "markets": None})
@@ -163,7 +185,7 @@ class Round(unittest.TestCase):
 
     def test_a_late_post_is_finalized_not_skipped_until_the_grace_ends(self):
         rs = {"phase": "skipped", "close_at_ms": 100, "publish_at_ms": 200, "markets": None}
-        f = Fake(round_status=rs, keeper_post=[{"market_id": "x"}])
+        f = Fake(round_status=rs, keeper_post=[POST])
         self.assertEqual(methods(self.plan(f, now=200 + 60_000)), [(C, "finalize_markets")])
         self.assertEqual(methods(self.plan(f, now=200 + op.LATE_FINALIZE_MS)), [(C, "start_round")])
         f.v["keeper_post"] = None
@@ -175,34 +197,34 @@ class Round(unittest.TestCase):
             self.assertEqual(methods(self.plan(f)), [(C, want)], phase)
 
     def test_every_colony_still_due_is_cranked_in_one_tick(self):
-        # Five colonies per market, one call each; none run yet in `ready`.
+        # Three colonies per market, one call each; none run yet in `ready`.
         f = Fake(round_status={"phase": "ready", "close_at_ms": 0, "markets": [{}, {}], "run": None})
-        self.assertEqual(methods(self.plan(f)), [(C, "crank_round")] * 10)
-        # Seven of ten done: three left.
-        run = {"markets": [{"colony_hashes": ["h"] * 5}, {"colony_hashes": ["h"] * 2}]}
+        self.assertEqual(methods(self.plan(f)), [(C, "crank_round")] * 6)
+        # Four of six done: two left.
+        run = {"markets": [{"colony_hashes": ["h"] * 3}, {"colony_hashes": ["h"]}]}
         f = Fake(round_status={"phase": "running", "close_at_ms": 0, "markets": [{}, {}], "run": run})
-        self.assertEqual(methods(self.plan(f)), [(C, "crank_round")] * 3)
-        # Twelve markets is the contract's cap: 60 calls.
+        self.assertEqual(methods(self.plan(f)), [(C, "crank_round")] * 2)
+        # Twelve markets is the contract's cap: 36 calls.
         f = Fake(round_status={"phase": "ready", "close_at_ms": 0, "markets": [{}] * 12, "run": None})
-        self.assertEqual(len(methods(self.plan(f))), 60)
+        self.assertEqual(len(methods(self.plan(f))), 36)
 
     def test_only_the_seed_drawing_crank_carries_the_drand_signature(self):
         rs = {"phase": "ready", "close_at_ms": 0, "markets": [{}], "run": None, "drand_round": 42}
         seen = []
         s = self.plan(Fake(round_status=rs), beacon=lambda r: seen.append(r) or SIG)
         self.assertEqual(seen, [42])
-        self.assertEqual([st["args"] for st in s], [{"drand_signature": SIG}] + [{}] * 4)
+        self.assertEqual([st["args"] for st in s], [{"drand_signature": SIG}] + [{}] * 2)
         # Not published yet: no crank at all this tick.
         self.assertEqual(self.plan(Fake(round_status=rs), beacon=no_beacon), [])
         # Already running: the seed is drawn, no beacon needed.
         run = {"markets": [{"colony_hashes": ["h"]}]}
         s = self.plan(Fake(round_status=dict(rs, phase="running", run=run)), beacon=no_beacon)
-        self.assertEqual([st["args"] for st in s], [{}] * 4)
+        self.assertEqual([st["args"] for st in s], [{}] * 2)
 
     def test_a_contract_without_drand_gets_no_signature(self):
         rs = {"phase": "ready", "close_at_ms": 0, "markets": [{}], "run": None}
         s = self.plan(Fake(round_status=rs), beacon=no_beacon)
-        self.assertEqual([st["args"] for st in s], [{}] * 5)
+        self.assertEqual([st["args"] for st in s], [{}] * 3)
 
 
 def sched(day, phase, drawn, rnd=70):
@@ -211,7 +233,7 @@ def sched(day, phase, drawn, rnd=70):
 
 class Burn(unittest.TestCase):
     def plan(self, fake, now, beacon=beacon):
-        return [s for s in op.plan(fake, K, C, now, beacon=beacon)
+        return [s for s in op.plan(fake, [K], C, now, beacon=beacon)
                 if s["method"] in ("crank_burn", "execute_burn")]
 
     def test_nothing_before_noon(self):
@@ -276,7 +298,7 @@ class Requests(unittest.TestCase):
 
     def plan(self, reqs, now=0, keepers=([K], 1), refused=(), beacon=beacon):
         f = Fake(forecast_request_count=len(reqs), forecast_requests=reqs, keepers=list(keepers))
-        return [s for s in op.plan(f, K, C, now, refused, beacon=beacon) if "request" in s["method"]]
+        return [s for s in op.plan(f, [K], C, now, refused, beacon=beacon) if "request" in s["method"]]
 
     def test_keeper_posts_odds_for_a_new_request(self):
         s = self.plan([self.req()])
@@ -289,6 +311,13 @@ class Requests(unittest.TestCase):
         self.assertEqual(self.plan([self.req(keepers_posted=[K])], keepers=two), [])
         self.assertEqual(methods(self.plan([self.req(keepers_posted=[K])], now=1000, keepers=two)),
                          [(C, "finalize_request_odds")])
+
+    def test_each_of_our_keepers_posts_before_the_request_finalizes(self):
+        K2 = "k2.t"
+        f = Fake(forecast_request_count=1, forecast_requests=[self.req(keepers_posted=[K])],
+                 keepers=[[K, K2, "k3.t"], 2])
+        s = [x for x in op.plan(f, [K, K2], C, 1000, beacon=beacon) if "request" in x["method"]]
+        self.assertEqual(methods(s), [(K2, "post_request_odds")])
 
     def test_a_refused_market_is_not_retried_but_the_request_still_finalizes(self):
         self.assertEqual(self.plan([self.req()], refused={0}), [])
@@ -309,6 +338,39 @@ class Requests(unittest.TestCase):
         self.assertEqual(self.plan([r], now=500, beacon=no_beacon), [])
         s = self.plan([self.req(phase="running", drand_round=9)], beacon=no_beacon)
         self.assertEqual(s[0]["args"], {"request_id": 0})
+
+
+class Randomness(unittest.TestCase):
+    """The randomness service: prove each waited-for drand round once."""
+
+    @staticmethod
+    def asked(*rows):
+        return Fake(randomness_count=len(rows), randomness_requests=[
+            {"id": i, "status": st, "drand_round": rnd} for i, (st, rnd) in enumerate(rows)])
+
+    def plan(self, f, now=1, b=beacon):
+        return op.plan(f, [K], C, now, beacon=b)
+
+    def test_proves_each_pending_round_once_with_its_beacon(self):
+        s = self.plan(self.asked(("pending", 90), ("pending", 90), ("ready", 80), ("pending", 91)))
+        self.assertEqual(methods(s), [(C, "fulfill_randomness")] * 2)
+        self.assertEqual([x["args"] for x in s], [
+            {"drand_round": 90, "drand_signature": SIG}, {"drand_round": 91, "drand_signature": SIG}])
+
+    def test_a_round_whose_beacon_is_not_out_waits(self):
+        self.assertEqual(self.plan(self.asked(("pending", 90)), b=no_beacon), [])
+
+    def test_nothing_pending_means_no_calls(self):
+        self.assertEqual(self.plan(self.asked(("ready", 80))), [])
+        self.assertEqual(self.plan(self.asked()), [])
+
+    def test_a_contract_without_the_service_is_left_alone(self):
+        class Old(Fake):
+            def view(self, method, args=None):
+                if method.startswith("randomness"):
+                    raise RuntimeError("%s failed: no such method" % method)
+                return super().view(method, args)
+        self.assertEqual(self.plan(Old()), [])
 
 
 class Fallback(unittest.TestCase):
@@ -334,7 +396,7 @@ class Order(unittest.TestCase):
         f = Fake(round_status={"phase": "posting", "close_at_ms": 5, "markets": None},
                  burn_schedule=sched(DAY, "running", DAY), burn_run=burn_run(t=0))
         sent = []
-        o = op.Operator(f, "c.t", K, C, "testnet", send=True, run=lambda cmd: sent.append(cmd) or True,
+        o = op.Operator(f, "c.t", [K], C, ["testnet"], send=True, run=lambda cmd: sent.append(cmd) or True,
                         now_ms=lambda: NOON + 5_000_000, log=lambda m: None,
                         readers={"trending": lambda: {"markets": []}, "request": lambda *a: None})
         order = [m for m, _ in o.tick()]
@@ -348,7 +410,7 @@ class Tick(unittest.TestCase):
                  forecast_requests=[{"id": 3, "phase": "odds", "market_id": "bad", "keepers_posted": [],
                                      "odds_by_ms": 10**15, "forecast_by_ms": None}])
         sent, logs = [], []
-        o = op.Operator(f, "c.t", K, C, "testnet", send=True, run=lambda cmd: sent.append(cmd) or True,
+        o = op.Operator(f, "c.t", [K], C, ["testnet"], send=True, run=lambda cmd: sent.append(cmd) or True,
                         now_ms=lambda: 0, log=logs.append,
                         readers={"trending": lambda: {"markets": []}, "request": lambda rid, slug: None})
         self.assertEqual(o.tick(), [])
@@ -363,20 +425,42 @@ class Tick(unittest.TestCase):
 
     def test_a_failed_send_is_reported_and_retried_next_tick(self):
         f = Fake(round_status={"phase": "ready", "close_at_ms": 0, "markets": [{}]})
-        o = op.Operator(f, "c.t", K, C, "testnet", send=True, run=lambda cmd: False,
+        o = op.Operator(f, "c.t", [K], C, ["testnet"], send=True, run=lambda cmd: False,
                         now_ms=lambda: 0, log=lambda m: None)
-        self.assertEqual(o.tick(), [("crank_round", False)] * 5)
-        self.assertEqual(o.tick(), [("crank_round", False)] * 5)
+        self.assertEqual(o.tick(), [("crank_round", False)] * 3)
+        self.assertEqual(o.tick(), [("crank_round", False)] * 3)
+
+    def test_a_failed_rpc_falls_back_to_the_next_network(self):
+        f = Fake(round_status={"phase": "running", "close_at_ms": 0, "markets": [{}],
+                               "run": {"markets": [{"colony_hashes": ["h"] * 2}]}})
+        nets = lambda cmd: cmd[cmd.index("network-config") + 1]
+        for replies, want, tried in [
+            ({"a": False, "b": True}, True, ["a", "b"]),     # RPC error: next network
+            ({"a": None, "b": True}, False, ["a"]),          # contract refused: stop
+            ({"a": True, "b": True}, True, ["a"]),
+            ({"a": False, "b": False}, False, ["a", "b"]),
+        ]:
+            sent = []
+            o = op.Operator(f, "c.t", [K], C, ["a", "b"], send=True,
+                            run=lambda cmd: sent.append(nets(cmd)) or replies[nets(cmd)],
+                            now_ms=lambda: 0, log=lambda m: None)
+            self.assertEqual(o.tick(), [("crank_round", want)])
+            self.assertEqual(sent, tried)
+
+    def test_the_contract_rejecting_a_call_is_told_apart_from_an_rpc_error(self):
+        self.assertTrue(op.REJECTED.search('ExecutionError("Smart contract panicked: PostingClosed")'))
+        self.assertFalse(op.REJECTED.search('internal error: [Some("Internal server error")]'))
+        self.assertFalse(op.REJECTED.search("error while sending payload: [error sending request for url]"))
 
     def test_a_beacon_is_fetched_once_and_sent_with_the_seed_drawing_call(self):
         f = Fake(round_status={"phase": "ready", "close_at_ms": 0, "markets": [{}], "drand_round": 7})
         fetched, sent, logs = [], [], []
         replies = iter([None, SIG])
-        o = op.Operator(f, "c.t", K, C, "testnet", send=True, run=lambda cmd: sent.append(cmd) or True,
+        o = op.Operator(f, "c.t", [K], C, ["testnet"], send=True, run=lambda cmd: sent.append(cmd) or True,
                         now_ms=lambda: 0, log=logs.append, fetch=lambda r: fetched.append(r) or next(replies))
         self.assertEqual(o.tick(), [])
         self.assertIn("waiting for drand round 7", logs)
-        self.assertEqual(len(o.tick()), 5)
+        self.assertEqual(len(o.tick()), 3)
         self.assertIn('"drand_signature":"%s"' % SIG, sent[0][sent[0].index("json-args") + 1])
         o.tick()
         self.assertEqual(fetched, [7, 7])

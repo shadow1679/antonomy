@@ -4,13 +4,18 @@ Everything on the contract is permissionless or allow-listed, so something has
 to call it. This loop reads the contract's views and makes the calls that are
 due, nothing else:
 
-  keeper account  (allow-listed on the contract)
-    post_trending        the round's market, read by keeper/trending.py
+  keeper accounts (allow-listed on the contract; --keeper, repeatable)
+    post_trending        the round's markets, each keeper reading them with
+                         keeper/trending.py on its own; a keeper whose list
+                         differs from the others' (a volume reshuffle between
+                         reads) reads again while posting is open
     post_request_odds    each requested market's odds, same reader
   cranker account (anyone)
     finalize_markets, crank_round, start_round        the round
     crank_burn, execute_burn                          the Burn colony's day
     finalize_request_odds, crank_request              requested forecasts
+    fulfill_randomness                                randomness service: proves each
+                                                      waited-for drand round once
   agent account   (optional, --agent)
     claim_play_tokens, register_agent                 once, when it can afford the deposit
     post_forecast        each open market and request, once, at the odds the
@@ -18,9 +23,14 @@ due, nothing else:
                          forecaster: the Agents colony then mirrors the market
                          until other agents post their own odds)
 
-Dry run unless --send: it prints the NEAR CLI commands it would sign. Usage:
+Dry run unless --send: it prints the NEAR CLI commands it would sign. Each
+send goes through the first NEAR CLI network (--network, repeatable); if that
+RPC fails (an HTTP error, a timeout) the same call goes to the next one. A call
+the contract itself rejected is not sent again. A retried call that did land
+the first time is harmless: an extra crank runs the next colony, and the
+once-only calls are refused the second time. Usage:
 
-  python3 -I keeper/daemon.py --contract <c> --keeper <acct> --cranker <acct> \\
+  python3 -I keeper/daemon.py --contract <c> --keeper <acct> [--keeper <acct>...] --cranker <acct> \\
       [--agent <acct>] [--once] [--interval 60] [--send]
 
 Burn colony cranks: one call steps up to 1,500 ticks (about 195 TGas), so the
@@ -37,27 +47,39 @@ that beacon is published or fetched, the call waits for the next tick.
 import argparse
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
+import threading
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "bots"))
 from swarm import RPC, Chain, fetch_beacon  # noqa: E402
+sys.path.insert(0, HERE)
+import demo  # noqa: E402
+from demo import (AGENT_STYLES, STAKE_STYLES, Crew, agent_steps, call, crew_steps,  # noqa: E402
+                  parse_personas, pick_market, to_bps)  # noqa: F401
 
 DAY_MS = 86_400_000
 STAKING_MS = DAY_MS // 2           # token/src/day.rs: the colony runs 12:00 to 24:00 UTC
 BURN_TICKS = 43_200
 TICKS_PER_CALL = 1_500             # token/src/burnrun.rs
 TRENDING = os.path.join(HERE, "trending.py")
-LIGHT_GAS, HEAVY_GAS = "100.0 Tgas", "300.0 Tgas"
+HEAVY_GAS = "300.0 Tgas"
 LATE_FINALIZE_MS = 30 * 60_000     # how long after publish a late post is still finalized
 TRENDING_COUNT = 12                # markets per round (contract MAX_TRENDING)
-MAX_ROUND_CRANKS = 60              # cranks per tick: five colonies for each of up to 12 markets
+RECRUIT_SCAN = 30                  # trending markets the demo requester picks from
+RECRUIT_SETTLE_MS = 2 * 60_000     # after a request, wait for the chain to show it
+RECRUIT_RETRY_MS = 30 * 60_000     # wait this long after the reader found no market to request
+WINDOW_OPENERS = ("finalize_markets", "finalize_request_odds")   # calls that open an agents' window
+COLONIES_PER_MARKET = 3            # token/src/round.rs: Momentum, Community, Agents
+MAX_ROUND_CRANKS = 36              # cranks per tick: three colonies for each of up to 12 markets
 MAX_BURN_CATCHUP = 5               # cranks per tick when the colony is behind the clock
-BPS = 10_000                       # agent odds must sum to exactly this (token/src/agents.rs)
 DEADLINE_MARGIN_MS = 10_000        # a deadline-bound call this close to its deadline isn't sent
+# The transaction ran and the contract refused it: another RPC won't change that.
+REJECTED = re.compile(r"ExecutionError|Smart contract panicked|ActionError")
 
 
 # rpc.testnet.near.org is fastnear behind another name, under the same per-IP
@@ -81,59 +103,6 @@ class MultiChain:
         raise last
 
 
-def call(account, method, args=None, gas=LIGHT_GAS, read=None, by=None):
-    """One planned transaction. `read` names a reader that fills in `args`
-    first: ("trending",) or ("request", id, slug). `by` is the time (ms) after
-    which the contract refuses it; such calls are sent first in a tick."""
-    return {"account": account, "method": method, "args": args or {}, "gas": gas, "read": read, "by": by}
-
-
-def to_bps(odds):
-    """`odds` rescaled to sum to exactly BPS, as an agent post must: the
-    keepers' median is taken per outcome, so it can sum to a little more or
-    less. Largest remainder, ties to the lowest index; all zeros split evenly."""
-    odds = [max(0, int(o)) for o in odds]
-    total = sum(odds)
-    if total == 0:
-        odds, total = [1] * len(odds), len(odds)
-    out = [o * BPS // total for o in odds]
-    rest = sorted(range(len(odds)), key=lambda i: (-(odds[i] * BPS % total), i))
-    for i in rest[:BPS - sum(out)]:
-        out[i] += 1
-    return out
-
-
-def agent_steps(chain, agent, now_ms, rs, requests):
-    """The forecaster agent's calls: join once, then post once on every open
-    market (the round's, until its publish time) and request (while its
-    agents' window is open)."""
-    targets = []                   # (colony, odds, deadline)
-    if rs["phase"] == "agents" and rs["markets"] is not None and now_ms < rs["publish_at_ms"]:
-        for m in chain.view("forecast_markets") or []:
-            targets.append((m["colony"], m["odds"], rs["publish_at_ms"]))
-    for r in requests:
-        if r["phase"] == "forecasting" and r["market"] is not None \
-                and now_ms < (r["forecast_by_ms"] or 0):
-            targets.append((r["colony"], r["market"]["odds"], r["forecast_by_ms"]))
-    targets = [(c, o, by) for c, o, by in targets
-               if agent not in [a for a, _ in chain.view("agent_snapshot", {"colony": c})["posts"]]]
-    if not targets:
-        return []
-    steps = []
-    join_by = max(by for _, _, by in targets)
-    if not chain.view("is_agent", {"account_id": agent}):
-        need = int(chain.view("request_config")["agent_deposit"])
-        have = int(chain.view("ft_balance_of", {"account_id": agent}))
-        if have < need and not chain.view("has_claimed", {"account_id": agent}):
-            steps.append(call(agent, "claim_play_tokens", by=join_by))
-            have += int(chain.view("faucet_amount"))
-        if have < need:
-            return []              # can't join: nothing to do until it is funded
-        steps.append(call(agent, "register_agent", by=join_by))
-    steps += [call(agent, "post_forecast", {"colony": c, "odds": to_bps(o)}, by=by) for c, o, by in targets]
-    return steps
-
-
 def seed_args(view, beacon, args=None):
     """Arguments for a call that draws a seed: `args` plus the signature of
     the drand round `view` commits to, or None while it isn't available. A
@@ -149,30 +118,53 @@ def seed_args(view, beacon, args=None):
     return args
 
 
-def plan(chain, keeper, cranker, now_ms, refused=(), agent=None, beacon=lambda rnd: None):
+def list_key(post):
+    """What keepers must agree on (token/src/market.rs `list_key`)."""
+    return tuple((m["market_id"], tuple(m["outcomes"])) for m in post)
+
+
+def to_repost(posts, quorum):
+    """Our keepers that should read and post again: every one that hasn't
+    posted, and, once all have but no list has `quorum` of them, those
+    outside the largest group (ties: the group of the first keeper)."""
+    missing = [k for k, p in posts.items() if p is None]
+    if missing or len(posts) < quorum:
+        return missing
+    groups = {}
+    for k, p in posts.items():
+        groups.setdefault(list_key(p), []).append(k)
+    best = max(groups.values(), key=len)
+    return [] if len(best) >= quorum else [k for k in posts if k not in best]
+
+
+def plan(chain, keepers, cranker, now_ms, refused=(), agent=None, beacon=lambda rnd: None):
     """The calls due now, in order. Pure apart from the chain reads and
-    `beacon(round)`, which returns a drand signature or None."""
+    `beacon(round)`, which returns a drand signature or None. `keepers` are
+    the allow-listed accounts this daemon signs for."""
     steps = []
 
     # ---- the round ----
     rs = chain.view("round_status")
     phase = rs["phase"]
     if phase == "posting":
-        if chain.view("keeper_post", {"account_id": keeper}) is None:
-            steps.append(call(keeper, "post_trending", read=("trending",)))
+        _, quorum = chain.view("keepers")
+        posts = {k: chain.view("keeper_post", {"account_id": k}) for k in keepers}
+        for k in to_repost(posts, quorum):
+            steps.append(call(k, "post_trending", read=("trending",)))
     elif phase == "agents":
         if rs["markets"] is None and now_ms >= rs["close_at_ms"]:
             steps.append(call(cranker, "finalize_markets"))
     elif phase in ("ready", "running"):
         # One call per colony, so catch up on every one still due this tick.
         run = rs.get("run")
-        left = 5 * len(rs["markets"] or [1]) - sum(len(m["colony_hashes"]) for m in (run or {"markets": []})["markets"])
+        left = COLONIES_PER_MARKET * len(rs["markets"] or [1]) - sum(len(m["colony_hashes"]) for m in (run or {"markets": []})["markets"])
         first = {} if run is not None else seed_args(rs, beacon)
         if first is not None:
             steps.append(call(cranker, "crank_round", first))
             for _ in range(max(1, min(MAX_ROUND_CRANKS, left)) - 1):
                 steps.append(call(cranker, "crank_round"))
-    elif phase == "skipped" and chain.view("keeper_post", {"account_id": keeper}) is not None \
+    elif phase == "skipped" \
+            and any(chain.view("keeper_post", {"account_id": k}) is not None for k in keepers) \
             and now_ms < rs["publish_at_ms"] + LATE_FINALIZE_MS:
         # A post that arrived (or was noticed) late can still be finalized:
         # the contract has no upper bound, so don't throw the round away.
@@ -207,13 +199,14 @@ def plan(chain, keeper, cranker, now_ms, refused=(), agent=None, beacon=lambda r
     n = chain.view("forecast_request_count")
     recent = chain.view("forecast_requests", {"from_id": max(0, n - 50), "limit": 50}) if n else []
     if n:
-        keepers, _ = chain.view("keepers")
+        listed, _ = chain.view("keepers")
         for r in recent:
             rid = r["id"]
             if r["phase"] == "odds":
-                if keeper not in r["keepers_posted"] and rid not in refused:
-                    steps.append(call(keeper, "post_request_odds", read=("request", rid, r["market_id"])))
-                elif now_ms >= r["odds_by_ms"] or set(keepers) <= set(r["keepers_posted"]):
+                todo = [] if rid in refused else [k for k in keepers if k not in r["keepers_posted"]]
+                for k in todo:
+                    steps.append(call(k, "post_request_odds", read=("request", rid, r["market_id"])))
+                if not todo and (now_ms >= r["odds_by_ms"] or set(listed) <= set(r["keepers_posted"])):
                     steps.append(call(cranker, "finalize_request_odds", {"request_id": rid}))
             elif r["phase"] == "forecasting" and now_ms >= r["forecast_by_ms"]:
                 args = seed_args(r, beacon, {"request_id": rid})
@@ -221,6 +214,19 @@ def plan(chain, keeper, cranker, now_ms, refused=(), agent=None, beacon=lambda r
                     steps.append(call(cranker, "crank_request", args))
             elif r["phase"] == "running":
                 steps.append(call(cranker, "crank_request", {"request_id": rid}))
+
+    # ---- randomness as a service ----
+    # Prove each drand round some request waits for, once its beacon is out.
+    # A contract without the service has no such views: nothing to do.
+    try:
+        count = chain.view("randomness_count")
+        asked = chain.view("randomness_requests", {"from_id": max(0, count - 50), "limit": 50}) if count else []
+    except (RuntimeError, OSError, ValueError, KeyError):
+        asked = []
+    for rnd in sorted({r["drand_round"] for r in asked if r["status"] == "pending"}):
+        sig = beacon(rnd)
+        if sig is not None:
+            steps.append(call(cranker, "fulfill_randomness", {"drand_round": rnd, "drand_signature": sig}))
     if agent:
         steps += agent_steps(chain, agent, now_ms, rs, recent)
     return steps
@@ -245,6 +251,13 @@ def read_request(rid, slug):
     return None if out is None else {"request_id": rid, "market": out["market"]}
 
 
+def read_recruit(exclude):
+    """`request_forecast` arguments: the first trending market not in
+    `exclude`, or None."""
+    out = _read(["--count", str(RECRUIT_SCAN)])
+    return None if out is None else pick_market(out["markets"], set(exclude))
+
+
 def cli(contract, step, network):
     return [
         "near", "contract", "call-function", "as-transaction", contract, step["method"],
@@ -255,14 +268,15 @@ def cli(contract, step, network):
 
 
 class Operator:
-    def __init__(self, chain, contract, keeper, cranker, network, send, run=None, now_ms=None,
-                 readers=None, log=None, agent=None, fetch=None):
+    def __init__(self, chain, contract, keepers, cranker, networks, send, run=None, now_ms=None,
+                 readers=None, log=None, agent=None, fetch=None, crew=None, split=False):
         self.chain, self.contract = chain, contract
-        self.keeper, self.cranker, self.network, self.send = keeper, cranker, network, send
-        self.agent = agent
+        self.keepers, self.cranker, self.networks, self.send = keepers, cranker, networks, send
+        self.agent, self.crew, self.split = agent, crew or Crew(), split
+        self.hold_recruit_until = 0
         self.run = run or self._run
         self.now_ms = now_ms or (lambda: int(time.time() * 1000))
-        self.readers = readers or {"trending": read_trending, "request": read_request}
+        self.readers = readers or {"trending": read_trending, "request": read_request, "recruit": read_recruit}
         self.log = log or (lambda m: print(m, file=sys.stderr))
         self.refused = set()
         self.fetch = fetch or fetch_beacon
@@ -281,58 +295,167 @@ class Operator:
         return self.beacons[rnd]
 
     def _run(self, cmd):
+        """True if sent, False if the RPC failed, None if the contract
+        rejected the call."""
         if not self.send:
             return True
         r = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
-        if r.returncode != 0:
-            self.log(r.stderr.strip()[-300:])
-        return r.returncode == 0
+        if r.returncode == 0:
+            return True
+        self.log(r.stderr.strip()[-300:])
+        return None if REJECTED.search(r.stderr) else False
 
-    def tick(self):
-        """Make every call that is due. Returns [(method, sent_ok)]."""
-        done = []
-        steps = plan(self.chain, self.keeper, self.cranker, self.now_ms(), self.refused, self.agent,
-                     self.beacon)
-        # The keeper's Polymarket reads can take minutes on a bad network, so
-        # the on-chain calls that don't need one (cranks, burn) go first, and
-        # of those the ones with a deadline (agent posts) before the rest: a
-        # tick of 60 round cranks takes long enough to miss a posting window.
-        steps.sort(key=lambda st: (st["read"] is not None, st["by"] is None))
-        for step in steps:
-            if step["by"] is not None and self.now_ms() >= step["by"] - DEADLINE_MARGIN_MS:
-                self.log("skip %s: its window closes before it would land" % step["method"])
-                continue
-            if step["read"] is not None:
-                kind, *a = step["read"]
-                args = self.readers[kind](*a)
-                if args is None:
-                    self.log("skip %s: the keeper reader refused" % step["method"])
-                    if kind == "request":
-                        self.refused.add(a[0])
-                    continue
-                step["args"] = args
-            cmd = cli(self.contract, step, self.network)
+    def send_step(self, step):
+        """Send `step` through each network in turn until one takes it."""
+        for net in self.networks:
+            cmd = cli(self.contract, step, net)
             self.log(("send " if self.send else "dry  ") + shlex.join(cmd)[:220])
             ok = self.run(cmd)
-            if not ok:
-                self.log("failed: %s (will retry next tick)" % step["method"])
-            done.append((step["method"], ok))
+            if ok is None:
+                return False
+            if ok:
+                return True
+        return False
+
+    def do_step(self, step, sent=(), made=None):
+        """Send one planned call: (method, sent_ok), or None if it was
+        skipped (its window is closing, its reader refused, it was already
+        made by an earlier pass)."""
+        if step["by"] is not None and self.now_ms() >= step["by"] - DEADLINE_MARGIN_MS:
+            self.log("skip %s: its window closes before it would land" % step["method"])
+            return None
+        if step["read"] is not None:
+            kind, *a = step["read"]
+            if kind == "recruit" and self.now_ms() < self.hold_recruit_until:
+                return None
+            args = self.readers[kind](*a)
+            if args is None:
+                self.log("skip %s: the keeper reader refused" % step["method"])
+                if kind == "request":
+                    self.refused.add(a[0])
+                elif kind == "recruit":
+                    self.hold_recruit_until = self.now_ms() + RECRUIT_RETRY_MS
+                return None
+            step["args"] = args
+        key = (step["account"], step["method"], json.dumps(step["args"], sort_keys=True))
+        if key in sent:
+            return None
+        if made is not None:
+            made.add(key)
+        ok = self.send_step(step)
+        if not ok:
+            self.log("failed: %s (will retry next tick)" % step["method"])
+        elif step["method"] == "request_forecast":
+            # Views lag a fresh transaction a little; a second request would cost a second fee.
+            self.hold_recruit_until = self.now_ms() + RECRUIT_SETTLE_MS
+        return (step["method"], ok)
+
+    def run_steps(self, steps, sent=(), made=None, parallel=False):
+        """Send `steps` in the order that suits their deadlines. `sent` holds
+        the calls an earlier pass of this tick made, which are not made again
+        (repeats within one pass are meant: a crank per colony); `made`, if
+        given, collects this pass's. `parallel` sends each account's calls in
+        its own thread (calls of one account stay in order; different accounts
+        have their own nonces)."""
+        # The keeper's Polymarket reads can take minutes on a bad network, so
+        # the on-chain calls that don't need one (cranks, burn) go first, and
+        # of those the ones with a deadline (agent posts, stakes) before the
+        # rest: a tick of 60 round cranks takes long enough to miss a window.
+        steps.sort(key=lambda st: (st["read"] is not None, st["by"] is None))
+        if not parallel:
+            return [r for r in (self.do_step(st, sent, made) for st in steps) if r is not None]
+        by_account = {}
+        for st in steps:
+            by_account.setdefault(st["account"], []).append(st)
+        out = {}
+
+        def work(acct):
+            out[acct] = [r for r in (self.do_step(st, sent, made) for st in by_account[acct]) if r is not None]
+
+        threads = [threading.Thread(target=work, args=(acct,)) for acct in by_account]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        return [r for acct in by_account for r in out.get(acct, [])]
+
+    def tick(self):
+        """Make every call that is due. Returns [(method, sent_ok)]. With
+        `split`, the agents' and the crew's calls are left to `fast_tick`."""
+        made = set()
+        steps = plan(self.chain, self.keepers, self.cranker, self.now_ms(), self.refused,
+                     None if self.split else self.agent, self.beacon)
+        if not self.split:
+            steps += crew_steps(self.chain, self.crew, self.now_ms(), self.log)
+        done = self.run_steps(steps, made=made)
+        if not self.split and any(m in WINDOW_OPENERS and ok for m, ok in done):
+            # A call just opened an agents' window (the request one is only
+            # 60 seconds long): post and stake in it now, not next tick.
+            rs = self.chain.view("round_status")
+            requests = demo.recent_requests(self.chain)
+            again = agent_steps(self.chain, self.agent, self.now_ms(), rs, requests) if self.agent else []
+            done += self.run_steps(again + crew_steps(self.chain, self.crew, self.now_ms(), self.log), made)
         return done
+
+    def fast_tick(self):
+        """The deadline-bound calls: the baseline agent's posts and the crew's
+        stakes, posts and requests. A cranking tick can take minutes (one
+        transaction at a time), longer than the 60-second window a request's
+        agents have, so these run on their own short loop."""
+        chain = demo.Memo(self.chain)
+        now = self.now_ms()
+        steps = crew_steps(chain, self.crew, now, self.log)
+        if self.agent:
+            try:
+                rs = chain.view("round_status")
+                steps += agent_steps(chain, self.agent, now, rs, demo.recent_requests(chain))
+            except (RuntimeError, OSError, ValueError, KeyError) as e:
+                self.log("agent: %s" % e)
+        return self.run_steps(steps, parallel=True)
 
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--contract", required=True)
-    p.add_argument("--keeper", required=True, help="allow-listed keeper account")
+    p.add_argument("--keeper", action="append", required=True,
+                   help="allow-listed keeper account; repeat for each keeper this daemon signs for")
     p.add_argument("--cranker", required=True, help="any account; pays the gas of the cranks")
     p.add_argument("--agent", help="optional forecaster-agent account: joins and posts the chain's odds on every open market")
+    p.add_argument("--staker", action="append", metavar="ACCOUNT[:STYLE]",
+                   help="demo staker persona (style %s, default follower); repeatable" % "/".join(STAKE_STYLES))
+    p.add_argument("--demo-agent", action="append", metavar="ACCOUNT[:STYLE]",
+                   help="extra forecaster agent with its own odds (style %s, default sharp); repeatable"
+                   % "/".join(AGENT_STYLES))
+    p.add_argument("--requester", help="demo account that pays for Recruit the swarm requests")
+    p.add_argument("--recruit-max", type=int, default=2, help="most requests the demo requester makes in all")
+    p.add_argument("--recruit-gap", type=int, default=demo.RECRUIT_GAP_MS // 60_000,
+                   help="minutes between the demo requester's requests")
     p.add_argument("--rpc", action="append", help="RPC endpoint; repeat for fallbacks (default: three public ones)")
-    p.add_argument("--network", default="testnet")
+    p.add_argument("--network", action="append",
+                   help="NEAR CLI network to sign through; repeat for fallbacks (default: testnet)")
     p.add_argument("--interval", type=int, default=60, help="seconds between ticks")
+    p.add_argument("--fast-interval", type=int, default=15,
+                   help="seconds between the fast loop's ticks (the agents' and the demo crew's calls, which "
+                        "have short windows and run beside the slower cranking loop); 0 = one loop for all")
     p.add_argument("--once", action="store_true")
     p.add_argument("--send", action="store_true", help="sign and send with the NEAR CLI")
     a = p.parse_args(argv)
-    op = Operator(MultiChain(a.rpc or RPCS, a.contract), a.contract, a.keeper, a.cranker, a.network, a.send, agent=a.agent)
+    op = Operator(MultiChain(a.rpc or RPCS, a.contract), a.contract, a.keeper, a.cranker, a.network or ["testnet"], a.send, agent=a.agent,
+                  crew=Crew(parse_personas(a.staker, STAKE_STYLES, "follower"),
+                            parse_personas(a.demo_agent, AGENT_STYLES, "sharp"),
+                            a.requester, a.recruit_max, a.recruit_gap * 60_000),
+                  split=a.fast_interval > 0)
+    if op.split and not a.once:
+        def fast():
+            while True:
+                try:
+                    op.fast_tick()
+                except (RuntimeError, OSError, ValueError, subprocess.SubprocessError) as e:
+                    print("fast tick failed: %s" % e, file=sys.stderr)
+                time.sleep(a.fast_interval)
+        threading.Thread(target=fast, daemon=True).start()
+    if op.split and a.once:
+        op.fast_tick()
     while True:
         try:
             op.tick()
