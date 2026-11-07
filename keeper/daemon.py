@@ -88,6 +88,13 @@ MAX_BURN_CATCHUP = 5               # cranks per tick when the colony is behind t
 DEADLINE_MARGIN_MS = 10_000        # a deadline-bound call this close to its deadline isn't sent
 # The transaction ran and the contract refused it: another RPC won't change that.
 REJECTED = re.compile(r"ExecutionError|Smart contract panicked|ActionError")
+# The RPC took the transaction but gave no result: on the heavy multi-block
+# cranks the node's wait for the result fails with this, and the transaction
+# usually lands anyway. A second send through another network would be a
+# second transaction, so a call with no deadline is not repeated: the next
+# tick plans again from the chain's state, which shows whether it landed.
+UNSURE = re.compile(r'internal error: \[Some\("Internal server error"\)\]')
+UNCONFIRMED = "unconfirmed"
 
 
 # rpc.testnet.near.org is fastnear behind another name, under the same per-IP
@@ -348,14 +355,16 @@ class Operator:
 
     def _run(self, cmd):
         """True if sent, False if the RPC failed, None if the contract
-        rejected the call."""
+        rejected the call, UNCONFIRMED if the RPC took it but gave no result."""
         if not self.send:
             return True
         r = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
         if r.returncode == 0:
             return True
         self.log(r.stderr.strip()[-300:])
-        return None if REJECTED.search(r.stderr) else False
+        if REJECTED.search(r.stderr):
+            return None
+        return UNCONFIRMED if UNSURE.search(r.stderr) else False
 
     def send_step(self, step):
         """Send `step` through each network in turn until one takes it."""
@@ -365,6 +374,11 @@ class Operator:
             ok = self.run(cmd)
             if ok is None:
                 return False
+            if ok == UNCONFIRMED:
+                if step["by"] is None:
+                    self.log("no result for %s; the next tick checks the chain" % step["method"])
+                    return True
+                continue   # a deadline-bound call tries the next network; a repeat is refused harmlessly
             if ok:
                 return True
         return False

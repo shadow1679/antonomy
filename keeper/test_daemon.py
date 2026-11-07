@@ -512,6 +512,40 @@ class Tick(unittest.TestCase):
         self.assertFalse(op.REJECTED.search('internal error: [Some("Internal server error")]'))
         self.assertFalse(op.REJECTED.search("error while sending payload: [error sending request for url]"))
 
+    def test_an_rpc_with_no_result_is_not_resent_unless_the_call_has_a_deadline(self):
+        # The heavy cranks land although the node's wait for their result fails.
+        err = 'Error: \n   0: internal error: [Some("Internal server error")]\n'
+        self.assertTrue(op.UNSURE.search(err))
+        self.assertFalse(op.UNSURE.search("error while sending payload: [error sending request for url]"))
+
+        class R:
+            def __init__(self, code, stderr):
+                self.returncode, self.stderr = code, stderr
+
+        real = op.subprocess.run
+        try:
+            for code, stderr, want in [
+                (0, "", True),
+                (1, err, op.UNCONFIRMED),
+                (1, 'ExecutionError("Smart contract panicked: x")', None),
+                (1, "error while sending payload", False),
+            ]:
+                op.subprocess.run = lambda *a, **k: R(code, stderr)
+                o = op.Operator(Fake(), "c.t", [K], C, ["a"], send=True, now_ms=lambda: 0, log=lambda m: None)
+                self.assertEqual(o._run(["near"]), want)
+        finally:
+            op.subprocess.run = real
+
+        nets = lambda cmd: cmd[cmd.index("network-config") + 1]
+        for by, tried, want in [(None, ["a"], True), (10**15, ["a", "b"], False)]:
+            sent = []
+            o = op.Operator(Fake(), "c.t", [K], C, ["a", "b"], send=True,
+                            run=lambda cmd: sent.append(nets(cmd)) or op.UNCONFIRMED,
+                            now_ms=lambda: 0, log=lambda m: None)
+            step = {"method": "crank_round", "args": {}, "gas": "100.0 Tgas", "account": C, "by": by, "read": None}
+            self.assertEqual(o.send_step(step), want)
+            self.assertEqual(sent, tried)
+
     def test_a_beacon_is_fetched_once_and_sent_with_the_seed_drawing_call(self):
         f = Fake(round_status={"phase": "ready", "close_at_ms": 0, "markets": [{}], "drand_round": 7})
         fetched, sent, logs = [], [], []
