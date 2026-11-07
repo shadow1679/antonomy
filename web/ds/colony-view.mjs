@@ -6,6 +6,7 @@
 // where the ants actually walked. Effects use Math.random (cosmetic only).
 
 import { W, H, NEST_X, NEST_Y, CAP, FOOD_RADIUS_SQ, SCORE_RADIUS_SQ } from "../../sim/js/antosim.mjs";
+import { walletColor } from "./staker-ants.mjs";
 
 const TAU = Math.PI * 2;
 const TRAIL = 24;            // ticks of path kept per ant, for the selection trail
@@ -127,6 +128,14 @@ export class ColonyView {
       this.moundFade[i] = 0.3 + 0.7 * smooth(1.4, 2.9, Math.hypot((i % W) - NEST_X, Math.floor(i / W) - NEST_Y));
     }
     this.tufts = [];         // grass drawn over the ants, swaying while playing
+    this.owner = null;       // staker ants: wallet index per ant, -1 for a plain ant
+    this.tints = [];
+  }
+
+  // Tint ants by wallet (see staker-ants.mjs). null clears it. Cosmetic only.
+  setStakers(stakers) {
+    this.owner = stakers ? stakers.owner : null;
+    this.tints = stakers ? stakers.rows.map((r) => walletColor(r.hue)) : [];
   }
 
   get still() { return this.motion.matches; }
@@ -753,7 +762,8 @@ export class ColonyView {
         d = ((d + 3 * Math.PI) % TAU) - Math.PI;
         const moved = this.curX[a] !== this.prevX[a] || this.curY[a] !== this.prevY[a];
         const phase = (this.gait[a] - (moved ? 1 - frac : 0)) * Math.PI;
-        this.ant(x, y, a0 + d * turn, phase, pass ? this.c.opt[this.optOf(this.carry[a])] : null);
+        const w = this.owner ? this.owner[a] : -1;
+        this.ant(x, y, a0 + d * turn, phase, pass ? this.c.opt[this.optOf(this.carry[a])] : null, w >= 0 ? this.tints[w] : null);
       }
     }
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -768,7 +778,7 @@ export class ColonyView {
 
   // One ant: dark halo for contrast, six legs in a tripod gait, antennae,
   // bone body. A returning ant holds a crumb from the pile it visited.
-  ant(x, y, ang, phase, crumb) {
+  ant(x, y, ang, phase, crumb, tint = null) {
     const { ctx } = this, k = this.S * ANT_SCALE;
     const cs = Math.cos(ang) * k, sn = Math.sin(ang) * k, lw = 1.7 / k;
     const swing = this.still ? 0 : 0.2;
@@ -805,6 +815,13 @@ export class ColonyView {
     ctx.moveTo(0.24, 0); ctx.ellipse(0.04, 0, 0.2, 0.12, 0, 0, TAU);         // thorax
     ctx.moveTo(0.65, 0); ctx.ellipse(0.46, 0, 0.19, 0.17, 0, 0, TAU);        // head
     ctx.fill();
+    if (tint) {                                                              // staker ant: wallet colour on gaster and thorax
+      ctx.fillStyle = tint;
+      ctx.beginPath();
+      ctx.moveTo(-0.12, 0); ctx.ellipse(-0.58, 0, 0.46, 0.32, 0, 0, TAU);
+      ctx.moveTo(0.24, 0); ctx.ellipse(0.04, 0, 0.2, 0.12, 0, 0, TAU);
+      ctx.fill();
+    }
     ctx.fillStyle = "rgba(255,255,255,0.2)";
     ctx.beginPath(); ctx.ellipse(-0.66, -0.1, 0.2, 0.1, 0, 0, TAU); ctx.fill();
 

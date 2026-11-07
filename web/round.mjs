@@ -9,6 +9,7 @@ import {
   Colony, seedFromInt, colonySeed, marketColony, stakeRichness, oddsRichness, oddsSnapshotHash,
   BURN_COLONY, KINDS, COMMUNITY, N_ANTS, TICKS, FORECAST_ANTS, FORECAST_TICKS,
 } from "../sim/js/antosim.mjs";
+import { walletWeights, stakerAnts } from "./ds/staker-ants.mjs";
 
 export const GLYPHS = ["▲", "■", "◆", "●", "★"];
 export const BURN_MENU = ["0.10%", "0.25%", "0.50%", "1.00%", "2.00%"];
@@ -26,17 +27,32 @@ export const RUN_MS = 120_000;   // the colonies run for this long, then the res
 const ZERO32 = new Uint8Array(32);
 
 // Fixture snapshots. The market is the one sim/tests/crosscheck.py uses.
-// Stake weights are milli sqrt-tokens per option, as Staking::sim_weights gives them.
-const BURN_WEIGHTS = [0, 4000, 9000, 2000, 0];
+// Stakes are fixture wallets (whole tokens per option). The weights the sim
+// reads are derived from them the way Staking::sim_weights does (milli
+// sqrt-tokens per option), so the staker ants and the food richness agree.
+const BURN_WALLETS = [
+  { id: "alice.testnet", stakes: [0, 4, 0, 0, 0] },
+  { id: "bob.testnet", stakes: [0, 4, 0, 0, 0] },
+  { id: "carol.testnet", stakes: [0, 0, 9, 0, 0] },
+  { id: "dave.testnet", stakes: [0, 0, 9, 0, 0] },
+  { id: "erin.testnet", stakes: [0, 0, 9, 0, 0] },
+  { id: "frank.testnet", stakes: [0, 0, 0, 4, 0] },
+];
+const BURN_WEIGHTS = walletWeights(BURN_WALLETS, 5); // [0, 4000, 9000, 2000, 0]
 const MARKETS = [
   {
     title: "Fed decision at the next meeting",
     outcomes: ["Cut", "Hold", "Hike"],
     odds: [6200, 2800, 1000],
     odds6h: [5500, 3300, 1200],
-    weights: [3000, 0, 12000],
+    wallets: [
+      { id: "grace.testnet", stakes: [9, 0, 0] },
+      { id: "heidi.testnet", stakes: [0, 0, 16] },
+      { id: "ivan.testnet", stakes: [0, 0, 16] },
+      { id: "judy.testnet", stakes: [0, 0, 16] },
+    ],
   },
-];
+].map((m) => ({ ...m, weights: walletWeights(m.wallets, m.outcomes.length) })); // [3000, 0, 12000]
 
 // Every colony of a round, Burn first, then each market's four forecasters
 // in KINDS order. make() returns a fresh Colony at tick 0.
@@ -50,6 +66,7 @@ export function roundColonies(roundSeed) {
     labels: BURN_MENU,
     ants: N_ANTS,
     ticks: TICKS,
+    stakers: stakerAnts(BURN_WALLETS, N_ANTS),
     make: () => new Colony(burnSeed, 5, stakeRichness(BURN_WEIGHTS), N_ANTS, TICKS, ZERO32),
   };
   const markets = MARKETS.map((m, i) => {
@@ -68,6 +85,8 @@ export function roundColonies(roundSeed) {
         labels: m.outcomes,
         ants: FORECAST_ANTS,
         ticks: FORECAST_TICKS,
+        // Only Community reads stakes, so only it has staker ants.
+        stakers: k === COMMUNITY ? stakerAnts(m.wallets, FORECAST_ANTS) : null,
         make: () => new Colony(seed, m.outcomes.length, rich,
           FORECAST_ANTS, FORECAST_TICKS, ZERO32, oddsHash),
       };

@@ -46,6 +46,7 @@
             <ul class="share-bars" data-r="bars"></ul>
             <p class="text-xs text-faint" style="margin: var(--space-3) 0 0">Share of pheromone inside each scoring ring. Food richness follows the square root of holder stakes on each option. The strongest trail at tick 800 wins.</p>
           </div>
+          <div class="chamber"><div class="chamber__header"><h3 class="chamber__title">Holder stakes</h3></div><div data-r="stakers"></div></div>
           <div class="chamber" role="status" aria-live="polite" data-r="result"></div>
         </div>
       </div>
@@ -72,7 +73,7 @@
 import { trailShares, marketResult, toHex } from "../sim/js/antosim.mjs";
 import { ColonyView } from "./ds/colony-view.mjs";
 import { demoRound, roundProgress, GLYPHS, KIND_BLURB } from "./round.mjs";
-import { $, esc, pad4, hashHTML, installCopy, liveShares, shareBars, leaderHTML, topbar } from "./ui.mjs";
+import { $, esc, pad4, hashHTML, installCopy, liveShares, shareBars, leaderHTML, topbar, stakerLegendHTML } from "./ui.mjs";
 
 $("topbar").outerHTML = topbar("live", `<span class="chip chip--live" id="live-chip">live</span>`);
 installCopy();
@@ -100,6 +101,8 @@ function tile(spec, root, canvas) {
   const r = (k) => root.querySelector(`[data-r="${k}"]`);
   const view = new ColonyView(canvas, { labels: spec.labels, glyphs: GLYPHS });
   view.selected = -1; // no followed ant on the overview; Replay has that
+  view.setStakers(spec.stakers);
+  if (r("stakers")) r("stakers").innerHTML = stakerLegendHTML(spec.stakers);
   const col = spec.make();
   view.attach(col);
   const t = { spec, col, view, r, bars: shareBars(r("bars"), spec.labels), visible: true, busy: true, lastT: -1, result: null };
@@ -142,6 +145,7 @@ function build() {
             </div>
             <ul class="share-bars share-bars--compact" data-r="bars"></ul>
             <p class="text-xs text-faint">${KIND_BLURB[f.kind]}</p>
+            ${f.stakers ? `<div data-r="stakers"></div>` : ""}
           </div>`).join("")}
       </div>
       <div class="table-wrap">

@@ -29,6 +29,16 @@ export function installCopy() {
   });
 }
 
+// Legend for staker ants: one row per wallet with its tint, stake and ants.
+// Empty string when the colony has no stakes (an even map, no staker ants).
+export function stakerLegendHTML(stakers) {
+  if (!stakers || !stakers.total) return "";
+  const rows = stakers.rows.filter((r) => r.ants > 0).map((r) =>
+    `<li><span class="wallet" style="--wallet-hue: ${r.hue}">${esc(r.id)}</span> <span class="text-faint">${r.tokens.toLocaleString("en")} staked · ${r.ants} ants</span></li>`).join("");
+  return `<ul class="stack text-xs" style="--stack-gap: var(--space-2); list-style: none; padding: 0; margin: 0">${rows}</ul>
+    <p class="text-xs text-faint" style="margin: var(--space-2) 0 0">Staker ants: each wallet's weight is the square root of its stake, and it spawns ants in proportion. The tint is cosmetic. The sim reads only the summed weight per option.</p>`;
+}
+
 // Per-option share of the scored pheromone right now, in percent, and the
 // leading option (-1 before any trail). For display while a colony runs; the
 // exact basis-point shares come from trailShares() once it has finished.
@@ -108,11 +118,12 @@ export class Player {
     document.fonts.ready.then(() => { if (this.col && !this.raf) this.view.draw(1); });
   }
 
-  load(make, labels) {
+  load(make, labels, stakers = null) {
     this.stop();
     this.make = make;
     this.labels = labels;
     this.view.labels = labels;
+    this.view.setStakers(stakers);
     this.col = make();
     this.view.attach(this.col);
     this.el.scrubber.max = this.col.ticks;

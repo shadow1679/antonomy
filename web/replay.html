@@ -56,6 +56,7 @@
               <span class="eyebrow" id="share-tick">tick 0</span>
             </div>
             <ul class="share-bars" id="bars"></ul>
+            <div id="stakers" style="margin-top: var(--space-3)"></div>
             <p class="text-xs text-faint" id="forecast-note" style="margin: var(--space-3) 0 0" hidden><span class="tag-forecast">Forecast · not advice</span> One of four forecasters on this market. Swarm belief is their average and is shown on the Live page.</p>
           </div>
         </div>
@@ -71,7 +72,7 @@
 <script type="module">
 import { toHex } from "../sim/js/antosim.mjs";
 import { roundById, demoRound } from "./round.mjs";
-import { $, esc, hashHTML, installCopy, liveShares, shareBars, Player, topbar } from "./ui.mjs";
+import { $, esc, hashHTML, installCopy, liveShares, shareBars, Player, topbar, stakerLegendHTML } from "./ui.mjs";
 
 $("topbar").outerHTML = topbar("replay");
 installCopy();
@@ -103,7 +104,8 @@ function load(id, key) {
   $("forecast-note").hidden = spec.key === "burn";
   bars = shareBars($("bars"), spec.labels);
   setBadge("idle", "Not verified");
-  player.load(spec.make, spec.labels);
+  player.load(spec.make, spec.labels, spec.stakers);
+  $("stakers").innerHTML = stakerLegendHTML(spec.stakers);
   history.replaceState(null, "", `?round=${id}&colony=${spec.key}`);
 }
 
