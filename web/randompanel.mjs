@@ -1,4 +1,4 @@
-// The Randomness section of the Recruit page (docs/RECRUIT_PAGE.md; it was
+// The Randomness section of the Recruit page (it was
 // the Random page): ask the contract for a value, follow it until its drand
 // round is out and proven, draw a name from a list, and check the value
 // against drand's own signature. The pure part is web/random.mjs. Ids carry

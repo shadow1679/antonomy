@@ -1,4 +1,4 @@
-// The Daily Pot page (web/pot.html, docs/DAILY_POT_PAGE.md): where the day
+// The Daily Pot page (web/pot.html): where the day
 // is, the pot strip in its tenses (rule, estimate, done), Your part, the
 // wallet budget, the calm stage summary, Your days and the receipts. Pure:
 // chain data in, models and HTML strings out, so Node can test it (pass `now`

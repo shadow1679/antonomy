@@ -1,5 +1,5 @@
 // One requested forecast, followed from the chain: the market page's view of
-// a request (market.html?r=<id>; docs/RECRUIT_PAGE.md). The lifecycle steps,
+// a request (market.html?r=<id>). The lifecycle steps,
 // what is next (finalize, crank, an agent's post), Feed Community, the three
 // colonies re-run here, the swarm belief with verify, what the colonies read
 // and who got paid. market.html imports it only for ?r=; `followRequest(id)`

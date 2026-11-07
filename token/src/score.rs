@@ -165,8 +165,7 @@ pub struct SrcTally {
 pub struct Tally {
     /// Books scored.
     pub books: u32,
-    /// Books whose market resolved 50-50: counted, not scored
-    /// (docs/FORECAST_PAGE.md §5).
+    /// Books whose market resolved 50-50: counted, not scored.
     pub fifty_fifty: u32,
     /// Resolved books whose winner wasn't among their outcomes: not scored.
     pub void: u32,

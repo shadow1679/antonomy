@@ -162,7 +162,7 @@
 .scent-more[open] > summary .chamber__title::before { content: "−"; }
 .scent-more[open] > summary { margin-bottom: var(--space-4); }
 
-/* ---- Landing (index.html, docs/LANDING_PAGE.md). The scene: the pitch
+/* ---- Landing (index.html). The scene: the pitch
    beside one map. On a wide screen the map is pinned: scrolling on, the pitch
    fades and the map grows from its column to fill the screen from under the
    steps' column (--z, 0 to 1, set by the script with the map's box), and the four steps scroll over it
@@ -593,7 +593,7 @@ kbd { display: inline-block; min-width: 1.9em; padding: 1px 6px; border: 1px sol
 .tile .sim-frame__hint { right: var(--space-2); bottom: var(--space-2); font-size: 10px; opacity: 0.8; }
 .tile [data-r="follow"]:not(:empty) { padding-top: var(--space-3); border-top: 1px solid var(--border); }
 
-/* ---- Recruit (docs/RECRUIT_PAGE.md): the page where you put the swarm to
+/* ---- Recruit: the page where you put the swarm to
    work, in three sections. Forecast on request: an ask strip (in a browser,
    from code, where the fee goes), then the request being followed (a
    lifecycle strip, one colony large with all three as thumbnails, the swarm

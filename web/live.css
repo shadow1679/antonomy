@@ -89,7 +89,7 @@ body.lv .eyebrow { margin: 0; }
 .lv-stack i { flex: var(--w) 0 0; min-width: 0; background: var(--opt-color); font-style: normal; font-family: "IBM Plex Mono", var(--font-symbol); font-size: 9px; line-height: 14px; text-align: center; color: rgb(13 10 7 / 0.78); overflow: hidden; }
 .lv-stack i.is-wide::before { content: var(--opt-glyph); }
 
-/* ---- Forecasts (docs/FORECAST_PAGE.md) ---- */
+/* ---- Forecasts ---- */
 
 /* The persistent line: forecast display, not betting. Sticky under the top
    bar, never dismissible. */

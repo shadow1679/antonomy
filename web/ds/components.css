@@ -11,8 +11,7 @@
    - Loading shows values as … in mono with aria-busy (no shimmer); an action
      shows ◌ and a verb ("Waiting for wallet…").
    - Error has a --fault border, ✗, what happened and what to do, and Retry
-     where retrying makes sense.
-   Sections follow docs/REDESIGN_FOUNDATIONS.md §8. */
+     where retrying makes sense. */
 
 /* ======================================================================
    Panel. .chamber is the v0 name and stays as an alias: flat, hairline,

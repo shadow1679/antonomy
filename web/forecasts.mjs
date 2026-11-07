@@ -1,4 +1,4 @@
-// The Forecast list on the Live page (docs/FORECAST_PAGE.md): one card per
+// The Forecast list on the Live page: one card per
 // market, the round's trending markets and the community's requests alike.
 // Each card holds the three colony maps beside the gap table (design B) and
 // ends in its headline gap. Pure: chain data in, HTML strings out, so Node

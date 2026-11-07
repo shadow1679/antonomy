@@ -1,4 +1,4 @@
-// The nest page's pure parts (docs/NEST_PAGE.md): the whole project as a
+// The nest page's pure parts: the whole project as a
 // cutaway ant base. Chambers stand for the system's parts, tunnels for its
 // flows. This module holds the two layouts (wide and tall, in nest units),
 // the tunnel paths and how ants walk them, and turns the contract's reads

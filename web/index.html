@@ -23,7 +23,7 @@
 <div id="topbar"></div>
 
 <main>
-  <!-- The scene (docs/LANDING_PAGE.md): the pitch beside one map, which
+  <!-- The scene: the pitch beside one map, which
        replays the latest finished market from its seed and checks the hash
        at the last tick. Scrolling on, the pitch leaves and the map grows to
        fill the screen and stays pinned while the four steps scroll over it,
@@ -122,7 +122,7 @@
   </section>
   </div>
 
-  <!-- The nest (docs/NEST_PAGE.md): the same canvas as the app's home, the
+  <!-- The nest: the same canvas as the app's home, the
        whole project as one ant base, read live from the chain once it
        scrolls into view. The chamber tags link to the app's home. -->
   <section class="page-section" id="the-nest" aria-labelledby="nest-title">
@@ -291,7 +291,7 @@ const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const optHTML = (o, label) => `<span class="opt" data-opt="${o}">${esc(label)}</span>`;
 const contractQ = () => { const c = new URLSearchParams(location.search).get("contract"); return c ? `&contract=${encodeURIComponent(c)}` : ""; };
 
-// ---- The scene (docs/LANDING_PAGE.md). One map, sticky beside the hero and
+// ---- The scene. One map, sticky beside the hero and
 // How the ants forecast, replays a finished market from its seed: the first
 // finished market of the round the chain shows (or the previous round), and
 // round 4's recording until the chain answers or while it has nothing run.

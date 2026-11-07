@@ -1,6 +1,5 @@
-// Add a market, on the Live page's side and first on Recruit's Forecast tab
-// (docs/RECRUIT_PAGE.md): find
-// a Polymarket market by link, ID or search, check it the way a keeper does,
+// Add a market, on the Live page's side and first on Recruit's Forecast tab:
+// find a Polymarket market by link, ID or search, check it the way a keeper does,
 // and pay the request fee from the connected wallet. The search is the one
 // read from outside the chain the pages make. `slugOf`, `overlapOf` and
 // `payBlock` are pure (web/test_addmarket.mjs); `mountAddMarket` wires the panel.

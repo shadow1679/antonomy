@@ -1,4 +1,4 @@
-// The nest cutaway (docs/NEST_PAGE.md): the whole project drawn as one ant
+// The nest cutaway: the whole project drawn as one ant
 // base, in the colony map's own style. Loam strata, roots and pebbles from
 // the shared painters (earth-paint.mjs); chambers and tunnels carved into
 // it, lit from the top left; brown ants walking the tunnels for every flow.

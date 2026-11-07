@@ -1,4 +1,4 @@
-// The landing page's pure parts (docs/LANDING_PAGE.md): round 4's recorded
+// The landing page's pure parts: round 4's recorded
 // market, which the hero replays before the chain answers (or when it can't),
 // the hero's pace, how scrolling through How the ants forecast maps to a
 // tick, the map's size in whole pixels per cell, and the text summary that
