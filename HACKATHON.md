@@ -5,10 +5,11 @@ Instructions for the AI coding agent helping a team take part in NEAR HACKATHON.
 
 ## Start here
 
-1. Build the project with the human. There is no sign-up before the hackathon: the only form is the final submission.
+1. Build the project with the human. There is no sign-up before the hackathon: the final submission is the only registration.
 2. Make the repository public before development ends, 2026-11-14T23:59:00Z.
-3. The human publishes a demo post on X: it says the project was built at NEAR HACKATHON and has the demo video or screenshots attached.
+3. The human publishes a demo post on X: it says the project was built at NEAR HACKATHON, tags @NEARProtocol and #NEARHackathon (optionally also @NearLegion and @NearBuilders), and has the demo video or screenshots attached.
 4. Submit once: POST to https://nearhackathon.com/api/applications with the contract below, only after the human has confirmed the exact payload. Skip this step if this project has already been submitted.
+5. If the saved submission has a mistake, the human requests changes at https://nearhackathon.com/request-changes. Never submit the project a second time.
 
 ## Facts
 
@@ -22,8 +23,14 @@ Instructions for the AI coding agent helping a team take part in NEAR HACKATHON.
 | Results announced by | 2026-11-18T23:59:00Z |
 | Submission form | https://nearhackathon.com/#apply |
 | Submission API | POST https://nearhackathon.com/api/applications |
+| Request changes to a submission | https://nearhackathon.com/request-changes |
 | NEAR docs | https://docs.near.org/ |
+| Example prompts for each track | https://github.com/nearai/near-hackathon-prompt-examples |
+| NEAR DevHub videos, including walkthroughs of the track prompts as they come out | https://www.youtube.com/channel/UCq0iWZQuXhvP8yQzDZsmWfQ |
+| NEAR AI credits and API key (see Q-000) | https://cloud.near.ai |
+| More ecosystem resources | https://nearbuilders.org/build |
 | NEAR Discord | https://discord.gg/nearprotocol |
+| NEAR builders chat on Telegram | https://t.me/nearbuilderschat |
 | X | https://x.com/NEARProtocol |
 | This file, live | https://nearhackathon.com/HACKATHON.md |
 
@@ -46,13 +53,15 @@ Collect these before submitting. Do not guess, generate or fill in placeholders 
 
 ## Never without the human's explicit confirmation
 
-- Send the submission. Print the full JSON payload first and wait for a yes. A second submission of the same repository is rejected, so there is one attempt per project.
+- Send the submission. Print the full JSON payload first and wait for a yes. A second submission of the same repository is rejected, so there is one attempt per project. Mistakes are fixed by requesting changes, not by submitting again.
 - Post anything on X or another network on their behalf.
 - Make the repository public, push, or force-push.
 - Sign transactions, spend tokens or deploy to mainnet.
 - Commit secrets. Keys belong in environment variables, never in the repository.
 
 ## Rules
+
+**Q-000. NEAR AI credits?** Buy with crypto or card in the NEAR AI Cloud dashboard (https://cloud.near.ai), or claim $10 by joining NEAR Builders (https://nearbuilders.org/join). Generate the API key in the dashboard.
 
 **Q-001. Code before 2026-11-01?** Yes, from the announcement on 2026-10-19 (https://x.com/nearprotocol/status/2112257967818997891). The window runs from then to 2026-11-14. Earlier commits are baseline.
 
@@ -96,11 +105,20 @@ The repository may stay private while the team builds, but it must be public by 
 
 ### 2. The demo post
 
-The human records a demo and publishes a public post on X: it says the project was built at NEAR HACKATHON and has the demo video or screenshots attached. You can draft the text; the human posts it and gives you the link.
+The human records a demo and publishes a public post on X: it says the project was built at NEAR HACKATHON, tags @NEARProtocol and #NEARHackathon, and has the demo video or screenshots attached. You can draft the text; the human posts it and gives you the link.
+
+A good demo post:
+
+- Lead with the user problem. Make the first line understandable to someone who doesn't know your project.
+- Show one complete moment. In the demo, go from a real user action to a visible result. Skip long intros, architecture slides, and setup.
+- Explain NEAR’s role concretely. Say what NEAR enables in this product — such as cross-chain settlement, private inference, or agent-controlled spending — and why that matters. Avoid a vague "powered by NEAR".
+- Give people a next step. Link the demo and public repo, and ask a genuine question or invite specific feedback.
+
+Every draft includes @NEARProtocol and #NEARHackathon, so the post shows up on the timeline. @NearLegion and @NearBuilders are optional: tagging them brings more community amplification and support.
 
 ### 3. Submit
 
-Submissions are accepted only during the development phase, from 2026-11-01T00:00:00Z to 2026-11-14T23:59:00Z. Outside that window the API answers 403 and explains why; tell the human instead of retrying. A submission cannot be edited, so send it when the repository is public and the demo post is up.
+Submissions are accepted only during the development phase, from 2026-11-01T00:00:00Z to 2026-11-14T23:59:00Z. Outside that window the API answers 403 and explains why; tell the human instead of retrying. A submission cannot be edited directly: changes go through a request the organizers review by hand (see "4. Request changes" below). So send it when the repository is public and the demo post is up.
 
 Validate every field against the contract below, print the payload for the human, and send it only after they confirm:
 
@@ -115,6 +133,12 @@ The values above are only an example of the shape. Never send them: ask the huma
 Generate `requestId` once, with `uuidgen | tr A-Z a-z` or `node -e 'console.log(crypto.randomUUID())'`. Keep it: a retry after a network error or a 503 must reuse the same value, and the server then treats it as the same submission. Do not commit the payload; it contains personal data.
 
 A 201 response means the submission is saved: tell the human. If they prefer the form, the same fields are at https://nearhackathon.com/#apply.
+
+### 4. Request changes
+
+If a saved submission has a mistake (a wrong repository or demo link, wallet, email, track or anything else), do not submit again: the same repository is rejected with 409, and a different link would count as another project. The human requests changes at https://nearhackathon.com/request-changes instead. There they enter the email, NEAR account and repository link from the submission exactly as submitted; if the mistake is in one of these, they enter what they submitted as best they remember. Then they tick every field to change, give its new value, and leave a Discord or Telegram handle. One request can change several fields.
+
+New values follow the same rules as the submission (see Submission API below), so check them with the human before they send. The organizers review every request by hand and may message the human to confirm, especially before changing the payout account or the repository. Until a change is applied, the submission stays as it was. Help the human gather the values; the human sends the request from the page.
 
 ## Submission API
 
@@ -141,7 +165,7 @@ Do not add other fields. In particular `website` is a spam trap: any non-empty v
 | 201 | Submission saved | Done. Tell the human. |
 | 400 | A field failed validation | Fix the fields listed in `fields` of the response and resend with the same requestId. |
 | 403 | Submissions are not open, or the request looked cross-site | Tell the human. Do not retry. |
-| 409 | Repository already submitted, or this email already has 2 submissions | The project was already submitted, or the human reached the limit. Ask the human; do not change the link or the email to get around it. |
+| 409 | Repository already submitted, or this email already has 2 submissions | The project was already submitted, or the human reached the limit. Ask the human; do not change the link or the email to get around it. If the earlier submission has a mistake, the human requests changes at https://nearhackathon.com/request-changes. |
 | 413 | Body too large | Shorten the description. |
 | 503 | Storage temporarily unavailable | Wait a minute and resend with the same requestId. |
 
@@ -149,23 +173,25 @@ Do not add other fields. In particular `website` is a spam trap: any non-empty v
 
 Put the `id` of every track the project fits in the `tracks` array of the submission. It is still one submission per project.
 
-The last column is what the organizers hope to see in each track: NEAR features and themes worth building around. They are hints and wishes, not requirements, and so are the protocols named in the Build column (Q-011). Lean on the ones that fit the idea and name them in the README.
+The Hints column is what the organizers hope to see in each track: NEAR features and themes worth building around. They are hints and wishes, not requirements, and so are the protocols named in the Build column (Q-011). Lean on the ones that fit the idea and name them in the README.
 
-| id | Track | Build | Hints: what to lean on |
-| --- | --- | --- | --- |
-| `defi` | Unstoppable DeFi | Build exchanges, perps, lending, vaults and trading agents that settle across chains through NEAR Intents. Deep liquidity, no custodian, nobody to switch it off. | TRADING, NEAR INTENTS, CHAIN SIGNATURES |
-| `thesis` | Investment Thesis | Build a long-term investment thesis for NEAR and back it with data: onchain analytics, live dashboards and models anyone can re-run. Judged on the evidence, not the conviction. | ONCHAIN DATA, DASHBOARDS, RESEARCH |
-| `privacy` | Privacy & Private AI | Explore confidential computation, private finance and AI that protects sensitive data. Build intelligence without exposure. | PRIVATE AI, TEE, NEAR AI CLOUD |
-| `business` | Autonomous Business | Build AI-native businesses with treasury, sales, procurement, cross-chain payments via NEAR Intents and revenue sharing. Humans only set the constraints. | AI AGENTS, NEAR INTENTS, CHAIN SIGNATURES |
-| `swarms` | AI Swarms | Build coordination markets, bidding, collective purchasing, intent-based settlement and emergent economies between agents. | MULTI-AGENT SYSTEMS, NEAR INTENTS, SUB-ACCOUNTS |
-| `security` | AI Security & Defense | Build spending limits, policy engines, sandboxed wallets, reputation and scam detection. Give AI money without giving it the keys to everything. | AGENT SECURITY, FUNCTION CALL KEYS, TEE ATTESTATION |
-| `agents` | Agent Economy | Build agents that earn, spend, negotiate, hire other agents and pay for APIs, compute or data — with crypto directly or through NEAR Intents. | AGENT COMMERCE, NEAR INTENTS, CHAIN SIGNATURES |
-| `realworld` | Real-World Money | Build payroll, invoicing, remittances, merchant payments and stablecoin rails for real businesses. Something a normal company could use tomorrow. | STABLECOINS, NEAR INTENTS, META TRANSACTIONS |
-| `games` | Games With Real Economies | Build NPCs with wallets, player-owned markets and economies that evolve without a dev patch. Judged on the game loop, not the token — bonus if players never notice the chain. | AGENT NPCS, SOCIAL LOGIN, NEAR INTENTS, NEP-245 |
-| `nfts` | NFTs That Do Something | Build NFTs as accounts — assets that own money, earn royalties, hold inventory, carry credentials, memberships or access rights. Ownership with behavior. | DYNAMIC NFTS, NEP-171, SUB-ACCOUNTS |
-| `memecoins` | Memecoins With Mechanics | Build memecoins where the meme does something — supply that reacts to the community, treasuries with rules, onchain rituals and challenges. Judged on the mechanic, not the chart. | MEMECOINS, TOKEN MECHANICS, NEP-141 |
-| `social` | Social Money | Build shared budgets, programmable rewards, collective ownership and reputation-based access on top of Sputnik DAO and Trezu. Don't rebuild the multisig — build what communities do with it. | SPUTNIK DAO, TREZU, NAMED ACCOUNTS |
-| `open` | Open Innovation | Have an idea that refuses to fit a category? Explore new ways for money, intelligence and ownership to work together. | EXPERIMENTAL, CHAIN ABSTRACTION, BUILD YOUR OWN |
+The Prompt column links an example prompt for the track, with links to relevant resources, from https://github.com/nearai/near-hackathon-prompt-examples. It is a starting point, not a requirement.
+
+| id | Track | Build | Hints: what to lean on | Prompt |
+| --- | --- | --- | --- | --- |
+| `defi` | Unstoppable DeFi | Build exchanges, perps, lending, vaults and trading agents that settle across chains through NEAR Intents. Deep liquidity, no custodian, nobody to switch it off. | TRADING, NEAR INTENTS, CHAIN SIGNATURES | https://github.com/nearai/near-hackathon-prompt-examples/blob/main/tracks/01-defi.md |
+| `thesis` | Investment Thesis | Build a long-term investment thesis for NEAR and back it with data: onchain analytics, live dashboards and models anyone can re-run. Judged on the evidence, not the conviction. | ONCHAIN DATA, DASHBOARDS, RESEARCH | https://github.com/nearai/near-hackathon-prompt-examples/blob/main/tracks/02-thesis.md |
+| `privacy` | Privacy & Private AI | Explore confidential computation, private finance and AI that protects sensitive data. Build intelligence without exposure. | PRIVATE AI, TEE, NEAR AI CLOUD | https://github.com/nearai/near-hackathon-prompt-examples/blob/main/tracks/03-privacy.md |
+| `business` | Autonomous Business | Build AI-native businesses with treasury, sales, procurement, cross-chain payments via NEAR Intents and revenue sharing. Humans only set the constraints. | AI AGENTS, NEAR INTENTS, CHAIN SIGNATURES | https://github.com/nearai/near-hackathon-prompt-examples/blob/main/tracks/04-business.md |
+| `swarms` | AI Swarms | Build coordination markets, bidding, collective purchasing, intent-based settlement and emergent economies between agents. | MULTI-AGENT SYSTEMS, NEAR INTENTS, SUB-ACCOUNTS | https://github.com/nearai/near-hackathon-prompt-examples/blob/main/tracks/05-swarms.md |
+| `security` | AI Security & Defense | Build spending limits, policy engines, sandboxed wallets, reputation and scam detection. Give AI money without giving it the keys to everything. | AGENT SECURITY, FUNCTION CALL KEYS, TEE ATTESTATION | https://github.com/nearai/near-hackathon-prompt-examples/blob/main/tracks/06-security.md |
+| `agents` | Agent Economy | Build agents that earn, spend, negotiate, hire other agents and pay for APIs, compute or data — with crypto directly or through NEAR Intents. | AGENT COMMERCE, NEAR INTENTS, CHAIN SIGNATURES | https://github.com/nearai/near-hackathon-prompt-examples/blob/main/tracks/07-agents.md |
+| `realworld` | Real-World Money | Build payroll, invoicing, remittances, merchant payments and stablecoin rails for real businesses. Something a normal company could use tomorrow. | STABLECOINS, NEAR INTENTS, META TRANSACTIONS | https://github.com/nearai/near-hackathon-prompt-examples/blob/main/tracks/08-realworld.md |
+| `games` | Games With Real Economies | Build NPCs with wallets, player-owned markets and economies that evolve without a dev patch. Judged on the game loop, not the token — bonus if players never notice the chain. | AGENT NPCS, SOCIAL LOGIN, NEAR INTENTS, NEP-245 | https://github.com/nearai/near-hackathon-prompt-examples/blob/main/tracks/09-games.md |
+| `nfts` | NFTs That Do Something | Build NFTs as accounts — assets that own money, earn royalties, hold inventory, carry credentials, memberships or access rights. Ownership with behavior. | DYNAMIC NFTS, NEP-171, SUB-ACCOUNTS | https://github.com/nearai/near-hackathon-prompt-examples/blob/main/tracks/10-nfts.md |
+| `memecoins` | Memecoins With Mechanics | Build memecoins where the meme does something — supply that reacts to the community, treasuries with rules, onchain rituals and challenges. Judged on the mechanic, not the chart. | MEMECOINS, TOKEN MECHANICS, NEP-141 | https://github.com/nearai/near-hackathon-prompt-examples/blob/main/tracks/11-memecoins.md |
+| `social` | Social Money | Build shared budgets, programmable rewards, collective ownership and reputation-based access on top of Sputnik DAO and Trezu. Don't rebuild the multisig — build what communities do with it. | SPUTNIK DAO, TREZU, NAMED ACCOUNTS | https://github.com/nearai/near-hackathon-prompt-examples/blob/main/tracks/12-social.md |
+| `open` | Open Innovation | Have an idea that refuses to fit a category? Explore new ways for money, intelligence and ownership to work together. | EXPERIMENTAL, CHAIN ABSTRACTION, BUILD YOUR OWN | https://github.com/nearai/near-hackathon-prompt-examples/blob/main/tracks/13-open.md |
 
 ## Prizes
 
@@ -180,7 +206,7 @@ Prize pool $250,000. One grand prize overall. 1st, 2nd and 3rd place in each of 
 
 ## Ecosystem
 
-Partner tools and their documentation. Read the docs before integrating anything; verify endpoints, contract addresses and SDK versions there instead of assuming them.
+Partner tools and their documentation. Read the docs before integrating anything; verify endpoints, contract addresses and SDK versions there instead of assuming them. More ecosystem resources, updated as they become available: https://nearbuilders.org/build.
 
 | Partner | What it is | Docs | Website | GitHub |
 | --- | --- | --- | --- | --- |
@@ -196,6 +222,17 @@ Partner tools and their documentation. Read the docs before integrating anything
 | SputnikDAO | DAO infrastructure | https://github.com/near-daos/sputnik-dao-contract#setup | https://x.com/SputnikDAO | https://github.com/near-daos/sputnik-dao-contract |
 | OutLayer | Secure transactions for AI agents | https://app.outlayer.ai/docs/getting-started | https://outlayer.ai/ | https://github.com/out-layer/outlayer |
 | GoMining | Bitcoin mining superapp | https://docs.gomining.com/ | https://gomining.com/ |  |
+| Agent Market | Marketplace for AI agents | https://docs.market.near.ai/ | https://market.near.ai/ |  |
+| NEAR Builders | Builder community | https://nearbuilders.org/build | https://nearbuilders.org/ | https://github.com/nearbuilders |
+| Gulf Labs | Invests in blockchain infrastructure |  | https://gulf-labs.com/ |  |
+| BRRRAIN | Memecoin with AI rewards | https://brrrain.fun/docs/ | https://brrrain.fun/ |  |
+| NEAR Business | Confidential multisig treasury | https://docs.business.near.com/ | https://business.near.com/ |  |
+
+### Partner notes
+
+- Rhea (rhea.finance): NEAR's DEX and lending protocol. Looking for something to build? Consider CLMM and AMM pools, the cross-chain swap API or vaults on top of its lending. SDKs and API docs: https://github.com/rhea-finance/rhea-sdk-docs. CLI: https://guide.rhea.finance/developers-1/cli-trading
+- Agent Market (market.near.ai): a marketplace where AI agents get hired and paid by the job, by people and by other agents. List the agent you build so it can earn: https://docs.market.near.ai/list-your-agent. Hire agents from Claude or other MCP clients: https://docs.market.near.ai/guides/claude-desktop
+- NEAR Business (business.near.com): a confidential multisig built on NEAR Intents. It keeps treasury balances and transfers hidden from the public, manages assets on 35+ chains from one dashboard and sets approval policies that fit your treasury. Sign up: https://business.near.com/create?ref=og. Demo: https://app.trupeer.ai/view/OEoiJVjUh/near-business-create-and-manage-a-treasury
 
 ## Community
 
@@ -204,5 +241,6 @@ Where the team finds collaborators, asks questions and follows updates.
 | Channel | Link | What it is for |
 | --- | --- | --- |
 | NEAR Discord | https://discord.gg/nearprotocol | Questions about building on NEAR, finding teammates |
+| Telegram | https://t.me/nearbuilderschat | Questions about building on NEAR, finding teammates |
 | X | https://x.com/NEARProtocol | Hackathon announcements and updates |
 
