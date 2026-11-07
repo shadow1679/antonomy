@@ -12,8 +12,8 @@
 <main>
   <div class="page-head container">
     <p class="eyebrow">Round <span id="round-id">…</span> · <span id="round-phase">running</span></p>
-    <h1>Every colony, live.</h1>
-    <p class="lede">All of this round's colonies run at once from one public seed: the Burn colony that picks today's burn, and four forecaster colonies on each trending market. Every viewer sees the same ticks, because the ants carry no randomness of their own. Open any colony in Replay to check its hash.</p>
+    <h1>The ants forecast. $ANTO feeds them.</h1>
+    <p class="lede">Four colonies forecast each trending market, all from one public seed. Three read the market odds, each in its own way. The fourth, Community, follows $ANTO holder stakes. Below them, the Burn colony picks today's burn. Every viewer sees the same ticks, because the ants carry no randomness of their own. Open any colony in Replay to check its hash.</p>
     <dl class="kv text-sm" style="margin-top: var(--space-4)">
       <dt>Round seed</dt><dd id="round-seed">…</dd>
       <dt>Colonies stop</dt><dd><span class="num" id="round-close">…</span></dd>
@@ -21,6 +21,17 @@
     </dl>
     <div class="notice notice--info" style="margin-top: var(--space-4)"><div><span class="notice__title">Demo clock, no contract yet</span><p>Until the contract runs rounds on testnet, the round number comes from the clock and the seed is sha256("seed-&lt;round&gt;"). Stakes and odds are fixtures. The colonies, maps and hashes are the real sim.</p></div></div>
   </div>
+
+  <section class="page-section" id="forecasts" aria-labelledby="fc-title">
+    <div class="container">
+      <div class="section-head">
+        <h2 id="fc-title">Forecast colonies</h2>
+        <span class="tag-forecast">Forecast · not advice</span>
+      </div>
+      <p class="text-sm text-muted" style="max-width: 72ch; margin-bottom: var(--space-5)">Each trending market gets four colonies, each on its own map. Follower, Contrarian and Momentum read the same keeper-posted odds three different ways. Community reads $ANTO holder stakes. Swarm belief is the average of their trail shares. It isn't calibrated as a probability yet, and nobody is paid for being right.</p>
+      <div class="stack" style="--stack-gap: var(--space-7)" id="markets"></div>
+    </div>
+  </section>
 
   <section class="page-section" id="burn" aria-labelledby="burn-title">
     <div class="container">
@@ -50,17 +61,6 @@
           <div class="chamber" role="status" aria-live="polite" data-r="result"></div>
         </div>
       </div>
-    </div>
-  </section>
-
-  <section class="page-section" id="forecasts" aria-labelledby="fc-title">
-    <div class="container">
-      <div class="section-head">
-        <h2 id="fc-title">Forecast colonies</h2>
-        <span class="tag-forecast">Forecast · not advice</span>
-      </div>
-      <p class="text-sm text-muted" style="max-width: 72ch; margin-bottom: var(--space-5)">Each trending market gets four colonies, each on its own map. They read the same keeper-posted odds four different ways. Swarm belief is the average of their trail shares. It isn't calibrated as a probability yet, and nobody is paid for being right.</p>
-      <div class="stack" style="--stack-gap: var(--space-7)" id="markets"></div>
     </div>
   </section>
 </main>

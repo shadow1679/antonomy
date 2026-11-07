@@ -10,7 +10,7 @@ The ants add spectacle and a replayable story. They do not add entropy: all rand
 
 **Project name:** Antonomy ($ANTO), autonomy with ants. Tagline: autonomy, but ants. The colony decides, you replay the math. The ticker has not been checked for collisions yet, and the name must be unique across the hackathon. Ant Colony Oracle remains the technical name of the mechanism.
 
-**Main colonies.** Antonomy has two core products. The **Burn colony** sets the token’s daily burn size within a hard cap, steered by holder stakes. The **Forecast colonies** read the odds of the top 10 trending markets on Polymarket and publish swarm predictions, and users can add markets of their own. The other colonies (rewards, treasury mix, daily rule, charity, raffles and the rest of section 14) are optional and not part of the core.
+**Main colonies.** Antonomy has two core products, and the forecasts lead (decided 26 October 2026). The **Forecast colonies** read the odds of the top 10 trending markets on Polymarket and publish swarm predictions, and users can add markets of their own. Holders feed the swarm by staking $ANTO on outcomes, which steers each market’s Community colony. The **Burn colony** sets the token’s daily burn size within a hard cap, steered by holder stakes. The other colonies (rewards, treasury mix, daily rule, charity, raffles and the rest of section 14) are optional and not part of the core.
 
 ## 2. Goals and non-goals
 
@@ -186,7 +186,7 @@ Antonomy enters NEAR HACKATHON in three tracks with one project, built on testne
 
 | Track | Why it fits | Feature that shows it |
 | --- | --- | --- |
-| Memecoins With Mechanics | The meme is the mechanic: holders steer the burn and the ants settle the vote | Pheromone staking |
+| Memecoins With Mechanics (main track) | The meme is the mechanic: the ants forecast and $ANTO feeds them. Holders stake on market outcomes to steer the Community forecaster, earn Brier-score reputation (never payouts), and steer the daily burn | Feed the swarm (pheromone staking) on the forecast colonies, then the Burn colony |
 | AI Swarms | Many agents with competing preferences produce one collective decision | Scripted bot swarm that joins every round |
 | Agent Economy | Agents spend tokens to stake and earn from a reward pool when their option wins | Bots with their own accounts and restricted keys |
 

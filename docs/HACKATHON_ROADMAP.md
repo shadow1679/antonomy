@@ -1,6 +1,8 @@
 # Antonomy ($ANTO): Hackathon Roadmap
 
-NEAR HACKATHON, build window **1 to 14 November 2026 (UTC)**, testnet only, zero cost. Repo must be public before **14 Nov 2026, 23:59 UTC**. Tracks: Memecoins With Mechanics, AI Swarms, Agent Economy (plus Investment Thesis via forecast colonies).
+NEAR HACKATHON, build window **1 to 14 November 2026 (UTC)**, testnet only, zero cost. Repo must be public before **14 Nov 2026, 23:59 UTC**. Tracks: Memecoins With Mechanics (main), AI Swarms, Agent Economy, plus Investment Thesis via forecast colonies.
+
+**Positioning (decided 2026-10-26):** forecast colonies are the headline feature. The memecoin pitch is Feed the swarm: $ANTO stakes steer each market's Community forecaster, and stakers earn Brier-score reputation, never payouts. The Burn colony stays core as the token's daily on-chain action, on second billing. Details in `docs/FEATURES.md`.
 
 The phase order and the dependencies come from the design doc. The day numbers are a **proposed schedule** for a 14-day window, not something the design doc fixes. The one exception is "measure ticks per call on day 2", which the doc specifies. Adjust once the gas numbers are in.
 
@@ -25,7 +27,7 @@ Already started pre-window: the integer reference sim in Python (`sim/python/ant
 | 4. Fairness | 4 to 5 | Harness that runs at least 1,000 seeds per map template and colony type. No option above about 30% for five options | Phase 3 |
 | 5. Burn contract and token | 4 to 7 | NEP-141 token, drand commit, request lifecycle, burn menu capped at 2%, permissionless advance with bounty, deadline default, pause | Phase 3 |
 | 6. Pheromone staking | 6 to 8 | Stake locking, square-root weighting, per-wallet caps, snapshot hash feeding the seed, staking closes before the round is published | Phase 5 |
-| 7. Forecast colonies | 7 to 10 | Keeper posts Polymarket snapshots, median across keepers, four forecasters per market, start with one market and grow to a few | Phases 3, 5 |
+| 7. Forecast colonies (headline) | 7 to 10 | Keeper posts Polymarket snapshots, median across keepers, four forecasters per market, start with one market and grow to a few. Staking on market outcomes feeds Community. Keeper-posted resolutions and the staker Brier leaderboard | Phases 3, 5, 6 |
 | 8. Live and replay pages | 8 to 11 | Main page shows every colony of the round live (Burn plus all forecasters) from contract state; secondary replay page with verify-from-seed and backtest. Both already run on a demo clock, so this phase swaps fixtures for contract reads | Phase 3, contract events |
 | 9. Bots and rewards | 10 to 11 | Three or four rule-based bots, play-token reward pool, keeper script on free CI | Phases 5, 6 |
 | 10. Also in scope | 11 to 12 | Staker ants (the in-app sandbox is already built) | Phases 6, 8 |
@@ -45,10 +47,11 @@ Cut from the top of this list first.
 
 1. Stretch features
 2. Staker ants
-3. Forecast colonies beyond one or two markets. Run only the Follower and Momentum colonies on more markets, and the other two on the top three.
-4. Bots beyond two strategies
+3. Bots beyond two strategies
+4. Forecast colonies beyond one or two markets. Run only the Follower and Momentum colonies on more markets, and the other two on the top three.
+5. Live staker leaderboard. Fall back to Brier scores on backtested resolved markets.
 
-Never cut: the deterministic sim, the capped Burn colony, staking, the live colonies page, and replay with hash verification.
+Never cut: the deterministic sim, the four forecasters on at least one market (with Community fed by real $ANTO stakes), staking, the capped Burn colony, the live colonies page, and replay with hash verification.
 
 ## Risks to the schedule
 
@@ -66,7 +69,7 @@ Never cut: the deterministic sim, the capped Burn colony, staking, the live colo
 - [ ] README written for AI judges: what it is, the problem it solves, and do-X-see-Y steps.
 - [ ] README states the known limits (Sybil resistance, trusted drand round in the demo, reward pool resembles betting, prototype predates the window).
 - [ ] Forecast outputs labelled as forecasts and not advice, with no links to betting venues.
-- [ ] Public demo post on X, written and published by the team, saying it was built at NEAR HACKATHON.
+- [ ] Public demo post on X, written and published by the team, saying it was built at NEAR HACKATHON. Lead with the forecast colonies and Feed the swarm, labelled as forecasts and not advice.
 - [ ] One submission per team, with a mainnet NEAR account for prizes.
 - [ ] Live HACKATHON.md re-read the day of submission.
 
