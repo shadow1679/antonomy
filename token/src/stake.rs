@@ -179,6 +179,29 @@ impl Staking {
         w
     }
 
+    /// Raw stake per option for one colony. The reward pot is split by raw
+    /// stake, while the sim reads the square-root `weights`.
+    pub fn totals(&self, colony: u16, n_options: usize) -> Vec<u128> {
+        let mut t = vec![0u128; n_options];
+        for ((_, c, o), v) in &self.stakes {
+            if *c == colony && (*o as usize) < n_options {
+                t[*o as usize] += *v;
+            }
+        }
+        t
+    }
+
+    /// One wallet's entries as (colony, option, amount), sorted. Readable while
+    /// staking is open, unlike the snapshot.
+    pub fn stakes_of(&self, who: &str) -> Vec<(u16, u8, u128)> {
+        let lo = (who.to_string(), 0, 0);
+        let hi = (who.to_string(), u16::MAX, u8::MAX);
+        self.stakes
+            .range(lo..=hi)
+            .map(|((_, c, o), v)| (*c, *o, *v))
+            .collect()
+    }
+
     /// `weights` in the unit the sim reads: milli sqrt-tokens, saturating at
     /// `u32::MAX`. One token (10^24 yocto) has `isqrt` 10^12, so the divisor is 10^9.
     pub fn sim_weights(&self, colony: u16, n_options: usize) -> Vec<u32> {
@@ -257,6 +280,23 @@ mod tests {
         assert_eq!(isqrt(16 * ONE), 2 * isqrt(4 * ONE));
         assert_eq!(w[0], 0);
         assert_eq!(s.weights(1, 3), vec![0, 0, 0]);
+    }
+
+    #[test]
+    fn totals_and_stakes_of_read_raw_amounts() {
+        let (mut l, mut s) = setup();
+        s.stake(&mut l, 1, "alice", 0, 1, 4 * ONE).unwrap();
+        s.stake(&mut l, 1, "bob", 0, 1, 16 * ONE).unwrap();
+        s.stake(&mut l, 1, "alice", 1, 0, 3 * ONE).unwrap();
+        s.stake(&mut l, 1, "alice", 0, 4, 2 * ONE).unwrap();
+        assert_eq!(s.totals(0, 3), vec![0, 20 * ONE, 0]);
+        assert_eq!(s.totals(1, 2), vec![3 * ONE, 0]);
+        assert_eq!(
+            s.stakes_of("alice"),
+            vec![(0, 1, 4 * ONE), (0, 4, 2 * ONE), (1, 0, 3 * ONE)]
+        );
+        assert_eq!(s.stakes_of("al"), vec![]);
+        assert_eq!(s.stakes_of("carol"), vec![]);
     }
 
     #[test]

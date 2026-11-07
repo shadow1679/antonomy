@@ -291,6 +291,25 @@ impl Contract {
         }
     }
 
+    /// Raw stake per option. The reward pot is split by raw stake, so this is
+    /// what a bot needs to estimate its share while staking is open.
+    pub fn stake_totals(&self, colony: u16, n_options: u8) -> Vec<U128> {
+        self.staking
+            .totals(colony, n_options as usize)
+            .into_iter()
+            .map(U128)
+            .collect()
+    }
+
+    /// One wallet's entries as (colony, option, amount), readable while open.
+    pub fn stakes_of(&self, account_id: AccountId) -> Vec<(u16, u8, U128)> {
+        self.staking
+            .stakes_of(account_id.as_str())
+            .into_iter()
+            .map(|(c, o, v)| (c, o, U128(v)))
+            .collect()
+    }
+
     pub fn stake_weights(&self, colony: u16, n_options: u8) -> Vec<U128> {
         self.staking
             .weights(colony, n_options as usize)
@@ -480,6 +499,10 @@ mod tests {
         assert_eq!(c.staked_by(acct("alice.test")).0, 25 * ONE);
         assert_eq!(c.ft_balance_of(acct("alice.test")).0, 475 * ONE);
         assert_eq!(c.stake_weights(0, 3)[2].0, antotoken::isqrt(25 * ONE));
+        assert_eq!(c.stake_totals(0, 3)[2].0, 25 * ONE);
+        let mine = c.stakes_of(acct("alice.test"));
+        assert_eq!(mine.len(), 1);
+        assert_eq!((mine[0].0, mine[0].1, mine[0].2 .0), (0, 2, 25 * ONE));
         let cfg = c.stake_config();
         assert_eq!((cfg.cap_per_wallet.0, cfg.close_at_ms), (100 * ONE, 1_000));
 
