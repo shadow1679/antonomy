@@ -1,0 +1,77 @@
+# Antonomy ($ANTO): Hackathon Roadmap
+
+NEAR HACKATHON, build window **1 to 14 November 2026 (UTC)**, testnet only, zero cost. Repo must be public before **14 Nov 2026, 23:59 UTC**. Tracks: Memecoins With Mechanics, AI Swarms, Agent Economy (plus Investment Thesis via forecast colonies).
+
+The phase order and the dependencies come from the design doc. The day numbers are a **proposed schedule** for a 14-day window, not something the design doc fixes. The one exception is "measure ticks per call on day 2", which the doc specifies. Adjust once the gas numbers are in.
+
+## Before the window (now to 31 Oct)
+
+**Coding starts now, before 1 Nov.** A NEAR Discord moderator confirmed that earlier prototype work is allowed. Still disclose the pre-window prototype and sim in the README.
+
+Already started pre-window: the integer reference sim in Python (`sim/python/antosim.py`) and its JS port (`sim/js/antosim.mjs`), checked against each other by `sim/tests/crosscheck.py`. This covers the start of phases 1 and 3.
+
+- [x] Ask in the NEAR Discord whether prototypes that predate the build window are allowed. A moderator confirmed they are. Still disclose it in the README.
+- [ ] Re-read https://nearhackathon.com/HACKATHON.md for current dates and rules.
+- [ ] Check the $ANTO ticker for collisions, and confirm the project name is unique across the hackathon.
+- [ ] Create the NEAR testnet accounts, and the mainnet NEAR account needed for prizes.
+
+## Phases
+
+| Phase | Proposed days | Deliverable | Depends on |
+| --- | --- | --- | --- |
+| 1. Foundation | 1 | Public repo, testnet accounts, Rust and Python sim skeletons, shared test-vector format | none |
+| 2. Gas measurement | 2 | Measured ticks per call (300 TGas limit). Decide ants, ticks and grid for each colony type | Phase 1 skeleton |
+| 3. Deterministic core | 2 to 4 | Integer-only Rust sim for 2 to 5 outcomes, lazy evaporation, lookup-table headings, fixed update order. Rust, JS and Python hashes identical across 10,000 seeds | Phase 2 |
+| 4. Fairness | 4 to 5 | Harness that runs at least 1,000 seeds per map template and colony type. No option above about 30% for five options | Phase 3 |
+| 5. Burn contract and token | 4 to 7 | NEP-141 token, drand commit, request lifecycle, burn menu capped at 2%, permissionless advance with bounty, deadline default, pause | Phase 3 |
+| 6. Pheromone staking | 6 to 8 | Stake locking, square-root weighting, per-wallet caps, snapshot hash feeding the seed, staking closes before the round is published | Phase 5 |
+| 7. Forecast colonies | 7 to 10 | Keeper posts Polymarket snapshots, median across keepers, four forecasters per market, start with one market and grow to a few | Phases 3, 5 |
+| 8. Replay page | 8 to 11 | Static page running the same integer code, verify-from-seed button, swarm-versus-market table, backtest | Phase 3, contract events |
+| 9. Bots and rewards | 10 to 11 | Three or four rule-based bots, play-token reward pool, keeper script on free CI | Phases 5, 6 |
+| 10. Also in scope | 11 to 12 | Staker ants, thief-ant demo, in-app sandbox | Phases 6, 8 |
+| 11. Stretch | 12 to 13 | Pick from: drop sugar, smell-o-vision, check the receipts, ant autopsy, recruit an ant, panic button | Core loop works end to end |
+| 12. Submission | 13 to 14 | README for AI judges, X demo post, final live-rules check, submit | everything above |
+
+## Milestone gates
+
+1. **Day 2:** gas numbers known. If a full run doesn't fit in a reasonable number of calls, shrink ants, ticks or grid. Forecast colonies can drop to about 60 ants and 300 ticks.
+2. **End of phase 3:** cross-language hash agreement. Nothing on-chain is trusted before this.
+3. **End of phase 8:** the core loop works end to end: stake → seed → on-chain run → replay → hash match. Only then start stretch features.
+4. **Day 13:** feature freeze. Only README, demo and bug fixes after this.
+
+## If time runs short (cut order)
+
+Cut from the top of this list first.
+
+1. Stretch features
+2. In-app sandbox
+3. Thief-ant demo
+4. Staker ants
+5. Forecast colonies beyond one or two markets. Run only the Follower and Momentum colonies on more markets, and the other two on the top three.
+6. Bots beyond two strategies
+
+Never cut: the deterministic sim, the capped Burn colony, staking, and the replay page with hash verification.
+
+## Risks to the schedule
+
+| Risk | Response |
+| --- | --- |
+| A full run doesn't fit in gas | Shrink the grid, ants or ticks, and stagger markets across rounds. A zero-knowledge or optimistic path is a later fallback, not for the hackathon |
+| Hash mismatches between languages | Fix the PRNG and update order first, and compare per-tick state dumps, not just final hashes |
+| Fairness test shows biased maps | Adjust templates or rely on the seeded action shuffle. Don't ship a biased menu |
+| Polymarket data terms unchecked | Check the terms before display or redistribution. Keep the keeper read-only |
+| Keeper or drand fetch fails during the demo | Permissionless advance and the deadline default action. Keep a recorded run as backup |
+
+## Submission checklist
+
+- [ ] Repository is public before 14 Nov 2026, 23:59 UTC. Aim for earlier, because there are no edits after submission.
+- [ ] README written for AI judges: what it is, the problem it solves, and do-X-see-Y steps.
+- [ ] README states the known limits (Sybil resistance, trusted drand round in the demo, reward pool resembles betting, prototype predates the window).
+- [ ] Forecast outputs labelled as forecasts and not advice, with no links to betting venues.
+- [ ] Public demo post on X, written and published by the team, saying it was built at NEAR HACKATHON.
+- [ ] One submission per team, with a mainnet NEAR account for prizes.
+- [ ] Live HACKATHON.md re-read the day of submission.
+
+## After the hackathon (not in scope now)
+
+Full on-chain drand verification, Sybil resistance, calibrated forecast shares, more colonies (charity, raffle, fee, risk-dial), guest colonies on-chain, randomness as a service, and legal review. Treat the roadmap in section 11 of the design doc as the source.
