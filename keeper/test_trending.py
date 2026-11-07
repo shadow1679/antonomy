@@ -95,10 +95,76 @@ class Posts(unittest.TestCase):
         self.assertEqual(t.price_at(h, 50), Decimal("0.1"))
         self.assertIsNone(t.price_at([], 50))
 
+    def test_trending_posts_the_slug_when_the_event_has_one(self):
+        e = event([market(5, ["0.62", "0.38"])], slug="fed-decision-in-december")
+        p = t.build_post(e, NOW, flat_history("0.55"))
+        self.assertEqual(p["market_id"], "fed-decision-in-december")
+
     def test_bps_rounds_half_even_and_clamps(self):
         self.assertEqual(t.bps("0.00005"), 0)
         self.assertEqual(t.bps("0.00015"), 2)
         self.assertEqual(t.bps("1.2"), 10000)
+
+
+class Retry(unittest.TestCase):
+    def test_a_dropped_connection_is_retried_then_succeeds(self):
+        import http.client
+        import io
+        import unittest.mock as mock
+        calls = []
+
+        class Resp(io.BytesIO):
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+
+        class Flaky(Resp):
+            def read(self, *a):
+                raise http.client.IncompleteRead(b"")
+
+        def opener(req, timeout=0):
+            calls.append(1)
+            return Flaky() if len(calls) < 3 else Resp(b'{"ok": 1}')
+
+        with mock.patch.object(t.urllib.request, "urlopen", opener), mock.patch.object(t.time, "sleep"):
+            self.assertEqual(t.Fetcher().get("http://x"), {"ok": 1})
+        self.assertEqual(len(calls), 3)
+
+    def test_gives_up_after_the_last_attempt(self):
+        import unittest.mock as mock
+
+        def opener(req, timeout=0):
+            raise OSError("down")
+
+        with mock.patch.object(t.urllib.request, "urlopen", opener), mock.patch.object(t.time, "sleep"):
+            with self.assertRaises(OSError):
+                t.Fetcher().get("http://x")
+
+
+class Requested(unittest.TestCase):
+    SLUG = "fed-decision-in-december"
+
+    def test_skips_trending_floors_and_posts_under_the_slug(self):
+        e = event([market(5, ["0.62", "0.38"])], slug=self.SLUG, volume24hr=10, liquidity=0)
+        self.assertIsNotNone(t.floors(e, NOW))
+        p = t.request_post(e, NOW, self.SLUG, flat_history("0.55"))
+        self.assertEqual(p["market_id"], self.SLUG)
+        self.assertEqual(p["odds"], [6200, 3800])
+
+    def test_still_filters_content_and_checks_open_and_slug(self):
+        hist = flat_history("0.5")
+        bad = event([market(5, ["0.5", "0.5"])], slug=self.SLUG, title="Will X be killed by June?")
+        self.assertIn("word", t.request_post(bad, NOW, self.SLUG, hist))
+        shut = event([market(5, ["0.5", "0.5"])], slug=self.SLUG, closed=True)
+        self.assertEqual(t.request_post(shut, NOW, self.SLUG, hist), "not open")
+        self.assertIn("no event", t.request_post({}, NOW, self.SLUG, hist))
+        decided = event([market(5, ["0.99", "0.01"])], slug=self.SLUG)
+        self.assertIn("decided", t.request_post(decided, NOW, self.SLUG, hist))
+
+    def test_seal_hashes_every_raw_response(self):
+        p = {"market_id": self.SLUG}
+        t.seal(p, [("u1", b"a"), ("u2", b"b")], None)
+        import hashlib
+        self.assertEqual(p["raw_hash"], hashlib.sha256(b"ab").hexdigest())
 
 
 if __name__ == "__main__":

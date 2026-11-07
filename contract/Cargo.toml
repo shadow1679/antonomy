@@ -11,6 +11,8 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 antotoken = { path = "../token", features = ["borsh"] }
 near-sdk = "5"
+# Raw host calls for drand's BLS check: near-sdk's BLS wrappers ignore errors.
+near-sys = "0.2"
 
 [dev-dependencies]
 near-sdk = { version = "5", features = ["unit-testing"] }

@@ -1,180 +1,319 @@
-"""Offline tests for bots/recruit.py and the example bots/my_ant.py (no
-network, nothing signed).
+"""Offline tests for bots/recruit.py, the Recruit the swarm agent tool (no
+network, nothing signed). A fake chain answers the contract views from a few
+stored requests; the finished one is a real run of the Python reference sim.
 
 Run: python3 -I bots/test_recruit.py
 """
-import contextlib
+import hashlib
 import io
 import json
-import math
 import os
 import sys
-import tempfile
 import unittest
-from types import SimpleNamespace
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(HERE, "..", "sim", "python"))
+import antosim  # noqa: E402
 import recruit as r  # noqa: E402
 
-ONE = r.ONE
-CAP = 100 * ONE
-ME = "ant.testnet"
+ONE = 10**24
+CONFIG = {"fee": str(100 * ONE), "keeper_bps": 2000, "agent_bps": 3000, "crank_bps": 1000,
+          "odds_window_ms": 600_000, "forecast_window_ms": 1_800_000,
+          "agent_deposit": str(10 * ONE), "crank_bounty": str(2 * ONE)}
+MARKET = {"colony": 0x8000, "market_id": "fed-decision-in-december", "outcomes": ["Cut", "Hold", "Hike"],
+          "odds": [6000, 2800, 1000], "odds_6h": [5500, 3300, 1200], "odds_hash": "00" * 32, "raw_hashes": []}
+
+
+def done_request():
+    """Request 0, finished: the stored hashes are a real run of the reference sim."""
+    seed = hashlib.sha256(b"request-0").digest()
+    agent_odds, agent_hash = [4500, 4000, 1500], hashlib.sha256(b"agents").digest()
+    # A holder staked 25 on Hike during the agents' window: Community votes.
+    weights, stake_hash = [0, 0, 5000], hashlib.sha256(b"stakes").digest()
+    res = antosim.forecast_market(seed, 0x8000, MARKET["odds"], MARKET["odds_6h"], weights, stake_hash,
+                                  agent_odds, agent_hash)
+    return {
+        "id": 0, "colony": 0x8000, "requester": "alice.testnet", "market_id": MARKET["market_id"],
+        "fee": str(100 * ONE), "phase": "done", "created_at_ms": 0, "odds_by_ms": 600_000,
+        "forecast_by_ms": 2_400_000, "keepers_posted": [], "market": MARKET,
+        "agents": {"odds": agent_odds, "hash": agent_hash.hex(), "posts": []},
+        "stakes": {"hash": stake_hash.hex(), "weights": weights,
+                   "entries": [["bob.testnet", 0x8000, 2, str(25 * ONE)]]},
+        "seed": seed.hex(), "colony_hashes": [c["hash"] for c in res["colonies"]],
+        "crankers": ["c.testnet"] * 5, "swarm": res["swarm"], "market_hash": res["hash"],
+        "paid_keepers": [], "paid_agents": [], "paid_cranks": [], "burned": "0",
+    }
+
+
+def open_request(rid, slug, phase, **kw):
+    out = {"id": rid, "colony": 0x8000 + rid, "requester": "bob.testnet", "market_id": slug,
+           "fee": str(100 * ONE), "phase": phase, "created_at_ms": 0, "odds_by_ms": 600_000,
+           "forecast_by_ms": None, "keepers_posted": [], "market": None, "agents": None, "stakes": None,
+           "seed": None,
+           "colony_hashes": [], "crankers": [], "swarm": None, "market_hash": None,
+           "paid_keepers": [], "paid_agents": [], "paid_cranks": [], "burned": "0"}
+    out.update(kw)
+    return out
+
+
+DONE = done_request()
 
 
 class FakeChain:
-    """Answers the contract views recruit.py reads, from raw stake entries."""
+    """Answers the views recruit.py reads."""
 
-    def __init__(self, entries=(), balance=1000 * ONE, pool=10_000 * ONE, close_at_ms=2**62):
-        self.entries = list(entries)  # (account, colony, option, amount)
-        self.balance, self.pool, self.close_at_ms = balance, pool, close_at_ms
+    def __init__(self, requests, agents=(), trending=None):
+        self.requests = list(requests)
+        self.agents = set(agents)
+        self.trending = trending
 
     def view(self, method, args=None):
         args = args or {}
-        burn = [e for e in self.entries if e[1] == r.BURN_COLONY]
-        n = args.get("n_options", 0)
-        if method == "stake_config":
-            return {"cap_per_wallet": str(CAP), "close_at_ms": self.close_at_ms, "publish_at_ms": self.close_at_ms + 1}
-        if method == "stake_weights":
-            return [str(sum(math.isqrt(a) for _, _, o, a in burn if o == k)) for k in range(n)]
-        if method == "stake_totals":
-            return [str(sum(a for _, _, o, a in burn if o == k)) for k in range(n)]
-        if method == "stakes_of":
-            return [[c, o, str(a)] for who, c, o, a in sorted(self.entries) if who == args["account_id"]]
-        if method == "staked_by":
-            return str(sum(a for who, _, _, a in self.entries if who == args["account_id"]))
-        if method == "ft_balance_of":
-            return str(self.balance)
-        if method == "reward_pool":
-            return str(self.pool)
-        if method == "rewards_earned":
-            return "0"
-        raise AssertionError(method)
+        if method == "request_config":
+            return CONFIG
+        if method == "forecast_request_count":
+            return len(self.requests)
+        if method == "forecast_requests":
+            return [q for q in self.requests if q["id"] >= args["from_id"]][: args["limit"]]
+        if method == "forecast_request":
+            return next((q for q in self.requests if q["id"] == args["request_id"]), None)
+        if method == "is_agent":
+            return args["account_id"] in self.agents
+        if method == "forecast_markets":
+            return self.trending
+        raise AssertionError("unexpected view %s" % method)
 
 
-def round_of(chain):
-    return r.read_round(chain, ME, 0)
+def tool(chain, send=False, now=0, account="me.testnet"):
+    """A Tool whose `run` records each NEAR CLI command; with send=True it also
+    applies request_forecast to the fake chain, as the contract would."""
+    calls = []
+
+    def run(cmd):
+        calls.append(cmd)
+        if send and cmd[5] == "request_forecast":
+            slug = json.loads(cmd[cmd.index("json-args") + 1])["market_id"]
+            chain.requests.append(open_request(len(chain.requests), slug, "odds", requester=account))
+        return send
+
+    t = r.Tool(chain, "anto.testnet", account, "testnet", run, now_ms=lambda: now)
+    return t, calls
 
 
-def run_quiet(fn, *args):
-    out, err = io.StringIO(), io.StringIO()
-    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        code = fn(*args)
-    return code, [json.loads(l) for l in out.getvalue().splitlines()], err.getvalue()
+def method_and_args(cmd):
+    return cmd[5], json.loads(cmd[cmd.index("json-args") + 1])
 
 
-def args(**kw):
-    return SimpleNamespace(contract="anto.testnet", account=ME, network="testnet", **kw)
+class Verify(unittest.TestCase):
+    def test_matches_a_real_run(self):
+        out = r.verify(FakeChain([DONE]), 0)
+        self.assertTrue(out["ok"], out)
+        self.assertEqual([c["kind"] for c in out["colonies"]], list(r.KIND_NAMES))
+        self.assertEqual(sum(out["swarm_belief"]), 10000)
+
+    def test_catches_tampered_stakes(self):
+        # Community reads the weights; every colony commits the stake hash.
+        bad = dict(DONE, stakes=dict(DONE["stakes"], weights=[0, 0, 0]))
+        out = r.verify(FakeChain([bad]), 0)
+        self.assertEqual([c["match"] for c in out["colonies"]], [True] * 3 + [False, True])
+        bad = dict(DONE, stakes=dict(DONE["stakes"], hash="00" * 32))
+        out = r.verify(FakeChain([bad]), 0)
+        self.assertFalse(out["ok"])
+        self.assertEqual([c["match"] for c in out["colonies"]], [False] * 5)
+
+    def test_catches_a_tampered_colony(self):
+        bad = dict(DONE, colony_hashes=list(DONE["colony_hashes"]))
+        bad["colony_hashes"][4] = "00" * 32
+        out = r.verify(FakeChain([bad]), 0)
+        self.assertFalse(out["ok"])
+        self.assertEqual([c["match"] for c in out["colonies"]], [True] * 4 + [False])
+
+    def test_needs_a_finished_request(self):
+        chain = FakeChain([DONE, open_request(1, "x", "running")])
+        self.assertIn("not finished", r.verify(chain, 1)["reason"])
+        self.assertIn("no such", r.verify(chain, 9)["reason"])
 
 
-class ReadRound(unittest.TestCase):
-    def test_round_reads_weights_totals_and_own_stake(self):
-        chain = FakeChain([("bob.testnet", 0, 1, 16 * ONE), (ME, 0, 1, 4 * ONE),
-                           (ME, 1, 0, 30 * ONE), ("bob.testnet", 0, 3, 9 * ONE)])
-        rd = round_of(chain)
-        self.assertEqual(rd.totals, [0, 20 * ONE, 0, 9 * ONE, 0])
-        self.assertEqual(rd.weights[1], math.isqrt(16 * ONE) + math.isqrt(4 * ONE))
-        self.assertEqual(rd.mine, [0, 4 * ONE, 0, 0, 0])   # the forecast stake is not a Burn stake
-        self.assertEqual(rd.staked, 34 * ONE)               # but it uses the same wallet cap
-        self.assertEqual(rd.headroom, 66 * ONE)
-        self.assertEqual(rd.pot, 1000 * ONE)                # 10% of the pool
+class Ask(unittest.TestCase):
+    def test_reads_an_existing_request_without_paying(self):
+        t, calls = tool(FakeChain([DONE]))
+        out = t.ask_swarm(MARKET["market_id"])
+        self.assertEqual(calls, [])
+        self.assertEqual(out["swarm_belief"], DONE["swarm"])
+        self.assertIn("not advice", out["label"])
 
-    def test_payout_is_by_raw_stake(self):
-        rd = round_of(FakeChain([("bob.testnet", 0, 2, 30 * ONE), (ME, 0, 2, 10 * ONE)]))
-        self.assertEqual(rd.payout_if_wins(2), 250 * ONE)            # 10 of 40
-        self.assertEqual(rd.payout_if_wins(2, 20 * ONE), 500 * ONE)  # 30 of 60
-        self.assertEqual(rd.payout_if_wins(0), 0)                    # nobody staked there
-        self.assertEqual(rd.payout_if_wins(0, ONE), rd.pot)          # alone on it
+    def test_dry_run_prints_the_request_call(self):
+        t, calls = tool(FakeChain([DONE]))
+        out = t.ask_swarm("ecb-decision-december")
+        self.assertFalse(out["sent"])
+        self.assertEqual(out["fee"], "100")
+        self.assertEqual(method_and_args(calls[0]), ("request_forecast", {"market_id": "ecb-decision-december"}))
 
-    def test_weight_after_counts_own_stake_once(self):
-        rd = round_of(FakeChain([("bob.testnet", 0, 2, 16 * ONE), (ME, 0, 2, 4 * ONE)]))
-        self.assertEqual(rd.weight_after(2, 5 * ONE), math.isqrt(16 * ONE) + math.isqrt(9 * ONE))
-        self.assertEqual(rd.weight_after(2), rd.weights[2])
+    def test_send_finds_the_new_request(self):
+        chain = FakeChain([DONE])
+        t, _ = tool(chain, send=True)
+        out = t.ask_swarm("ecb-decision-december")
+        self.assertEqual((out["request_id"], out["phase"], out["sent"]), (1, "odds", True))
 
-    def test_food_share_matches_the_sim_unit(self):
-        rd = round_of(FakeChain())
-        self.assertAlmostEqual(rd.food_share(0), 0.2)
-        # 100 tokens is 10 sqrt-tokens = 10000 milli on a 2500 base: 5x the food.
-        self.assertAlmostEqual(rd.food_share(0, 100 * ONE), 5 / 9)
+    def test_skipped_requests_are_asked_again(self):
+        t, calls = tool(FakeChain([open_request(0, "thin-market", "skipped")]))
+        t.ask_swarm("thin-market")
+        self.assertEqual(method_and_args(calls[0])[0], "request_forecast")
 
 
-class Clip(unittest.TestCase):
-    def test_bad_entries_dropped_and_total_clipped(self):
-        rd = round_of(FakeChain([(ME, 1, 0, 70 * ONE)], balance=500 * ONE))  # 30 tokens of headroom
-        stakes, notes = r.clip(rd, [(7, ONE), (True, ONE), (0, -1), (1, 2.5), "junk",
-                                    (2, 20 * ONE), (3, 20 * ONE), (4, ONE)])
-        self.assertEqual(stakes, [(2, 20 * ONE), (3, 10 * ONE)])
-        self.assertEqual(len(notes), 7)
-        self.assertIn("no balance", notes[-1])
+class Post(unittest.TestCase):
+    def forecasting(self):
+        return open_request(1, "ecb-decision-december", "forecasting", forecast_by_ms=5_000,
+                            market=dict(MARKET, colony=0x8001))
 
-    def test_dict_answers_and_balance_limit(self):
-        rd = round_of(FakeChain(balance=3 * ONE))
-        self.assertEqual(r.clip(rd, {4: 2 * ONE, 1: 2 * ONE})[0], [(1, 2 * ONE), (4, ONE)])
-        self.assertEqual(r.clip(rd, None), ([], []))
+    def test_posts_on_the_request_colony(self):
+        t, calls = tool(FakeChain([DONE, self.forecasting()], agents={"me.testnet"}))
+        out = t.post_forecast([5000, 4000, 1000], request_id=1)
+        self.assertEqual(method_and_args(calls[0]),
+                         ("post_forecast", {"colony": 0x8001, "odds": [5000, 4000, 1000]}))
+        self.assertEqual(out["outcomes"], ["Cut", "Hold", "Hike"])
 
+    def test_refuses_what_the_contract_would(self):
+        t, calls = tool(FakeChain([DONE, self.forecasting()], agents={"me.testnet"}))
+        for odds, why in [([5000, 5000], "3 outcomes"), ([5000, 4000, 999], "exactly 10000"),
+                          ([11000, -1000, 0], "0 to 10000")]:
+            with self.assertRaises(ValueError) as e:
+                t.post_forecast(odds, request_id=1)
+            self.assertIn(why, str(e.exception))
+        with self.assertRaises(ValueError) as e:
+            t.post_forecast([5000, 4000, 1000], request_id=0)
+        self.assertIn("phase done", str(e.exception))
+        self.assertEqual(calls, [])
 
-class Join(unittest.TestCase):
-    def test_dry_run_prints_plan_and_stake_calls(self):
-        chain = FakeChain([("bob.testnet", 0, 4, 50 * ONE)])
-        cmds = []
-        code, out, _ = run_quiet(r.join, chain, lambda rd: [(4, 25 * ONE), (0, 5 * ONE)], args(), cmds.append, 0)
-        self.assertEqual(code, 0)
-        plan = out[0]["stakes"]
-        self.assertEqual([p["option"] for p in plan], [4, 0])
-        self.assertEqual(int(plan[0]["payout_if_wins"]), 1000 * ONE // 3)  # 25 of 75
-        self.assertEqual(int(plan[1]["payout_if_wins"]), 1000 * ONE)
-        self.assertEqual([json.loads(c[7]) for c in cmds],
-                         [{"colony": 0, "option": 4, "amount": str(25 * ONE)},
-                          {"colony": 0, "option": 0, "amount": str(5 * ONE)}])
-        self.assertEqual(cmds[0][cmds[0].index("sign-as") + 1], ME)
+    def test_needs_registration(self):
+        t, _ = tool(FakeChain([DONE, self.forecasting()]))
+        with self.assertRaises(ValueError) as e:
+            t.post_forecast([5000, 4000, 1000], request_id=1)
+        self.assertIn("register", str(e.exception))
 
-    def test_stake_during_the_run_counts_from_the_next_day(self):
-        cmds = []
-        noon = 20_745 * r.swarm.DAY_MS + r.swarm.STAKING_MS
-        code, out, _ = run_quiet(r.join, FakeChain(close_at_ms=5), lambda rd: [(0, ONE)], args(), cmds.append, noon)
-        self.assertEqual((code, len(cmds)), (0, 1))
-        self.assertEqual((out[0]["counts_from_day"], out[0]["freeze_at_ms"]), (20_746, noon + r.swarm.DAY_MS))
+    def test_trending_colony(self):
+        trending = [{"colony": 1, "outcomes": ["Yes", "No"]}]
+        t, calls = tool(FakeChain([], agents={"me.testnet"}, trending=trending))
+        t.post_forecast([7000, 3000], colony=1)
+        self.assertEqual(method_and_args(calls[0]), ("post_forecast", {"colony": 1, "odds": [7000, 3000]}))
+        with self.assertRaises(ValueError):
+            t.post_forecast([7000, 3000], colony=2)
 
-    def test_withdraw_unstakes_every_entry_of_the_account(self):
-        chain = FakeChain([("bob.testnet", 0, 2, 5), (ME, 0, 4, 7), (ME, 2, 1, 3)])
-        cmds = []
-        run_quiet(r.withdraw, chain, args(), cmds.append, 0)
-        self.assertEqual([(c[5], json.loads(c[7])) for c in cmds],
-                         [("unstake", {"colony": 0, "option": 4, "amount": "7"}),
-                          ("unstake", {"colony": 2, "option": 1, "amount": "3"})])
-        # Not while the colony runs.
-        cmds = []
-        code, _, err = run_quiet(r.withdraw, chain, args(), cmds.append, r.swarm.STAKING_MS)
-        self.assertEqual((code, cmds), (1, []))
-        self.assertIn("locked", err)
+    def test_parse_odds(self):
+        self.assertEqual(r.parse_odds("6000, 3000,1000"), [6000, 3000, 1000])
+        with self.assertRaises(ValueError):
+            r.parse_odds("60%,40%")
 
 
-class Strategies(unittest.TestCase):
-    def test_builtin_strategies_load(self):
-        rd = round_of(FakeChain([("bob.testnet", 0, 3, 9 * ONE)]))
-        self.assertEqual(r.load_strategy("follower")(rd), [(3, 10 * ONE)])
-        self.assertEqual(r.load_strategy("contrarian")(rd), [(0, 10 * ONE)])
+class Crank(unittest.TestCase):
+    def test_calls_whatever_is_due(self):
+        odds = open_request(0, "a", "odds")
+        fc = open_request(1, "b", "forecasting", forecast_by_ms=5_000, market=MARKET)
+        run = open_request(2, "c", "running", colony_hashes=["00" * 32])
+        chain = FakeChain([odds, fc, run])
+        early, _ = tool(chain, now=1_000)
+        self.assertEqual(early.crank(0)["note"], "nothing due yet")
+        self.assertEqual(early.crank(1)["note"], "nothing due yet")
+        self.assertEqual(early.crank(2)["called"], "crank_request")
+        late, calls = tool(chain, now=600_000)
+        self.assertEqual(late.crank(0)["called"], "finalize_request_odds")
+        self.assertEqual(late.crank(1)["called"], "crank_request")
+        self.assertEqual(method_and_args(calls[0]), ("finalize_request_odds", {"request_id": 0}))
 
-    def test_strategy_file_needs_decide(self):
-        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
-            f.write("x = 1\n")
-        try:
-            with self.assertRaises(SystemExit):
-                r.load_strategy(f.name)
-        finally:
-            os.unlink(f.name)
-        with self.assertRaises(SystemExit):
-            r.load_strategy("whale")
+    def test_the_seed_drawing_crank_carries_the_drand_beacon(self):
+        fc = open_request(1, "b", "forecasting", forecast_by_ms=5_000, market=MARKET, drand_round=77)
+        chain = FakeChain([fc])
+        t, calls = tool(chain, now=600_000)
+        t.beacon = lambda rnd: None
+        self.assertEqual(t.crank(1)["note"], "waiting for drand round 77")
+        self.assertEqual(calls, [])
+        t.beacon = lambda rnd: "ab" * 48 if rnd == 77 else None
+        self.assertEqual(t.crank(1)["called"], "crank_request")
+        self.assertEqual(method_and_args(calls[0]),
+                         ("crank_request", {"request_id": 1, "drand_signature": "ab" * 48}))
 
-    def test_example_ant_prefers_value_and_respects_cap(self):
-        decide = r.load_strategy(os.path.join(HERE, "my_ant.py"))
-        # Crowded top burn, empty rest: the whole pot beats a slice of it.
-        rd = round_of(FakeChain([("whale.testnet", 0, 4, 100 * ONE)]))
-        self.assertEqual(decide(rd), [(0, 20 * ONE)])
-        # Already at the cap: sit out.
-        self.assertEqual(decide(round_of(FakeChain([(ME, 0, 2, CAP)]))), [])
-        # Every answer survives the clip unchanged.
-        self.assertEqual(r.clip(rd, decide(rd)), (decide(rd), []))
+    def test_wait_cranks_until_done(self):
+        chain = FakeChain([open_request(0, "a", "running", colony_hashes=[])])
+        t, _ = tool(chain, now=0)
+
+        def crank_once(cmd):  # each crank adds a colony; the fifth finishes
+            q = chain.requests[0]
+            q["colony_hashes"].append("00" * 32)
+            if len(q["colony_hashes"]) == 5:
+                chain.requests[0] = dict(DONE, id=0)
+            return True
+
+        t.run = crank_once
+        out = r.wait(t, 0, crank=True, sleep=lambda s: self.fail("should not sleep"))
+        self.assertEqual(out["phase"], "done")
+
+
+    def test_wait_posts_your_odds_when_agents_may(self):
+        fc = open_request(1, "ecb-decision-december", "forecasting", forecast_by_ms=5_000,
+                          market=dict(MARKET, colony=0x8001))
+        chain = FakeChain([DONE, fc], agents={"me.testnet"})
+        t, calls = tool(chain, now=0)
+        sent = []
+
+        def run(cmd):
+            sent.append(method_and_args(cmd))
+            if cmd[5] == "post_forecast":
+                chain.requests[1] = dict(DONE, id=1)  # the window closes and the cranks run
+            return True
+
+        t.run = run
+        out = r.wait(t, 1, crank=False, sleep=lambda s: self.fail("should not sleep"),
+                     odds="Hike=1000,Cut=6000,Hold=3000")
+        self.assertEqual(sent, [("post_forecast", {"colony": 0x8001, "odds": [6000, 3000, 1000]})])
+        self.assertEqual(out["phase"], "done")
+
+    def test_resolve_odds(self):
+        outs = ["Cut", "Hold", "Hike"]
+        self.assertEqual(r.resolve_odds("6000,3000,1000", outs), [6000, 3000, 1000])
+        self.assertEqual(r.resolve_odds("Hold=3000, Cut=6000, Hike=1000", outs), [6000, 3000, 1000])
+        for spec, why in [("Raise=1000,Cut=6000,Hold=3000", "no outcome"), ("Cut=6000,Hold=4000", "no odds for Hike"),
+                          ("Cut=60%,Hold=30,Hike=10", "whole basis points")]:
+            with self.assertRaises(ValueError) as e:
+                r.resolve_odds(spec, outs)
+            self.assertIn(why, str(e.exception))
+
+
+class Mcp(unittest.TestCase):
+    def roundtrip(self, chain, *msgs):
+        t, calls = tool(chain)
+        out = io.StringIO()
+        r.serve_mcp(t, io.StringIO("".join(json.dumps(m) + "\n" for m in msgs)), out)
+        return [json.loads(line) for line in out.getvalue().splitlines()], calls
+
+    def test_handshake_and_tools(self):
+        replies, _ = self.roundtrip(
+            FakeChain([DONE]),
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}},
+            {"jsonrpc": "2.0", "method": "notifications/initialized"},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+        )
+        self.assertEqual(len(replies), 2)  # no reply to the notification
+        self.assertEqual(replies[0]["result"]["protocolVersion"], "2025-06-18")
+        names = [x["name"] for x in replies[1]["result"]["tools"]]
+        self.assertEqual(names, ["ask_swarm", "post_forecast", "verify"])
+
+    def test_calls(self):
+        replies, calls = self.roundtrip(
+            FakeChain([DONE]),
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+             "params": {"name": "ask_swarm", "arguments": {"market": MARKET["market_id"]}}},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+             "params": {"name": "verify", "arguments": {"request_id": 0}}},
+            {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+             "params": {"name": "post_forecast", "arguments": {"request_id": 0, "odds": [1, 2, 3]}}},
+            {"jsonrpc": "2.0", "id": 4, "method": "nope"},
+        )
+        self.assertEqual(replies[0]["result"]["structuredContent"]["swarm_belief"], DONE["swarm"])
+        self.assertTrue(replies[1]["result"]["structuredContent"]["ok"])
+        self.assertTrue(replies[2]["result"]["isError"])
+        self.assertEqual(replies[3]["error"]["code"], -32601)
+        self.assertEqual(calls, [])
 
 
 if __name__ == "__main__":

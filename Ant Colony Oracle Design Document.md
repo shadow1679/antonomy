@@ -8,7 +8,7 @@ The Ant Colony Oracle turns a public random seed into a verifiable, watchable de
 
 The ants add spectacle and a replayable story. They do not add entropy: all randomness comes from the seed source. A working prototype of the simulation is at https://claude.ai/artifact/FL3c2cR32WimU8FmcVPe1F.
 
-**Project name:** Antonomy ($ANTO), autonomy with ants. Tagline: autonomy, but ants. The colony decides, you replay the math. The ticker has not been checked for collisions yet, and the name must be unique across the hackathon. Ant Colony Oracle remains the technical name of the mechanism.
+**Project name:** Antonomy ($ANTO), autonomy with ants. Tagline: autonomy, but ants. The colony decides, you replay the math. Web searches on 2026-10-28 found no token with the ticker ANTO and nothing called Antonomy, so the ticker stays. That is not a registry check, and uniqueness across the hackathon's other submissions is still unchecked. Ant Colony Oracle remains the technical name of the mechanism.
 
 **Main colonies.** Antonomy has two core products, and the forecasts lead (decided 26 October 2026). The **Forecast colonies** read the odds of the top 10 trending markets on Polymarket and publish swarm predictions, and users can add markets of their own. Holders feed the swarm by staking $ANTO on outcomes, which steers each market’s Community colony. The **Burn colony** sets the token’s daily burn size within a hard cap, steered by holder stakes. The other colonies (rewards, treasury mix, daily rule, charity, raffles and the rest of section 14) are optional and not part of the core.
 
@@ -46,7 +46,7 @@ The prototype uses the following parameters. All of them become immutable contra
 | --- | --- |
 | Grid | 72 × 48 cells, nest at the centre |
 | Food sources | 5, placed 9 to 21 cells from the nest at seed-derived angles |
-| Food richness | 0.35 to 1.3, derived from the seed or the snapshot (widened from 0.7 to 1.3 on 27 Oct 2026 so stakes steer) |
+| Food richness | 0.35 to 1.3, derived from the seed or the stake snapshot (widened from 0.7 to 1.3 on 27 Oct 2026 so stakes steer); from an odds snapshot, 0 to 1.3 in proportion (27 Oct 2026, so forecasts follow their odds) |
 | Ants | 150 |
 | Ticks | 800 |
 | Evaporation | 0.8% of every cell per tick |
@@ -153,7 +153,7 @@ Two products are core: the Burn colony and the Forecast colonies. Everything in 
 | Calling it an oracle without carrying information | Describe it as a verifiable colony until real data is encoded in the maps |
 | Gas overruns | Measure ticks per call first, lazy evaporation, batch requests |
 
-**Forecast colony risks.** A keeper could rank the trending list to favour chosen markets, so several keepers post independently and the lists must match. User-added markets could be spam or abusive, so they pass the same filters, carry a fee and share a fixed number of slots. Market outcomes can be ambiguous or disputed, so the leaderboard scores a market only after its resolution is final. Gas grows with the number of markets, and the data provider’s terms must be checked.
+**Forecast colony risks.** A keeper could rank the trending list to favour chosen markets, so several keepers post independently and the lists must match. User-added markets could be spam or abusive, so they pass the same filters, carry a fee and share a fixed number of slots. Gas grows with the number of markets, and the data provider’s terms must be checked.
 
 This document is not legal advice. Treasury mechanisms, raffles and betting products need review by a qualified lawyer before launch.
 
@@ -173,8 +173,8 @@ Forecast colonies slot in after the testnet contract: first one market with four
 - Is the primary goal a daily ritual, variety, or a signal that responds to real conditions?
 - Which chain, given verification gas and prover costs?
 - Which decision types go live first?
-- Who runs the keeper or prover, and who pays for it?
-- Which jurisdictions matter for the legal review?
+- Who runs the keeper or prover, and who pays for it? Decided 2026-10-28: the team, from testnet gas.
+- Which jurisdictions matter for the legal review? Decided 2026-10-28: none for the hackathon (testnet play token, no mainnet). A real launch needs legal review first.
 
 * How exactly do we define trending, and which keepers are allowed to post the list?
 * How many markets per round can we afford in gas?
@@ -186,7 +186,7 @@ Antonomy enters NEAR HACKATHON in three tracks with one project, built on testne
 
 | Track | Why it fits | Feature that shows it |
 | --- | --- | --- |
-| Memecoins With Mechanics (main track) | The meme is the mechanic: the ants forecast and $ANTO feeds them. Holders stake on market outcomes to steer the Community forecaster, earn Brier-score reputation (never payouts), and steer the daily burn | Feed the swarm (pheromone staking) on the forecast colonies, then the Burn colony |
+| Memecoins With Mechanics (main track) | The meme is the mechanic: the ants forecast and $ANTO feeds them. Holders stake on market outcomes to steer the Community forecaster (no payouts for being right), and steer the daily burn | Feed the swarm (pheromone staking) on the forecast colonies, then the Burn colony |
 | AI Swarms | Many agents with competing preferences produce one collective decision | Scripted bot swarm that joins every round |
 | Agent Economy | Agents spend tokens to stake and earn from a reward pool when their option wins | Bots with their own accounts and restricted keys |
 
@@ -208,11 +208,9 @@ The forecasting colonies in section 15 also fit the Investment Thesis track, whi
 | Feature | Track | The meme | The tech it exposes |
 | --- | --- | --- | --- |
 | Drop sugar | Memecoins With Mechanics | Holders drop sugar on an option and its scent grows | Square-root stake weighting, and a stake snapshot hashed into the seed |
-| Smell-o-vision | Memecoins With Mechanics | A toggle that shows the scent the ants are following | The pheromone field, deposit and evaporation rules |
 | Check the receipts | Memecoins With Mechanics | One click re-runs the day and compares the result hash | Determinism: same seed and stakes, same answer |
 | Ant autopsy | AI Swarms | Scrub the run tick by tick and follow any single ant | Fixed update order and bit-exact replay |
 | Recruit an ant | AI Swarms, Agent Economy | A starter script so any agent joins a round with its own strategy and earns from the reward pool | The bot interface, per-wallet caps and reward accounting |
-| Panic button | All | One account can freeze the colony | The pause method and the kill switch from section 8 |
 
 **Zero-cost setup**
 
@@ -233,10 +231,7 @@ The forecasting colonies in section 15 also fit the Investment Thesis track, whi
 
 **Known limits to state plainly in the README**
 
-- Splitting stake across wallets to beat the quadratic weighting is not solved. Sybil resistance is future work.
 - In the demo the contract trusts the posted drand round. Full on-chain verification is future work.
-- The reward pool resembles prediction betting. It uses a play token on testnet, and a real launch needs legal review.
-- The prototype and this design predate the build window. Ask in the NEAR Discord whether earlier prototypes are allowed, and disclose it in the README either way.
 
 ## 14. Colony catalogue, ant types and custom colonies
 
@@ -291,7 +286,6 @@ A forecasting colony takes the current odds of a prediction market as its map an
 2. The snapshot sets each outcome’s food richness, so a likelier outcome is a richer food source.
 3. Four colonies run on the same snapshot, each reading it differently (see the table).
 4. Each colony’s trail share per outcome is its forecast. The swarm prediction is the average of the four shares, shown next to the market odds.
-5. After the market resolves, each colony is scored with a Brier score and the results go on a public leaderboard.
 
 | Colony | Reads the odds as | Food richness |
 | --- | --- | --- |
@@ -304,14 +298,14 @@ A forecasting colony takes the current odds of a prediction market as its map an
 
 The colonies read the market’s own odds, so they mostly echo the market with noise. In the first sample backtest (eight made-up markets, so the numbers mean nothing yet) the market’s own odds scored best with a Brier score of 0.535. The four colonies scored between 0.66 and 0.82, and the swarm average scored 0.725, against 0.80 for a flat guess. One cause is that trail share is compressed toward even odds. In one example run, the Follower gave a 5% outcome about 17%.
 
-The planned fix is to calibrate trail shares, for example with a power transform fitted on resolved markets, before showing them as probabilities. Until then they are labelled swarm belief. The value of the feature is a transparent, replayable method, a public track record, and the disagreement among the colonies. To carry extra information, the Community colony needs real holder stakes, and other colonies can read other sources, such as the same question on another prediction market.
+The planned fix is to calibrate trail shares, for example with a power transform fitted on resolved markets, before showing them as probabilities. Decided 2026-10-28: that is not in the hackathon scope, so they stay labelled swarm belief. The value of the feature is a transparent, replayable method, a public track record, and the disagreement among the colonies. To carry extra information, the Community colony needs real holder stakes, and other colonies can read other sources, such as the same question on another prediction market.
 
 ### Which markets run
 
 - **Top 10 trending.** A keeper lists active markets on Polymarket sorted by 24-hour trading volume, applies the filters below and posts the first 10. Third-party tools commonly define trending this way, sometimes with a minimum volume, so confirm the exact sort parameter in the official docs. Several keepers post independently, and the contract requires their lists to match.
 - **Filters.** No markets about violence, deaths or private individuals. A minimum volume and liquidity. A resolution date within a set window. Two to five outcomes, and for events with more, keep the four most likely and group the rest as Other.
 - **User-added markets.** Anyone can submit a Polymarket market link or ID for a community slot. It must pass the same filters, the submitter pays the gas to run it, and a small fee or deposit (to be decided) discourages spam. A fixed number of community slots per round, for example five, keeps gas bounded.
-- **Cadence.** The top 10 list refreshes on a fixed schedule, to be decided. Markets that fall out of the top 10 stop running, and their scores stay on the leaderboard.
+- **Cadence.** The top 10 list refreshes on a fixed schedule, to be decided. Markets that fall out of the top 10 stop running.
 
 ### Scaling on-chain
 
@@ -326,7 +320,7 @@ Measure ticks per call first, then pick.
 
 ### Outcome counts
 
-The first simulation has a fixed five food sources. Many markets are plain Yes or No questions with two outcomes, and some events have more than five. The simulation must support 2 to 5 outcomes. The leaderboard reads the final result from the market after it resolves.
+The first simulation has a fixed five food sources. Many markets are plain Yes or No questions with two outcomes, and some events have more than five. The simulation must support 2 to 5 outcomes.
 
 ### Data and trust
 
@@ -337,7 +331,7 @@ The first simulation has a fixed five food sources. Many markets are plain Yes o
 
 ### Rules
 
-- No payouts for being right. Stakes sway only the Community colony, and rewards are limited to reputation and the leaderboard.
+- No payouts for being right. Stakes sway only the Community colony.
 - Do not link to places where people can bet, and label every output as a forecast and not advice.
 - Avoid markets about violence, deaths and private individuals.
 - Get legal review before launch. A forecast display is a lighter product than a betting market, but it is not risk-free.

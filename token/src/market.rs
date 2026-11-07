@@ -17,8 +17,8 @@ use crate::{ledger::AccountId, Error};
 use antosim::{market_colony, odds_richness, odds_snapshot_hash, Kind};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Markets per round. One for now; raise it once gas per market is measured.
-pub const MAX_TRENDING: usize = 1;
+/// Markets per round. Each costs five round cranks (about 18 TGas each).
+pub const MAX_TRENDING: usize = 12;
 pub const MAX_ID_LEN: usize = 128;
 pub const MAX_LABEL_LEN: usize = 64;
 
@@ -82,7 +82,7 @@ fn list_key(list: &[MarketPost]) -> Vec<(&str, &[String])> {
 }
 
 /// Lower median: always one of the posted values.
-fn median(mut xs: Vec<u16>) -> u16 {
+pub(crate) fn median(mut xs: Vec<u16>) -> u16 {
     xs.sort_unstable();
     xs[(xs.len() - 1) / 2]
 }
@@ -95,7 +95,7 @@ fn check_odds(odds: &[u16], odds_6h: &[u16]) -> Result<(), Error> {
     Ok(())
 }
 
-fn check_post(m: &MarketPost) -> Result<(), Error> {
+pub(crate) fn check_post(m: &MarketPost) -> Result<(), Error> {
     let label_ok = |s: &String| !s.is_empty() && s.len() <= MAX_LABEL_LEN;
     let distinct = m.outcomes.iter().collect::<BTreeSet<_>>().len() == m.outcomes.len();
     if m.market_id.is_empty()
@@ -107,6 +107,55 @@ fn check_post(m: &MarketPost) -> Result<(), Error> {
         return Err(Error::BadMarket);
     }
     check_odds(&m.odds, &m.odds_6h)
+}
+
+/// The keepers' agreement rule, shared by trending lists and requested markets.
+/// Accepts the list that at least `quorum` keepers posted (same markets, same
+/// outcomes, same order) and takes the per-outcome lower median of their odds.
+/// `colony_of(m)` gives the colony id of the list's market `m`.
+pub(crate) fn accept(
+    posts: &BTreeMap<AccountId, Vec<MarketPost>>,
+    quorum: u8,
+    colony_of: impl Fn(u16) -> u16,
+) -> Result<Vec<Market>, Error> {
+    // Group keepers by the list they posted. BTreeMap keeps it deterministic.
+    let mut groups: BTreeMap<Vec<(&str, &[String])>, Vec<&AccountId>> = BTreeMap::new();
+    for (who, list) in posts {
+        groups.entry(list_key(list)).or_default().push(who);
+    }
+    let agreeing = groups
+        .into_values()
+        .find(|g| g.len() >= quorum as usize)
+        .ok_or(Error::NoQuorum)?;
+
+    let first = &posts[agreeing[0]];
+    let mut markets = Vec::with_capacity(first.len());
+    for (m, post) in first.iter().enumerate() {
+        let ps: Vec<&MarketPost> = agreeing.iter().map(|k| &posts[*k][m]).collect();
+        let med = |f: fn(&MarketPost) -> &[u16]| -> Vec<u16> {
+            (0..post.outcomes.len())
+                .map(|o| median(ps.iter().map(|p| f(p)[o]).collect()))
+                .collect()
+        };
+        let odds = med(|p| &p.odds);
+        let odds_6h = med(|p| &p.odds_6h);
+        // Each post was valid, but a median of valid posts can still be all zeros.
+        check_odds(&odds, &odds_6h)?;
+        markets.push(Market {
+            colony: colony_of(m as u16),
+            market_id: post.market_id.clone(),
+            outcomes: post.outcomes.clone(),
+            odds_hash: odds_snapshot_hash(&odds, &odds_6h).map_err(|_| Error::BadMarket)?,
+            odds,
+            odds_6h,
+            raw_hashes: agreeing
+                .iter()
+                .zip(&ps)
+                .map(|(k, p)| ((*k).clone(), p.raw_hash))
+                .collect(),
+        });
+    }
+    Ok(markets)
 }
 
 impl Registry {
@@ -124,6 +173,14 @@ impl Registry {
             posts: BTreeMap::new(),
             markets: None,
         })
+    }
+
+    /// Start the next round: forget the old posts and markets and post until
+    /// `close_at`. The keepers and the quorum stay.
+    pub fn reopen(&mut self, close_at: u64) {
+        self.close_at = close_at;
+        self.posts.clear();
+        self.markets = None;
     }
 
     pub fn keepers(&self) -> impl Iterator<Item = &AccountId> {
@@ -168,43 +225,7 @@ impl Registry {
         if self.markets.is_some() {
             return Err(Error::AlreadyFinalized);
         }
-        // Group keepers by the list they posted. BTreeMap keeps it deterministic.
-        let mut groups: BTreeMap<Vec<(&str, &[String])>, Vec<&AccountId>> = BTreeMap::new();
-        for (who, list) in &self.posts {
-            groups.entry(list_key(list)).or_default().push(who);
-        }
-        let agreeing = groups
-            .into_values()
-            .find(|g| g.len() >= self.quorum as usize)
-            .ok_or(Error::NoQuorum)?;
-
-        let first = &self.posts[agreeing[0]];
-        let mut markets = Vec::with_capacity(first.len());
-        for (m, post) in first.iter().enumerate() {
-            let posts: Vec<&MarketPost> = agreeing.iter().map(|k| &self.posts[*k][m]).collect();
-            let med = |f: fn(&MarketPost) -> &[u16]| -> Vec<u16> {
-                (0..post.outcomes.len())
-                    .map(|o| median(posts.iter().map(|p| f(p)[o]).collect()))
-                    .collect()
-            };
-            let odds = med(|p| &p.odds);
-            let odds_6h = med(|p| &p.odds_6h);
-            // Each post was valid, but a median of valid posts can still be all zeros.
-            check_odds(&odds, &odds_6h)?;
-            markets.push(Market {
-                colony: market_colony(m as u16),
-                market_id: post.market_id.clone(),
-                outcomes: post.outcomes.clone(),
-                odds_hash: odds_snapshot_hash(&odds, &odds_6h).map_err(|_| Error::BadMarket)?,
-                odds,
-                odds_6h,
-                raw_hashes: agreeing
-                    .iter()
-                    .zip(&posts)
-                    .map(|(k, p)| ((*k).clone(), p.raw_hash))
-                    .collect(),
-            });
-        }
+        let markets = accept(&self.posts, self.quorum, market_colony)?;
         Ok(self.markets.insert(markets).as_slice())
     }
 
@@ -350,7 +371,12 @@ mod tests {
         let bad = |r: &mut Registry, list| r.post(1, "k1", list).unwrap_err();
         assert_eq!(bad(&mut r, vec![]), Error::BadMarket);
         assert_eq!(
-            bad(&mut r, vec![ok(), post("m2", &[1, 1], &[1, 1])]),
+            bad(
+                &mut r,
+                (0..=MAX_TRENDING)
+                    .map(|i| post(&format!("m{i}"), &[6000, 4000], &[6000, 4000]))
+                    .collect()
+            ),
             Error::BadMarket
         );
         assert_eq!(
@@ -417,11 +443,13 @@ mod tests {
             &m.odds_6h,
             &[3000, 0, 12000],
             antosim::sha256(b"stakes"),
+            &[4500, 4000, 1500],
+            antosim::sha256(b"agents"),
             antosim::FORECAST_ANTS,
             antosim::FORECAST_TICKS,
         )
         .unwrap();
         // Same fixture as sim/rust forecast_market_matches_reference.
-        assert_eq!(out.swarm, vec![3594, 3121, 3285]);
+        assert_eq!(out.swarm, vec![4149, 3327, 2524]);
     }
 }

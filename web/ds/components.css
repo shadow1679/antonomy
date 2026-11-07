@@ -478,7 +478,7 @@
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
 }
-/* Compact: for small cards such as the four forecasters of a market. */
+/* Compact: for small cards such as the five forecasters of a market. */
 .share-bars--compact { gap: var(--space-2); }
 .share-bars--compact .share-bar { grid-template-columns: minmax(4.5rem, max-content) 1fr 5ch; gap: var(--space-2); font-size: var(--text-xs); }
 .share-bars--compact .share-bar__track { height: 6px; }
@@ -851,8 +851,9 @@
 /* Compact: one line per outcome (label, track, value, delta) for overview
    cards. The market odds stay as the tick on the track. */
 .belief--compact { gap: var(--space-2); }
-.belief--compact .belief__row { grid-template-columns: minmax(0, 7.5rem) minmax(0, 1fr) 6ch 6ch; align-items: center; gap: var(--space-3); }
-.belief--compact .belief__label { min-width: 0; font-size: var(--text-xs); white-space: nowrap; overflow: hidden; }
+.belief--compact .belief__row { grid-template-columns: minmax(0, 9.5rem) minmax(0, 1fr) 6ch 6ch; align-items: center; gap: var(--space-3); }
+.belief--compact .belief__label { min-width: 0; font-size: var(--text-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 480px) { .belief--compact .belief__row { grid-template-columns: minmax(0, 7rem) minmax(0, 1fr) 6ch 6ch; } }
 .belief--compact .belief__track { grid-column: auto; order: 1; height: 8px; }
 .belief--compact .belief__market { top: -3px; bottom: -3px; }
 .belief--compact .belief__value { order: 2; font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 600; text-align: right; }

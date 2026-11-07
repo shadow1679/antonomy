@@ -1,0 +1,771 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Antonomy · market</title>
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="live.css">
+</head>
+<body class="lv">
+<div id="topbar"></div>
+
+<main>
+  <section class="lv-round lv-round--slim" aria-label="The round">
+    <div class="container">
+      <div class="lv-round__row">
+        <div>
+          <a class="lv-back" id="back" href="live.html#forecasts">← All markets</a>
+          <p class="lv-round__name">Round <span class="num" id="rc-id">…</span></p>
+        </div>
+        <ol class="lv-steps" id="rc-phases" aria-label="Round phases"></ol>
+        <div class="lv-round__clock">
+          <span class="eyebrow" id="rc-next-label">Reading the chain</span>
+          <span class="lv-clock num" id="rc-next">…</span>
+        </div>
+      </div>
+      <div class="lv-round__foot">
+        <p id="rc-line" aria-live="polite">Reading the contract…</p>
+        <span class="lv-round__seed">Seed <span id="round-seed">drawn at the first crank</span></span>
+        <button class="btn btn--primary btn--sm" type="button" id="crank-btn" title="Each call runs one colony on-chain. Needs a connected wallet and a little testnet NEAR for gas." hidden>Crank a colony</button>
+        <label class="text-xs" id="auto-wrap" title="While this tab is open and a wallet is connected, send each crank as soon as it is due. Your wallet still approves every call; the keeper daemon cranks too."><input type="checkbox" id="auto-crank"> Auto-crank</label>
+      </div>
+    </div>
+  </section>
+
+  <div class="container" id="market"><p class="lv-empty lv-market">Reading the market from the contract…</p></div>
+</main>
+
+<div id="footer"></div>
+
+<script type="module">
+import { trailShares, COMMUNITY, AGENTS } from "../sim/js/antosim.mjs";
+import { ColonyView } from "./ds/colony-view.mjs";
+import { ColonyThumb } from "./ds/colony-thumb.mjs";
+import { GLYPHS, KIND_BLURB, KIND_NAMES } from "./round.mjs";
+import { loadRound } from "./roundchain.mjs";
+import { isqrt } from "./burncard.mjs";
+import { chain, view, wallet, yocto, ensureTokens, ONE, ZERO_HASH } from "./chain.mjs";
+import { createAutoCrank } from "./autocrank.mjs";
+import { TripTracker } from "./autopsy.mjs";
+import { $, esc, pad4, hms, hashHTML, installCopy, liveShares, shareBars, topbar, footer, stakerRoster, beliefBoard, whatHTML, wireMapPick, followHTML } from "./ui.mjs";
+import { REPLAY_TPS, pct, utc, wait, fmtT, sumBig, bigJSON, deltaCls, gl, marketHref, liveHref, stepsHTML, clockOf, finished, sigOf, makeVerifier, marketState, colonyCache } from "./lv.mjs";
+
+$("topbar").outerHTML = topbar("live", `<span class="chip chip--live" id="live-chip">live</span>`);
+$("footer").outerHTML = footer();
+installCopy();
+$("back").href = liveHref("#forecasts");
+
+const replayHref = (rd, key) => `replay.html?round=${rd.id}&colony=${key}`;
+
+// Skip drawing the stage while it is off screen; the colonies still step.
+const io = new IntersectionObserver((es) => {
+  for (const e of es) if (mk && e.target === mk.stageEl) { mk.visible = e.isIntersecting; if (mk.visible) mk.busy = true; }
+});
+
+// ---- state ----
+let round = null;              // the normalized round from the chain
+let items = [];                // { m, group: "cur" | "prev", rd }
+let pin = null;                // { rid, index }: the market shown, kept when the round moves on
+let mk = null;                 // the open market's view state
+let acct = null, acctInfo = null, cfg = null, agentSnap = null;
+const colonyFor = colonyCache((col) => ({ tracker: new TripTracker(col) }));
+const verifyOf = makeVerifier((m) => { if (mk && sigOf(mk.it.m) === sigOf(m)) { paintChecks(); paintState(); } });
+
+// ---- which market ----
+
+function collect() {
+  const cur = round.markets.map((m) => ({ m, group: "cur", rd: round }));
+  const prd = finished(round.previous);
+  const prev = prd ? prd.markets.map((m) => ({ m, group: "prev", rd: prd })) : [];
+  items = [...cur, ...prev];
+}
+
+// The first read finds ?m=<key>; later reads follow the same round and
+// index, since m3 becomes p3 once the next round opens.
+function resolve() {
+  if (!pin) {
+    const want = new URLSearchParams(location.search).get("m");
+    const it = items.find((i) => i.m.key === want) ?? (want ? null : items[0]);
+    if (!it) return null;
+    pin = { rid: it.rd.id, index: it.m.index };
+  }
+  return items.find((i) => i.rd.id === pin.rid && i.m.index === pin.index) ?? null;
+}
+
+function show(it) {
+  if (!it) {
+    closeMarket();
+    $("market").innerHTML = `<p class="lv-empty lv-market">${pin
+      ? `Round ${pin.rid.toLocaleString("en")} is no longer readable here: the contract keeps the current round and the one before it.`
+      : "This market is not in the current round or the one before it."} <a href="${liveHref("#forecasts")}">See this round's markets</a>.</p>`;
+    document.title = "Antonomy · market";
+    return;
+  }
+  if (new URLSearchParams(location.search).get("m") !== it.m.key) history.replaceState(null, "", marketHref(it.m.key));
+  openMarket(it);
+}
+
+// Previous / next markets swap in place, without reloading the round.
+document.addEventListener("click", (e) => {
+  const a = e.target.closest?.("a[data-nav]");
+  if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+  const it = items.find((i) => i.m.key === a.dataset.nav);
+  if (!it) return;
+  e.preventDefault();
+  pin = { rid: it.rd.id, index: it.m.index };
+  history.pushState(null, "", marketHref(it.m.key));
+  openMarket(it);
+  header();
+  scrollTo({ top: 0 });
+  mk?.root.querySelector("#m-title").focus({ preventScroll: true });
+});
+addEventListener("popstate", () => { pin = null; if (round) { show(resolve()); header(); } });
+
+// ---- the market ----
+
+const ABSTAIN = { 3: "Nobody staked on this market, so Community has no input and sits out of the swarm belief.",
+  4: "No forecaster agent posted, so Agents has no input and sits out of the swarm belief." };
+
+function keepersHTML(m) {
+  if (!m.rawHashes.length) return `<p class="text-sm text-muted" style="margin: 0">No keeper list accepted yet.</p>`;
+  return `<ul>${m.rawHashes.map(([k, h]) => `<li><code>${esc(k)}</code>${hashHTML(h, "raw API response hash")}</li>`).join("")}</ul>`;
+}
+
+// Before the seed: when each step happens.
+function timelineHTML(now = Date.now()) {
+  const p = round.phase;
+  const at = { posting: 0, agents: 1, ready: 2, running: 3, done: 4 }[p] ?? -1;
+  const st = (i) => (at > i ? "past" : at === i ? "now" : "next");
+  const left = (ms) => (now < ms ? `<span class="lv-timeline__in num">in ${hms(ms - now)}</span>` : "");
+  const steps = [
+    [utc(round.closeMs), "Staking closes", "Stakes on this market freeze into the Community colony's input.", left(round.closeMs)],
+    [utc(round.publishMs), "Agents' window ends", "Forecaster agents post odds until then; Agents follows their median.", left(round.publishMs)],
+    ["", "First crank draws the seed", "Anyone may crank. The block's random seed becomes the round seed.", ""],
+    ["", "Five colonies run on-chain", "One colony per call, then the swarm belief and market hash are final.", ""],
+  ];
+  return steps.map(([t, title, text, l], i) => `<li data-state="${st(i)}"><span class="lv-timeline__at">${t}</span>
+    <div class="lv-timeline__body"><b>${gl(`${st(i) === "past" ? "✓ " : st(i) === "now" ? "◌ " : ""}${title}`)}${l}</b><p>${text}</p></div></li>`).join("");
+}
+
+// What each forecaster will read, for a market that has not run yet.
+function kindsHTML(m) {
+  const t = m.stakes ? sumBig(m.stakes) : null;
+  const posts = agentSnap?.colony === m.colony ? agentSnap.posts : [];
+  const input = [
+    ["the keepers' odds", ""], ["the keepers' odds", ""], ["odds now against 6 hours ago", ""],
+    t ? [`${fmtT(t)} tANTO staked so far`, ""] : ["no stakes yet: would sit out", "out"],
+    posts.length ? [`${posts.length} agent post${posts.length === 1 ? "" : "s"}`, ""] : [round.phase === "posting" ? "agents post after staking closes" : "no posts yet: would sit out", posts.length || round.phase === "posting" ? "" : "out"],
+  ];
+  return KIND_NAMES.map((name, k) => `<li><b>${name}</b><span>${KIND_BLURB[k]}</span><small data-state="${input[k][1]}">reads ${input[k][0]}</small></li>`).join("");
+}
+
+const planHTML = (m) => `
+  <div class="lv-plan">
+    <section class="lv-panel" aria-labelledby="tl-title">
+      <div class="lv-panel__head"><h2 class="lv-h3" id="tl-title">What happens next</h2></div>
+      <ol class="lv-timeline" data-r="timeline">${timelineHTML()}</ol>
+    </section>
+    <section class="lv-panel" aria-labelledby="kd-title">
+      <div class="lv-panel__head"><h2 class="lv-h3" id="kd-title">The five colonies</h2>${whatHTML("forecasters", "More")}</div>
+      <ul class="lv-kinds" data-r="kinds">${kindsHTML(m)}</ul>
+      <p class="lv-panel__foot">There is no map before the seed exists. Each colony then runs on its own map, inside the contract.</p>
+    </section>
+  </div>`;
+
+const stageHTML = (m, sel) => `
+  <div class="lv-stage">
+    <div class="lv-picks" role="tablist" aria-label="The five colonies">${m.forecasters.map((f, k) => `
+      <button type="button" role="tab" class="lv-pick" data-k="${k}" aria-selected="${k === sel}" tabindex="${k === sel ? 0 : -1}" aria-controls="stage-map">
+        <canvas width="216" height="144" aria-hidden="true"></canvas>
+        <span class="lv-pick__name">${f.name}</span>
+        <span class="lv-pick__lead" data-r="lead-${k}">${f.cranked ? "starting…" : "waiting for a crank"}</span>
+        ${f.counted ? "" : `<span class="lv-pick__out" title="${ABSTAIN[f.kind]}">sits out</span>`}
+      </button>`).join("")}
+    </div>
+    <div class="lv-stage__map" id="stage-map" role="tabpanel">
+      <div class="lv-stage__head"><h2 class="lv-h3" data-r="s-name"></h2><span class="text-sm text-muted" data-r="s-blurb"></span><span data-r="s-chips"></span>
+        <a class="btn btn--sm btn--ghost" data-r="s-replay" href="#">Replay ↗</a></div>
+      <div class="sim-frame">${m.forecasters.map((f, k) => `
+        <canvas width="1080" height="720" data-k="${k}"${k === sel ? "" : " hidden"} aria-label="${f.name} colony map for ${esc(m.title)}, replayed from the on-chain seed. Click an ant to follow it."></canvas>`).join("")}
+        <div class="sim-frame__hud"><span class="sim-frame__tick">tick <strong data-r="tick">0000</strong>/<span data-r="ticks">0000</span></span></div>
+        <span class="sim-frame__tick sim-frame__hint" data-r="hint">click an ant to follow it</span>
+      </div>
+      <ul class="share-bars share-bars--compact" data-r="bars"></ul>
+      <div data-r="follow" aria-live="polite"></div>
+    </div>
+    ${m.forecasters[COMMUNITY]?.stakers?.total ? `
+    <div class="lv-roster">
+      <h3>Who feeds Community</h3>
+      <p class="lv-panel__note">Each wallet's stake spawns ants in its colour. Hover a wallet to light up its ants on the Community map. ${whatHTML("staker-ants", "Staker ants")}</p>
+      <div data-r="roster"></div>
+    </div>` : ""}
+    ${m.forecasters[AGENTS]?.stakers?.total ? `
+    <div class="lv-roster">
+      <h3>Who feeds Agents</h3>
+      <p class="lv-panel__note">Each forecaster agent's ants hatch in its colour, an equal share each, since the median weighs every post the same. Hover an agent to light up its ants on the Agents map; click an ant for its posted odds. ${whatHTML("agents-colony", "Agents colony")}</p>
+      <div data-r="agent-roster"></div>
+    </div>` : ""}
+  </div>`;
+
+const checksHTML = (m) => `
+  <div class="lv-checks">
+    <section class="lv-panel" aria-labelledby="vf-title">
+      <div class="lv-panel__head"><h2 class="lv-h3" id="vf-title">Verified in your browser</h2>
+        <span class="verify-badge" data-state="pending" data-r="vbadge" role="status" aria-live="polite">Re-running</span></div>
+      <p class="lv-panel__note">Your browser rebuilds each colony from the on-chain seed and inputs, runs it to its last tick and compares its result hash with the one the contract stored.</p>
+      <div class="table-wrap"><table class="table">
+        <thead><tr><th scope="col">Colony</th><th scope="col">On-chain hash</th><th scope="col">Replayed here</th><th scope="col">Cranked by</th><th scope="col">Check</th></tr></thead>
+        <tbody data-r="vrows"></tbody>
+      </table></div>
+    </section>
+    <section class="lv-panel" aria-labelledby="bf-title">
+      <div class="lv-panel__head"><h2 class="lv-h3" id="bf-title">By colony, %</h2>${whatHTML("forecasters", "The five forecasters")}</div>
+      <div class="table-wrap"><table class="table">
+        <caption class="visually-hidden">Each colony's trail share per outcome, the swarm belief and its gap to the market. Forecast, not advice.</caption>
+        <thead><tr><th scope="col">Outcome</th><th scope="col" class="num">Market</th>
+          ${m.forecasters.map((f) => `<th scope="col" class="num">${f.name}${f.counted ? "" : `<br><span class="text-xs text-faint">sits out</span>`}</th>`).join("")}
+          <th scope="col" class="num">Swarm belief</th><th scope="col" class="num">Δ vs market</th></tr></thead>
+        <tbody data-r="rows"></tbody>
+      </table></div>
+    </section>
+  </div>`;
+
+function inputsHTML(m) {
+  const posts = m.agents?.posts ?? [];
+  return `<details class="lv-more">
+    <summary>Inputs and hashes <span>· keepers' raw responses${posts.length ? ", agents' posts" : ""}</span></summary>
+    <div class="lv-more__body">
+      <div><h3 class="eyebrow">Keepers' raw API response hashes</h3>${keepersHTML(m)}</div>
+      ${posts.length ? `<div><h3 class="eyebrow">Agents' posts</h3>
+        <ul>${posts.map(([a, o]) => `<li><code>${esc(a)}</code><span class="num text-muted">${o.map(pct).join(" / ")}%</span></li>`).join("")}</ul>
+        <p class="lv-note">Median the Agents colony reads: <span class="num">${m.agents.odds.map(pct).join(" / ")}%</span> · hash ${m.agents.hash === ZERO_HASH ? "none" : hashHTML(m.agents.hash, "agent snapshot hash")}</p></div>` : ""}
+    </div>
+  </details>`;
+}
+
+function marketHTML(it, sel) {
+  const { m, rd } = it, run = !!m.forecasters;
+  const list = items.filter((i) => i.group === it.group);
+  const idx = list.indexOf(it);
+  const prevK = list[idx - 1]?.m.key, nextK = list[idx + 1]?.m.key;
+  const nk = m.rawHashes.length;
+  const beliefNote = m.swarm ? `Market hash ${hashHTML(m.marketHash, "market hash")} ${whatHTML("market-hash", "What's this?")}`
+    : run ? "The swarm belief appears once all five colonies are cranked."
+    : "Posted on-chain by the keepers. The colonies run after the agents' window.";
+  const step = (k, label) => (k ? `<a class="btn btn--sm btn--ghost" href="${marketHref(k)}" data-nav="${k}">${label}</a>`
+    : `<span class="btn btn--sm btn--ghost" aria-disabled="true">${label}</span>`);
+  return `
+  <article class="lv-market" id="market-view" aria-labelledby="m-title">
+    <header class="lv-market__head">
+      <div>
+        <p class="eyebrow">${it.group === "prev" ? "Previous round" : "Round"} ${rd.id.toLocaleString("en")} · market ${idx + 1} of ${list.length} · ${m.outcomes.length} outcomes</p>
+        <h1 id="m-title" tabindex="-1">${esc(m.title)}</h1>
+        <p class="lv-meta">
+          <span class="lv-state" data-r="state"></span>
+          <span>Polymarket event <code>${esc(m.marketId)}</code></span>
+          <span>odds: median of ${nk} keeper${nk === 1 ? "" : "s"}</span>
+          <span>odds hash ${hashHTML(m.oddsHash, "odds hash")} ${m.oddsHashOk ? "✓ matches the odds" : "✗ does not match the odds"}</span>
+        </p>
+      </div>
+      <nav class="lv-market__step" aria-label="Other markets in this round">
+        ${step(prevK, "← Previous")}
+        <span class="lv-market__of num">${idx + 1} / ${list.length}</span>
+        ${step(nextK, "Next →")}
+      </nav>
+    </header>
+    <div class="lv-market__grid">
+      <aside class="lv-market__side">
+        <section class="lv-panel" aria-labelledby="bl-title">
+          <div class="lv-panel__head"><h2 class="lv-h3" id="bl-title">${m.swarm ? "Swarm belief" : "Market odds"}</h2><span class="tag-forecast">Forecast · not advice</span></div>
+          <ul class="${m.swarm ? "belief" : "share-bars"}" data-r="belief"></ul>
+          ${m.swarm ? `<ul class="belief-key" style="margin-top: var(--space-4)"><li class="belief-key__swarm">swarm belief</li><li class="belief-key__market">market odds</li></ul>` : ""}
+          <p class="lv-panel__foot">${beliefNote}</p>
+        </section>
+        ${it.group === "cur" ? `<section class="lv-panel lv-act" id="act-panel" aria-labelledby="act-title"></section>`
+          : `<section class="lv-panel lv-panel--quiet"><p>This round is over. Its stakes were refunded when round ${round.id.toLocaleString("en")} opened.</p></section>`}
+      </aside>
+      <div class="lv-market__main">${run ? stageHTML(m, sel) : planHTML(m)}</div>
+    </div>
+    ${run ? checksHTML(m) : ""}
+    ${inputsHTML(m)}
+  </article>`;
+}
+
+function closeMarket() {
+  if (mk?.stageEl) io.unobserve(mk.stageEl);
+  mk = null;
+}
+
+let shownSig = "";
+function openMarket(it) {
+  const sig = JSON.stringify([round.id, round.phase, it.group, sigOf(it.m)]);
+  const same = mk && mk.it.m.key === it.m.key && mk.it.rd.id === it.rd.id;
+  if (same && sig === shownSig) { mk.it = it; return; }
+  shownSig = sig;
+  const sel = same ? mk.sel : 0;
+  closeMarket();
+  document.title = `${it.m.title} · Antonomy`;
+  $("market").innerHTML = marketHTML(it, sel);
+  const root = $("market").firstElementChild;
+  mk = { it, rd: it.rd, root, sel, q: (k) => root.querySelector(`[data-r="${k}"]`), busy: true, visible: true, follow: -1, fracs: [], lastT: [] };
+  setupMarket();
+  paintState();
+  actSig = "";
+  renderAct();
+  if (it.group === "cur" && !it.m.forecasters && agentSnap?.colony !== it.m.colony) loadAgentSnap().then(() => { renderAct(); paintKinds(); });
+}
+
+function paintState() {
+  const el = mk?.q("state");
+  if (!el) return;
+  const { m, rd } = mk.it;
+  const [s, a, b] = marketState(m, rd.phase, verifyOf(m)?.v ?? null);
+  el.dataset.state = s;
+  el.innerHTML = `<b>${gl(a)}</b>${b ? ` · ${gl(b)}` : ""}`;
+}
+
+function setupMarket() {
+  const { it, root, q } = mk, { m } = it;
+  if (m.swarm) beliefBoard(q("belief"), m.outcomes, m.odds)(m.swarm);
+  else shareBars(q("belief"), m.outcomes)(m.odds.map((x) => x / 100));
+  if (!m.forecasters) return;
+  verifyOf(m);
+  const cs = m.forecasters.map((f) => colonyFor(f, m.run.seed));
+  mk.cols = cs.map((c) => c.col);
+  mk.trackers = cs.map((c) => c.tracker);
+  mk.starts = cs.map((c) => c.startedAt);
+  mk.thumbs = [...root.querySelectorAll(".lv-pick canvas")].map((cv, k) => {
+    const th = new ColonyThumb(cv, { glyphs: GLYPHS });
+    th.setStakers(m.forecasters[k].stakers);
+    th.attach(mk.cols[k]);
+    return th;
+  });
+  mk.views = [...root.querySelectorAll(".sim-frame canvas")].map((cv, k) => {
+    const v = new ColonyView(cv, { labels: m.forecasters[k].labels, glyphs: GLYPHS });
+    v.selected = -1;
+    v.setStakers(m.forecasters[k].stakers);
+    v.attach(mk.cols[k]);
+    wireMapPick(cv, v, {
+      onPick: (a) => { mk.follow = v.selected = a; q("hint").hidden = true; followPanel(); mk.busy = true; },
+      redraw: () => { mk.busy = true; },
+    });
+    return v;
+  });
+  mk.stageEl = root.querySelector(".sim-frame");
+  io.observe(mk.stageEl);
+  const picks = root.querySelector(".lv-picks");
+  picks.addEventListener("click", (e) => { const b = e.target.closest(".lv-pick"); if (b) select(+b.dataset.k); });
+  picks.addEventListener("keydown", (e) => {
+    const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+    if (!d) return;
+    e.preventDefault();
+    select((mk.sel + d + 5) % 5);
+    picks.children[mk.sel].focus();
+  });
+  root.addEventListener("click", (e) => {
+    if (!e.target.closest('[data-follow="close"]')) return;
+    mk.follow = mk.views[mk.sel].selected = -1;
+    q("follow").innerHTML = "";
+    q("hint").hidden = false;
+    mk.busy = true;
+  });
+  for (const [ci, slot] of [[COMMUNITY, "roster"], [AGENTS, "agent-roster"]]) {
+    if (!m.forecasters[ci]?.stakers?.total) continue;
+    stakerRoster(q(slot), (w) => {
+      if (w >= 0 && mk.sel !== ci) select(ci);
+      mk.views[ci].spotlight = w;
+      mk.busy = true;
+    })(m.forecasters[ci].stakers, m.outcomes);
+  }
+  select(mk.sel);
+  paintChecks();
+}
+
+// Show colony k on the stage.
+function select(k) {
+  const { m } = mk.it, f = m.forecasters[k], q = mk.q;
+  mk.sel = k;
+  mk.root.querySelectorAll(".lv-pick").forEach((b, i) => { b.setAttribute("aria-selected", String(i === k)); b.tabIndex = i === k ? 0 : -1; });
+  mk.views.forEach((v, i) => { v.cv.hidden = i !== k; v.selected = -1; });
+  q("s-name").textContent = f.name;
+  q("s-blurb").textContent = KIND_BLURB[f.kind];
+  q("s-chips").innerHTML = (f.cranked ? "" : `<span class="chip">○ waiting for a crank</span> `) + (f.counted ? "" : `<span class="chip" title="${ABSTAIN[f.kind]}">sits out</span>`);
+  const rp = q("s-replay");
+  rp.hidden = !f.cranked;
+  rp.href = replayHref(mk.rd, f.key);
+  rp.setAttribute("aria-label", `Replay and verify the ${f.name} colony`);
+  q("ticks").textContent = pad4(f.ticks);
+  mk.bars = shareBars(q("bars"), f.labels);
+  mk.follow = -1;
+  q("follow").innerHTML = "";
+  q("hint").hidden = false;
+  mk.busy = true;
+  mk.lastT = [];
+  stageTick();
+}
+
+function followPanel() {
+  if (!mk || mk.follow < 0) return;
+  const k = mk.sel, col = mk.cols[k], f = mk.it.m.forecasters[k], a = mk.follow;
+  mk.q("follow").innerHTML = followHTML({
+    a, col, trips: mk.trackers[k].lives[a], labels: f.labels, stakers: f.stakers,
+    href: `${replayHref(mk.rd, f.key)}&ant=${a}&t=${col.t}`,
+  });
+}
+
+// Tick counter, the stage's share bars and each tab's leader, when ticks change.
+function stageTick() {
+  const { cols, sel, q, it } = mk, v = verifyOf(it.m).v;
+  const col = cols[sel];
+  q("tick").textContent = pad4(col.t);
+  const res = v?.results[sel];
+  if (res && col.t === col.ticks) mk.bars(trailShares(res).map((x) => x / 100), res.winner_option);
+  else mk.bars(liveShares(col).pct);
+  it.m.forecasters.forEach((f, k) => {
+    if (!f.cranked || mk.lastT[k] === cols[k].t) return;
+    mk.lastT[k] = cols[k].t;
+    const { lead, pct: p } = liveShares(cols[k]);
+    const done = cols[k].t === cols[k].ticks;
+    q(`lead-${k}`).innerHTML = lead < 0 ? "no trail yet" : `${done ? "✓ " : ""}<span class="opt" data-opt="${lead}">${esc(f.labels[lead])}</span> ${p[lead].toFixed(0)}%`;
+  });
+}
+
+const STATE_TEXT = { match: "✓ match", mismatch: "✗ mismatch", pending: "○ not cranked yet" };
+
+function paintChecks() {
+  if (!mk?.it.m.forecasters) return;
+  const { m } = mk.it, q = mk.q, v = verifyOf(m).v;
+  if (!v) return;
+  const vb = q("vbadge");
+  const bad = v.colonies.filter((c) => c.state === "mismatch").length + (v.market?.state === "mismatch" ? 1 : 0);
+  const n = v.colonies.filter((c) => c.state === "match").length + (v.market?.state === "match" ? 1 : 0);
+  vb.dataset.state = bad ? "mismatch" : n ? "match" : "idle";
+  vb.textContent = bad ? `${bad} hash${bad === 1 ? "" : "es"} differ` : n ? `${n} of ${v.colonies.length + (v.market ? 1 : 0)} hashes match` : "nothing cranked yet";
+  q("vrows").innerHTML = v.colonies.map((c) => `<tr><th scope="row">${c.spec.name}</th>
+      <td>${c.expected ? hashHTML(c.expected, "on-chain hash") : `<span class="text-faint">not yet</span>`}</td>
+      <td>${c.actual ? hashHTML(c.actual, "replayed hash") : `<span class="text-faint">–</span>`}</td>
+      <td class="text-xs">${c.spec.cranker ? `<code>${esc(c.spec.cranker)}</code>` : "–"}</td>
+      <td><span class="chip" data-state="${c.state}">${STATE_TEXT[c.state]}</span></td></tr>`).join("") +
+    `<tr><th scope="row">Market hash</th>
+      <td>${m.marketHash ? hashHTML(m.marketHash, "on-chain market hash") : `<span class="text-faint">not yet</span>`}</td>
+      <td>${v.market ? hashHTML(v.market.actual, "replayed market hash") : `<span class="text-faint">–</span>`}</td>
+      <td class="text-xs">–</td>
+      <td><span class="chip" data-state="${v.market?.state ?? "pending"}">${v.market ? STATE_TEXT[v.market.state] + (v.market.state === "match" ? " · swarm belief too" : "") : STATE_TEXT.pending}</span></td></tr>`;
+  q("rows").innerHTML = m.outcomes.map((label, o) => {
+    const cell = (k) => (v.results[k] ? pct(trailShares(v.results[k])[o]) : "–");
+    const sw = m.swarm ? m.swarm[o] : null, d = sw === null ? 0 : sw - m.odds[o];
+    return `<tr><th scope="row"><span class="opt" data-opt="${o}">${esc(label)}</span></th><td class="num">${pct(m.odds[o])}</td>` +
+      m.forecasters.map((_, k) => `<td class="num">${cell(k)}</td>`).join("") +
+      `<td class="num col-swarm">${sw === null ? "–" : pct(sw)}</td><td class="num">${sw === null ? "–" : `<span class="delta ${deltaCls(d)}">${pct(Math.abs(d))}</span>`}</td></tr>`;
+  }).join("");
+}
+
+function paintKinds() {
+  const el = mk?.q("kinds");
+  if (el) el.innerHTML = kindsHTML(mk.it.m);
+}
+
+// Every frame: replay the market's cranked colonies at REPLAY_TPS.
+function stepMarket(perf) {
+  if (!mk?.cols) return;
+  const now = performance.now(), { cols, it } = mk;
+  let running = false, changed = false;
+  cols.forEach((col, k) => {
+    if (!it.m.forecasters[k].cranked) { mk.fracs[k] = 1; return; }
+    const exact = Math.min(col.ticks, ((now - mk.starts[k]) / 1000) * REPLAY_TPS), target = Math.floor(exact);
+    const fx = target - col.t <= 2;
+    while (col.t < target) {
+      col.step();
+      mk.trackers[k].observe(col);
+      mk.thumbs[k].afterStep();
+      mk.views[k].afterStep(fx);
+      changed = true;
+    }
+    if (col.t < col.ticks) running = true;
+    mk.fracs[k] = col.t < col.ticks ? exact - target : 1;
+  });
+  if (changed) {
+    stageTick();
+    if (mk.follow >= 0 && cols[mk.sel].t % 5 === 0) followPanel();
+  }
+  if (mk.visible && (running || mk.busy)) {
+    mk.thumbs.forEach((th, k) => th.draw(mk.fracs[k] ?? 1));
+    mk.busy = mk.views[mk.sel].draw(mk.fracs[mk.sel] ?? 1, perf);
+  }
+}
+
+// ---- round bar: the round of the market shown ----
+
+function header(now = Date.now()) {
+  if (!round) return;
+  const rd = mk?.it.rd ?? round, p = rd.phase;
+  $("rc-id").textContent = rd.id.toLocaleString("en");
+  $("rc-phases").innerHTML = stepsHTML(rd);
+  [$("rc-next-label").textContent, $("rc-next").textContent] = clockOf(rd, now);
+  const lines = {
+    posting: "Staking is open: stake $ANTO on an outcome to feed this market's Community colony.",
+    agents: "Staking is closed. Registered forecaster agents post their odds; then anyone can crank the colonies.",
+    ready: "Anyone can crank: the first call draws the seed, then each call runs one colony inside the contract.",
+    running: "The colonies are running on-chain. Each finished one is replayed and checked here.",
+    done: rd === round ? "Every colony ran and the result is final. The next round opens when anyone calls start_round."
+      : `This round is over; round ${round.id.toLocaleString("en")} is open now.`,
+    skipped: "No quorum of keepers posted by the publish time, so this round was skipped.",
+  };
+  if (!$("rc-line").dataset.hold) $("rc-line").textContent = lines[p] ?? "";
+  $("crank-btn").hidden = !(rd === round && (p === "ready" || p === "running"));
+  $("round-seed").innerHTML = rd.seed ? hashHTML(rd.seed, "round seed") : "drawn at the first crank";
+  $("live-chip").innerHTML = `live<span class="topbar__round"> · round ${round.id.toLocaleString("en")}</span>`;
+  const tl = mk && !mk.it.m.forecasters && mk.it.group === "cur" ? mk.q("timeline") : null;
+  if (tl) tl.innerHTML = timelineHTML(now);
+}
+
+// ---- crank ----
+
+const auto = createAutoCrank({
+  next: () => wallet.accountId && round && (round.phase === "ready" || round.phase === "running")
+    ? { method: "crank_round", args: {}, gasTgas: 300, label: "crank a colony" } : null,
+  send: (s) => wallet.call(s.method, s.args, { gasTgas: s.gasTgas }),
+  refresh: () => refresh(),
+  say: (t) => say(t),
+  wait,
+});
+$("auto-crank").addEventListener("change", async (e) => {
+  if (e.target.checked && !wallet.accountId) {
+    e.target.checked = false;
+    try { await wallet.connect(); } catch (err) { say(String(err.message || err)); }
+    return;
+  }
+  await auto.set(e.target.checked);
+  e.target.checked = auto.on;
+});
+
+$("crank-btn").addEventListener("click", async () => {
+  if (!wallet.accountId) { try { await wallet.connect(); } catch (e) { say(String(e.message || e)); } return; }
+  await sendTx("crank_round", {}, { gasTgas: 300 }, "Crank sent.");
+});
+
+// A transaction's progress in the round bar, held for a few seconds.
+function say(t) {
+  const el = $("rc-line");
+  el.textContent = t;
+  el.dataset.hold = "1";
+  clearTimeout(say.t);
+  say.t = setTimeout(() => { delete el.dataset.hold; header(); }, 8000);
+}
+
+const txState = { stake: "", post: "" };
+async function sendTx(method, args, opts, okText, tab = null) {
+  const set = (t) => {
+    if (!tab) return say(t);
+    txState[tab] = t;
+    const el = document.querySelector("#act-panel .tx-status");
+    if (el && actTab === tab) el.textContent = t;
+  };
+  try {
+    set("Waiting for your wallet…");
+    await wallet.call(method, args, opts);
+    set(`${okText} Waiting for the chain…`);
+    await wait(2500);
+    await refresh();
+    set(okText);
+  } catch (e) {
+    set(`Not sent: ${String(e.message || e).slice(0, 200)}`);
+  }
+}
+
+// ---- your part: stake on this market, or post odds as an agent ----
+
+async function loadAcct() {
+  acct = wallet.accountId;
+  if (!acct) { acctInfo = null; return; }
+  try {
+    const [bal, claimed, staked, stakes, isAgent] = await Promise.all([
+      chain.balance(acct), chain.hasClaimed(acct), view("staked_by", { account_id: acct }), chain.stakesOf(acct), chain.isAgent(acct),
+    ]);
+    acctInfo = { acct, bal, claimed, staked: BigInt(staked), isAgent,
+      stakes: stakes.map(([colony, option, amount]) => ({ colony, option, amount: BigInt(amount) })) };
+  } catch (e) { acctInfo = { acct, error: String(e.message || e) }; }
+}
+
+// Agents' posts on this market before its colonies run (after that they
+// are part of the run's inputs). The contract returns null before any post.
+async function loadAgentSnap() {
+  const m = mk?.it.group === "cur" ? mk.it.m : null;
+  if (!m || m.forecasters || round.phase === "posting") { agentSnap = null; return; }
+  try { agentSnap = { colony: m.colony, posts: (await chain.agentSnapshot(m.colony))?.posts ?? [] }; } catch { agentSnap = null; }
+}
+
+let actTab = "stake", actPicked = false, actSig = "";
+const faucetText = () => `${cfg?.faucet ? fmtT(cfg.faucet) : "150"} play tokens`;
+const connectHTML = (what) => `<p class="lv-act__text">Connect a NEAR testnet wallet to ${what}. New accounts get ${faucetText()}, once.</p>
+  <button class="btn btn--sm" type="button" data-act="connect">Connect wallet</button>`;
+
+function stakeBody(m, a, mine, open) {
+  const intro = `<p class="lv-act__text">Your stake on an outcome feeds this market's Community colony, weighted by its square root. Play tokens, refunded when the next round opens. ${whatHTML("stakes", "How stakes work")}</p>`;
+  if (!open && !mine.length) return `<p class="lv-act__text">Staking for this round closed at ${utc(round.closeMs)}. It opens again on the next round's markets. ${whatHTML("stakes", "How stakes work")}</p>`;
+  if (!acct) return intro + connectHTML("stake");
+  if (a?.error) return `<p class="lv-act__text">Could not read your account: ${esc(a.error)}</p>`;
+  const cap = cfg?.cap ?? 0n, left = cap > a.staked ? cap - a.staked : 0n;
+  return `<dl class="kv">
+      <dt>Balance</dt><dd class="num">${fmtT(a.bal)} tANTO${a.claimed ? "" : ` <span class="text-faint">+ ${faucetText()} on first stake</span>`}</dd>
+      <dt>Staked</dt><dd class="num">${fmtT(a.staked)} of ${fmtT(cap)} tANTO this round</dd>
+    </dl>
+    ${open ? `<div class="lv-act__form">
+      <div class="field"><label class="field__label" for="st-opt">Outcome</label>
+        <select class="input" id="st-opt">${m.outcomes.map((o, i) => `<option value="${i}">${GLYPHS[i]} ${esc(o)}</option>`).join("")}</select></div>
+      <div class="field"><label class="field__label" for="st-amt">tANTO</label>
+        <input class="input num" id="st-amt" type="number" min="1" max="${Number(left / ONE)}" step="1" value="${Math.min(10, Number(left / ONE) || 1)}"></div>
+      <button class="btn btn--primary" type="button" data-act="stake"${left === 0n ? " disabled" : ""}>Stake on this market</button>
+    </div>` : `<p class="lv-act__text">Staking closed at ${utc(round.closeMs)}.</p>`}
+    ${mine.length ? `<ul class="lv-act__mine" aria-label="Your stakes on this market">${mine.map((s) => `<li>
+      <span class="opt" data-opt="${s.option}">${esc(m.outcomes[s.option] ?? "?")}</span><span class="num">${fmtT(s.amount)} tANTO</span>
+      ${open ? `<button class="btn btn--sm btn--ghost" type="button" data-act="unstake" data-opt="${s.option}" data-amt="${s.amount}">Unstake</button>` : ""}</li>`).join("")}</ul>
+      <p class="lv-note" data-r="share"></p>` : ""}`;
+}
+
+function postBody(m, a, posts, mineP) {
+  const intro = `<p class="lv-act__text">Registered forecaster agents post their own odds after staking closes. The Agents colony follows their median; agents are paid for work, never for being right. ${whatHTML("recruit", "Agents")}</p>`;
+  const list = posts.length ? `<ul class="lv-posts" aria-label="Posted so far">${posts.map(([id, o]) => `<li><code>${esc(id)}</code> <span class="num">${o.map(pct).join(" / ")}%</span></li>`).join("")}</ul>` : "";
+  if (!acct) return intro + connectHTML("post odds") + list;
+  if (a?.error) return `<p class="lv-act__text">Could not read your account: ${esc(a.error)}</p>`;
+  if (!a.isAgent) return intro + `<p class="lv-act__text">Registering locks a refundable deposit of <b class="num">${fmtT(cfg?.deposit ?? 0n)} tANTO</b>.</p>
+    <button class="btn btn--sm" type="button" data-act="register">Register as an agent</button>` + list;
+  if (round.phase !== "agents") return `<p class="lv-act__text">You are a registered agent. ${round.phase === "posting" ? `The window opens when staking closes at ${utc(round.closeMs)}.` : "This round's window is closed."}${mineP ? ` Your post: <span class="num">${mineP.map(pct).join(" / ")}%</span>.` : ""}</p>` + list;
+  const start = mineP ?? m.odds;
+  return `<p class="lv-act__text">Your odds in percent, summing to 100. Post as often as you like until ${utc(round.publishMs)}; the last post counts.</p>
+    <div class="lv-odds">${m.outcomes.map((o, i) => `<div class="field"><label class="field__label" for="ag-${i}"><span class="opt" data-opt="${i}">${esc(o)}</span></label>
+      <input class="input num" id="ag-${i}" data-ag type="number" min="0" max="100" step="0.01" value="${(start[i] / 100).toFixed(2)}"></div>`).join("")}</div>
+    <div class="cluster"><button class="btn btn--primary btn--sm" type="button" data-act="post">Post my forecast</button><span class="text-sm num" data-r="ag-sum"></span></div>` + list;
+}
+
+function renderAct() {
+  const el = $("act-panel");
+  if (!el || !mk) return;
+  const m = mk.it.m, a = acctInfo, open = round.phase === "posting";
+  if (!actPicked) actTab = round.phase === "agents" ? "post" : "stake";
+  const mine = a?.stakes ? a.stakes.filter((s) => s.colony === m.colony) : [];
+  const posts = m.agents?.posts ?? (agentSnap?.colony === m.colony ? agentSnap.posts : []);
+  const mineP = posts.find(([id]) => id === acct)?.[1] ?? null;
+  const sig = bigJSON([m.key, actTab, acct, round.phase, a && [a.bal, a.claimed, a.staked, a.isAgent, a.error], mine.map((s) => [s.option, s.amount]), posts]);
+  if (sig === actSig) return;
+  actSig = sig;
+  // Keep what the user typed across a re-render.
+  const typed = [...el.querySelectorAll("input, select")].map((i) => [i.id, i.value]);
+  const tabs = `<div class="seg" role="group" aria-label="Take part">${[["stake", "Stake"], ["post", "Post odds"]].map(([k, l]) =>
+    `<button type="button" data-tab="${k}" aria-pressed="${actTab === k}">${l}</button>`).join("")}</div>`;
+  el.innerHTML = `<div class="lv-panel__head"><h2 class="lv-h3" id="act-title">Your part</h2>${tabs}</div>
+    ${actTab === "stake" ? stakeBody(m, a, mine, open) : postBody(m, a, posts, mineP)}
+    <p class="tx-status" role="status" aria-live="polite">${esc(txState[actTab])}</p>`;
+  for (const [id, v] of typed) { const i = id && el.querySelector(`#${id}`); if (i) i.value = v; }
+  if (actTab === "stake" && acct && mine.length) shareLine(m, mine);
+  agentSum();
+}
+
+async function shareLine(m, mine) {
+  try {
+    const w = await view("stake_weights", { colony: m.colony, n_options: m.outcomes.length });
+    const total = sumBig(w);
+    const my = mine.reduce((a, s) => a + isqrt(s.amount), 0n);
+    const el = document.querySelector("#act-panel [data-r=share]");
+    if (el && total) el.textContent = `Your weight is ${(Number((my * 10000n) / total) / 100).toFixed(1)}% of what Community follows on this market.`;
+  } catch { /* leave blank */ }
+}
+
+function agentSum() {
+  const ins = [...document.querySelectorAll("#act-panel [data-ag]")];
+  const out = document.querySelector("#act-panel [data-r=ag-sum]");
+  if (!ins.length || !out) return;
+  const sum = ins.reduce((a, i) => a + Math.round((+i.value || 0) * 100), 0);
+  out.textContent = `${sum === 10000 ? "✓" : "✗"} total ${(sum / 100).toFixed(2)}%`;
+  out.style.color = sum === 10000 ? "var(--success)" : "var(--warning)";
+  const b = document.querySelector("#act-panel [data-act=post]");
+  if (b) b.disabled = sum !== 10000;
+}
+document.addEventListener("input", (e) => { if (e.target.matches?.("[data-ag]")) agentSum(); });
+
+document.addEventListener("click", async (e) => {
+  const tab = e.target.closest?.("#act-panel [data-tab]");
+  if (tab) { actTab = tab.dataset.tab; actPicked = true; renderAct(); return; }
+  const b = e.target.closest?.("#act-panel [data-act]");
+  if (!b || !mk) return;
+  const m = mk.it.m, act = b.dataset.act, t = actTab;
+  b.disabled = true;
+  try {
+    if (act === "connect") { await wallet.connect(); return; }
+    if (act === "stake") {
+      const amt = +$("st-amt").value, opt = +$("st-opt").value;
+      if (!(amt > 0)) throw new Error("Enter an amount above zero.");
+      txState.stake = "Checking your play tokens…";
+      if (await ensureTokens(acct)) await wait(2500);
+      await sendTx("stake", { colony: m.colony, option: opt, amount: yocto(amt) }, { gasTgas: 60 }, "Stake sent.", "stake");
+    } else if (act === "unstake") {
+      await sendTx("unstake", { colony: m.colony, option: +b.dataset.opt, amount: b.dataset.amt }, { gasTgas: 60 }, "Unstake sent.", "stake");
+    } else if (act === "register") {
+      if (await ensureTokens(acct)) await wait(2500);
+      await sendTx("register_agent", {}, { gasTgas: 60 }, "Registered.", "post");
+    } else if (act === "post") {
+      const odds = [...document.querySelectorAll("#act-panel [data-ag]")].map((i) => Math.round((+i.value || 0) * 100));
+      if (odds.reduce((a, x) => a + x, 0) !== 10000) throw new Error("Odds must sum to 100%.");
+      await sendTx("post_forecast", { colony: m.colony, odds }, { gasTgas: 60 }, "Forecast posted.", "post");
+    }
+  } catch (err) {
+    txState[t] = `Not sent: ${String(err.message || err).slice(0, 200)}`;
+    const el = document.querySelector("#act-panel .tx-status");
+    if (el) el.textContent = txState[t];
+  } finally { b.disabled = false; }
+});
+
+wallet.onChange(async () => { actSig = ""; await loadAcct(); renderAct(); });
+
+// ---- polling ----
+
+async function refresh() {
+  try {
+    round = await loadRound();
+    collect();
+    await loadAcct();
+    show(resolve());
+    await loadAgentSnap();
+    header();
+    paintKinds();
+    renderAct();
+    $("market").dataset.ready = "1";
+    auto.poll();
+  } catch (e) {
+    $("rc-line").textContent = `Could not read the contract: ${String(e.message || e).slice(0, 160)}. Retrying.`;
+  }
+}
+
+async function loadCfg() {
+  if (cfg) return;
+  try {
+    const [sc, rc, f] = await Promise.all([chain.stakeConfig(), chain.requestConfig(), chain.faucetAmount()]);
+    cfg = { cap: BigInt(sc.cap_per_wallet), deposit: BigInt(rc.agent_deposit), faucet: BigInt(f) };
+  } catch { /* retried on the next poll */ }
+}
+
+function frame(perf) {
+  if (round) stepMarket(perf);
+  requestAnimationFrame(frame);
+}
+
+let lastSec = -1;
+setInterval(() => {
+  const now = Date.now(), sec = Math.floor(now / 1000);
+  if (sec === lastSec) return;
+  lastSec = sec;
+  header(now);
+}, 500);
+
+async function poll() {
+  await loadCfg();
+  await refresh();
+}
+poll();
+setInterval(() => { if (!document.hidden) poll(); }, 20_000); // public RPCs rate-limit by IP
+requestAnimationFrame(frame);
+document.fonts.ready.then(() => { if (mk) mk.busy = true; });
+</script>
+</body>
+</html>

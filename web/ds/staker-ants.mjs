@@ -1,4 +1,6 @@
 // Staker ants: each wallet's stake spawns ants tinted in that wallet's colour.
+// Agent ants (agentAnts, at the end) do the same for forecaster agents in the
+// Agents colony.
 // Pure view data. It never touches the sim: the sim only sees per-option
 // weights (see walletWeights), and which ant belongs to which wallet is a
 // presentation choice, a function of the stakes alone. No RNG, no floats in
@@ -76,4 +78,24 @@ export function stakerAnts(wallets, nAnts) {
   let a = 0;
   for (const r of rows) for (let k = 0; k < r.ants; k++) owner[a++] = r.i;
   return { rows, owner, total };
+}
+
+// Agent ants: in the Agents colony each forecaster agent's ants hatch in its
+// colour, like staker ants. That colony follows the agents' lower median, in
+// which every post that counted weighs the same, so the whole colony splits
+// evenly over the agents: floor(nAnts / agents) each, the rest one apiece to
+// the lowest indices. `posts` is the agent snapshot's [[account, odds], ...],
+// sorted by account. Same shape as stakerAnts, with kind "agent", each row
+// carrying its posted odds and `total` the number of agents.
+export function agentAnts(posts, nAnts) {
+  const rows = (posts ?? []).map(([id, odds], i) => ({ id, hue: walletHue(id), odds, ants: 0, i, agent: true }));
+  const owner = new Int16Array(nAnts).fill(-1);
+  if (!rows.length) return { rows, owner, total: 0, kind: "agent" };
+  const each = Math.floor(nAnts / rows.length);
+  let extra = nAnts - each * rows.length, a = 0;
+  for (const r of rows) {
+    r.ants = each + (extra-- > 0 ? 1 : 0);
+    for (let k = 0; k < r.ants; k++) owner[a++] = r.i;
+  }
+  return { rows, owner, total: rows.length, kind: "agent" };
 }

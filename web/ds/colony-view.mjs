@@ -95,8 +95,8 @@ function fades() {
 const SCENES = new Map(); // key -> { ground, roadTex, tufts, px }, oldest first
 const SCENE_PIXELS = 8 * 2 * 720 * 480;
 let scenePixels = 0;
-// Uncached scenery is painted at most once per frame `now`, so opening four
-// maps at once spreads the work over four frames instead of one long stall.
+// Uncached scenery is painted at most once per frame `now`, so opening five
+// maps at once spreads the work over five frames instead of one long stall.
 let paintedAt = null;
 
 // Same rule as the sim: highest score, ties to the lowest index, -1 if no trail.

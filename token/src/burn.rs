@@ -38,6 +38,11 @@ pub struct BurnExecutor {
 }
 
 impl BurnExecutor {
+    /// The newest burn day already executed.
+    pub fn last_day(&self) -> Option<u64> {
+        self.last_day
+    }
+
     /// Execute the colony's decision. Returns the amount burned.
     pub fn execute(
         &mut self,

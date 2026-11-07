@@ -1,19 +1,22 @@
-// Burn history: every burn day from the demo genesis up to a given day, run in
-// order so each day burns from what the day before left in the treasury. Pure
-// data and no DOM, so Node can test it. The amount is the contract's:
-// floor(treasury × bps / 10000) in base units (24 decimals), as burn_amount in
-// token/src/burn.rs. There is no contract yet, so the genesis day and the
-// starting treasury are fixtures; once burns run on testnet, read the rows
-// from the contract's burn events instead and keep the shape.
+// The Burn colony's pure data layer: no DOM, no network, so Node can test it.
+// The chain holds the day's seed and the frozen stake snapshot; this module
+// turns them into what the sim reads, exactly as the contract does
+// (token/src/stake.rs burn_weights, token/src/burnrun.rs), and checks the
+// snapshot against the hash the run committed to. Reads and writes of the
+// contract are in burnchain.mjs.
 
-import { trailShares, toHex, run, seedFromInt } from "../sim/js/antosim.mjs";
-import { burnDay, DAY_MS } from "./round.mjs";
+import { sha256, BURN_TICKS } from "../sim/js/antosim.mjs";
 
-export const ONE = 10n ** 24n;
+export const ONE = 10n ** 24n;                     // yocto per token
 export const BURN_MENU_BPS = [10, 25, 50, 100, 200]; // token/src/burn.rs
-export const GENESIS_DAY = Date.UTC(2026, 9, 19) / DAY_MS; // first demo burn day, 19 Oct 2026
-export const TREASURY_START = 100_000_000n * ONE;          // demo treasury on the genesis day
+export const DAY_MS = 86_400_000;
+export const STAKING_MS = DAY_MS - BURN_TICKS * 1000; // 00:00 to 12:00 UTC
+export const BURN_COLONY = 0;
+export const N_OPTIONS = 5;
+const SIM_WEIGHT_DIV = 10n ** 9n;                  // token/src/stake.rs: 1 token has isqrt 10^12
+const SNAPSHOT_TAG = new TextEncoder().encode("ANTO-STAKE-v0");
 
+// floor(treasury × bps / 10000) in base units, as burn_amount in token/src/burn.rs.
 export function burnAmount(treasury, index) {
   const bps = BURN_MENU_BPS[index];
   if (bps === undefined) throw new RangeError("bad burn index");
@@ -21,61 +24,135 @@ export function burnAmount(treasury, index) {
 }
 
 // Whole tokens with thousands separators (rounded down).
-export const fmtTokens = (base) => (base / ONE).toLocaleString("en");
+export const fmtTokens = (base) => (BigInt(base) / ONE).toLocaleString("en");
+// Tokens to two decimals, for amounts that can be small (a stake of 0.5).
+export function fmtTokens2(base) {
+  const b = BigInt(base), cents = (b * 100n) / ONE;
+  const whole = (cents / 100n).toLocaleString("en"), frac = String(cents % 100n).padStart(2, "0");
+  return frac === "00" ? whole : `${whole}.${frac.replace(/0$/, "")}`;
+}
+// yocto -> tokens as a Number, to 6 decimals. For display and staker ants only.
+export const toTokens = (base) => Number((BigInt(base) * 1_000_000n) / ONE) / 1_000_000;
 
-// A day's run is 43,200 ticks (about 1 s of sim), so it runs in chunks with
-// `yieldTo` between them and the page keeps painting.
-const CHUNK = 2000;
-async function finish(col, yieldTo) {
-  while (col.t < col.ticks) {
-    for (let i = 0; i < CHUNK && col.step(); i++);
-    if (yieldTo) await yieldTo();
-  }
-  return col.result();
+export const hexToBytes = (h) => Uint8Array.from(h.match(/../g).map((x) => parseInt(x, 16)));
+export const toHexStr = (b) => [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+
+// ---- the day clock (UTC) ----
+
+export const dayStart = (day) => day * DAY_MS;
+export const dayRunAt = (day) => day * DAY_MS + STAKING_MS; // 12:00: stakes freeze, the seed is drawn
+export const dayEndAt = (day) => (day + 1) * DAY_MS;        // 24:00: the last tick, then the burn
+export const dayOf = (ms) => Math.floor(ms / DAY_MS);
+export const dayDate = (day) => new Date(dayStart(day)).toISOString().slice(0, 10);
+
+// The tick the clock allows for `day` at `now`: one a second from 12:00, never
+// past the last. The chain never runs ahead of this (BurnRun::allowed).
+export const clockTick = (day, now, ticks = BURN_TICKS) =>
+  Math.min(ticks, Math.max(0, Math.floor((now - dayRunAt(day)) / 1000)));
+
+// Which tick the page shows. The chain stores the run as far as the last
+// crank (a keeper cranks about every 25 minutes), so its `t` lags the clock.
+// The page runs the same deterministic colony on from the on-chain seed up to
+// the clock tick, so the map never pauses: ticks past `chain` are computed
+// here and confirmed by the next crank. `chain` and `clock` are returned so
+// the page can say how far ahead it is.
+export function shownTick(run, now, { ahead = true } = {}) {
+  const clock = clockTick(run.day, now, run.ticks ?? BURN_TICKS);
+  const chain = Math.min(run.t, clock);
+  return { chain, clock, shown: ahead ? clock : chain, lag: Math.max(0, clock - chain) };
 }
 
-// A past day never changes, so each one runs once: results are kept in
-// memory and, in a browser, in localStorage (keyed by the sim's fingerprint
-// and the day seed). Replay re-runs any day from its seed to check a stored row.
-const runs = new Map(); // day -> { winner_option, scores, perm, hash }
-const store = typeof window === "undefined" ? null : window.localStorage;
-// The hash of a tiny run past a score checkpoint: it changes whenever the sim's
-// algorithm does, version bump or not, so stale rows are never read back.
-const SIM_PRINT = run(seedFromInt(0), 5, null, 10, 150).hash.slice(0, 16);
-const storeKey = (d) => `antonomy:burn:${SIM_PRINT}:${d.burn.ticks}:${toHex(d.seed)}`;
-const keep = ({ winner_option, scores, perm, hash }) => ({ winner_option, scores, perm, hash });
+// ---- the stake snapshot ----
 
-function stored(d) {
-  try { return JSON.parse(store?.getItem(storeKey(d)) ?? "null"); } catch { return null; }
+// floor(sqrt(n)) for a BigInt.
+export function isqrt(n) {
+  if (n < 0n) throw new RangeError("negative");
+  if (n < 2n) return n;
+  let x = 1n << BigInt((n.toString(2).length + 1) >> 1);
+  for (;;) {
+    const y = (x + n / x) >> 1n;
+    if (y >= x) return x;
+    x = y;
+  }
 }
 
-// One row per finished day in [GENESIS_DAY, toDay), oldest first, plus the
-// treasury left for day `toDay` and the total burned. `yieldTo` (optional,
-// async) runs between chunks of a day's run so a page can paint;
-// `onDay(i, n)` reports progress before day i of n runs.
-export async function burnHistory(toDay, { yieldTo, onDay } = {}) {
-  const rows = [];
-  let treasury = TREASURY_START;
-  for (let day = GENESIS_DAY; day < toDay; day++) {
-    const d = burnDay(day);
-    if (!runs.has(day)) {
-      let r = stored(d);
-      if (!r) {
-        onDay?.(day - GENESIS_DAY, toDay - GENESIS_DAY);
-        r = keep(await finish(d.burn.make(), yieldTo));
-        try { store?.setItem(storeKey(d), JSON.stringify(r)); } catch { /* storage full or blocked */ }
-      }
-      runs.set(day, r);
-    }
-    const result = runs.get(day);
-    const index = result.winner_option;
-    const burned = burnAmount(treasury, index);
-    rows.push({
-      day, date: d.date, seed: toHex(d.seed), index, bps: BURN_MENU_BPS[index],
-      shares: trailShares(result), hash: result.hash,
-      before: treasury, burned, after: treasury - burned,
-    });
-    treasury -= burned;
+// Per-option sim weights (milli sqrt-tokens) of a snapshot: the sum over the
+// colony-0 entries of isqrt(amount), then divided once by 10^9 and floored,
+// saturating at u32::MAX. The same as token/src/stake.rs burn_weights.
+export function snapshotWeights(entries, n = N_OPTIONS) {
+  const w = new Array(n).fill(0n);
+  for (const [, colony, option, amount] of entries) {
+    if (colony === BURN_COLONY && option < n) w[option] += isqrt(BigInt(amount));
   }
-  return { rows, treasury, burned: TREASURY_START - treasury };
+  return w.map((x) => { const v = x / SIM_WEIGHT_DIV; return v > 0xffffffffn ? 0xffffffff : Number(v); });
+}
+
+// The same weights from per-option sums, for the live totals while staking is
+// open: the contract's stake_weights view already sums isqrt(stake) in
+// sqrt-yocto, so only the divisor is left.
+export const weightsFromSqrtYocto = (w) => w.map((x) => {
+  const v = BigInt(x) / SIM_WEIGHT_DIV;
+  return v > 0xffffffffn ? 0xffffffff : Number(v);
+});
+
+// sha256(tag || count u32 || per entry: len u16, account, colony u16, option u8,
+// amount u128), big-endian: token/src/stake.rs hash_entries. Hex.
+export function snapshotHash(entries) {
+  const enc = new TextEncoder();
+  const parts = [SNAPSHOT_TAG, u32(entries.length)];
+  for (const [acct, colony, option, amount] of entries) {
+    const a = enc.encode(acct);
+    parts.push(u16(a.length), a, u16(colony), Uint8Array.of(option), u128(BigInt(amount)));
+  }
+  const buf = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let o = 0;
+  for (const p of parts) { buf.set(p, o); o += p.length; }
+  return [...sha256(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+const u16 = (x) => Uint8Array.of(x >> 8, x & 255);
+const u32 = (x) => Uint8Array.of(x >>> 24, (x >> 16) & 255, (x >> 8) & 255, x & 255);
+function u128(x) {
+  const out = new Uint8Array(16);
+  for (let i = 15; i >= 0; i--) { out[i] = Number(x & 255n); x >>= 8n; }
+  return out;
+}
+
+// Wallets of a snapshot as the staker-ant view reads them: { id, stakes } with
+// tokens per option (colony 0 only), sorted as the snapshot is.
+export function snapshotWallets(entries, n = N_OPTIONS) {
+  const by = new Map();
+  for (const [acct, colony, option, amount] of entries) {
+    if (colony !== BURN_COLONY || option >= n) continue;
+    if (!by.has(acct)) by.set(acct, { id: acct, stakes: new Array(n).fill(0) });
+    by.get(acct).stakes[option] += toTokens(amount);
+  }
+  return [...by.values()];
+}
+
+// Raw stake per option of a snapshot (yocto), for the roster and the reward split.
+export function snapshotTotals(entries, n = N_OPTIONS) {
+  const t = new Array(n).fill(0n);
+  for (const [, colony, option, amount] of entries) if (colony === BURN_COLONY && option < n) t[option] += BigInt(amount);
+  return t;
+}
+
+// ---- burn events (contract logs) ----
+// `EVENT burn day=<d> index=<i> amount=<yocto> stakes=<hash>`,
+// `EVENT burn_run_done day=<d> winner=<i> hash=<hash>`,
+// `EVENT burn_seed day=<d> seed=<hex> stakes=<hash>`.
+
+const kv = (s) => Object.fromEntries(s.split(/\s+/).map((p) => p.split("=")).filter((p) => p.length === 2));
+export function parseBurnLogs(logs) {
+  const out = { burn: null, done: null, seed: null };
+  for (const line of logs ?? []) {
+    const m = /^EVENT (burn|burn_run_done|burn_seed)\s+(.*)$/.exec(line);
+    if (!m) continue;
+    const f = kv(m[2]);
+    const day = Number(f.day);
+    if (!Number.isSafeInteger(day)) continue;
+    if (m[1] === "burn" && /^\d+$/.test(f.amount ?? "") && /^\d$/.test(f.index ?? "")) out.burn = { day, index: Number(f.index), amount: BigInt(f.amount), stakes: f.stakes ?? null };
+    else if (m[1] === "burn_run_done") out.done = { day, winner: Number(f.winner), hash: f.hash ?? null };
+    else out.seed = { day, seed: f.seed ?? null, stakes: f.stakes ?? null };
+  }
+  return out;
 }

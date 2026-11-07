@@ -6,20 +6,24 @@ Q8 fixed point, headings are 16 discrete directions from a lookup table, and
 the PRNG is xoshiro128** on 32-bit words.
 
 Inputs besides the seed: per-option food richness, derived from a stake snapshot
-(`stake_richness`, Burn and Community colonies) or an odds snapshot
-(`odds_richness`, the other forecasters), plus the stake snapshot hash and the
-odds snapshot hash, which go into the result hash. `burn_run` and
-`forecast_run` are the entry points that wire these together.
+(`stake_richness`, Burn and Community colonies), an odds snapshot
+(`odds_richness`, Follower, Contrarian and Momentum) or the forecaster agents'
+median odds (`agent_richness`, the Agents colony), plus two snapshot hashes,
+which go into the result hash. `burn_run` and `forecast_run` are the entry
+points that wire these together.
 
-Forecast colonies: `forecast_market` runs the four forecasters on one market,
+Forecast colonies: `forecast_market` runs the five forecasters on one market,
 each on its own map (`colony_seed`), turns their scores into trail shares and
-averages them into the swarm belief, committed in one market hash.
+averages them into the swarm belief, committed in one market hash. Odds-driven
+richness is proportional to the food weight, so a colony's trail shares track
+its food, and a colony with no input (Community without stakes, Agents
+without posts) abstains from the average (`voters`).
 
 Scoring: a colony's score per source is the pheromone within 6 cells of it,
 summed at a checkpoint every SCORE_EVERY ticks and at the final tick, so a
 steady lead adds up over a long run instead of only the last few minutes of
-trail counting. With the 0.35..1.3 richness band and a low flat stake base,
-stakes steer: on the 43,200-tick Burn colony, 100 tANTO from one wallet on an
+trail counting. Stake richness sits in the 0.35..1.3 band over a low flat
+base, so stakes steer: on the 43,200-tick Burn colony, 100 tANTO from one wallet on an
 option lifts its win rate from 20% to about 52%.
 
 Not yet implemented (see docs/HACKATHON_ROADMAP.md): map templates (walls,
@@ -56,8 +60,8 @@ MOMENTUM_FLOOR = 200        # 2% floor on the Momentum food weight
 COMMUNITY_BASE = 2500       # flat food weight per outcome before stakes, milli sqrt-tokens
 ODDS_TAG = b"ANTO-ODDS-v0"
 ZERO32 = bytes(32)
-FOLLOWER, CONTRARIAN, MOMENTUM, COMMUNITY = range(4)
-KINDS = (FOLLOWER, CONTRARIAN, MOMENTUM, COMMUNITY)
+FOLLOWER, CONTRARIAN, MOMENTUM, COMMUNITY, AGENTS = range(5)
+KINDS = (FOLLOWER, CONTRARIAN, MOMENTUM, COMMUNITY, AGENTS)
 
 # --- Forecast colonies ------------------------------------------------------
 FORECAST_ANTS = 60          # design doc section 15, scaling option 1
@@ -120,6 +124,18 @@ def _scale_richness(weights):
     return [RICH_MIN + RICH_SPAN * (w * BPS // top) // BPS for w in weights]
 
 
+def _odds_scale(weights):
+    """Food weights -> Q8 richness proportional to the weight, the richest
+    source at the band's top (1.3) and a zero weight at 0. Odds-driven
+    colonies (Follower, Contrarian, Momentum, Agents) use this, so their trail
+    shares track their food: 70/30 odds give the Follower about 64/36. The
+    0.35 floor of `_scale_richness` flattened them (70/30 gave 58/42).
+    """
+    top = max(weights)
+    assert top > 0
+    return [(RICH_MIN + RICH_SPAN) * w // top for w in weights]
+
+
 def _check_odds(odds, odds_6h):
     assert 2 <= len(odds) <= 5 and len(odds_6h) == len(odds)
     assert all(0 <= o <= BPS for o in odds + odds_6h)
@@ -140,7 +156,7 @@ def odds_richness(kind, odds, odds_6h):
         w = [max(o + 2 * (o - p), MOMENTUM_FLOOR) for o, p in zip(odds, odds_6h)]
     else:
         raise ValueError("kind must be FOLLOWER, CONTRARIAN or MOMENTUM")
-    return _scale_richness(w)
+    return _odds_scale(w)
 
 
 def stake_richness(weights):
@@ -153,6 +169,16 @@ def stake_richness(weights):
     weights = list(weights)
     assert 2 <= len(weights) <= 5 and all(0 <= x <= M32 for x in weights)
     return _scale_richness([COMMUNITY_BASE + x for x in weights])
+
+
+def agent_richness(agent_odds):
+    """Per-option Q8 richness for the Agents colony: the Follower rule on the
+    forecaster agents' per-outcome median odds (basis points). All zeros means
+    no agent posted, and the map is even.
+    """
+    agent_odds = list(agent_odds)
+    assert 2 <= len(agent_odds) <= 5 and all(0 <= o <= BPS for o in agent_odds)
+    return _odds_scale(agent_odds if any(agent_odds) else [1] * len(agent_odds))
 
 
 def odds_snapshot_hash(odds, odds_6h):
@@ -335,15 +361,28 @@ def burn_run(seed, weights, stake_hash, ants=N_ANTS, ticks=TICKS):
     return run(seed, 5, stake_richness(weights), ants, ticks, stake_hash=stake_hash)
 
 
-def forecast_run(seed, kind, odds, odds_6h, weights=None, stake_hash=None, ants=N_ANTS, ticks=TICKS):
+def forecast_run(seed, kind, odds, odds_6h, weights=None, stake_hash=None, agent_odds=None, agent_hash=None,
+                 ants=N_ANTS, ticks=TICKS):
     """One forecaster on one market. Community reads `weights` (that market's
-    stakes); the others read the odds snapshot."""
+    stakes), Agents reads `agent_odds` (the forecaster agents' median odds) and
+    the others read the odds snapshot.
+
+    Every forecaster commits the stake snapshot hash. The second commitment is
+    the odds snapshot hash, except for Agents, which commits `agent_hash` (the
+    agent-odds snapshot) instead.
+    """
+    odds_hash = odds_snapshot_hash(odds, odds_6h)
     if kind == COMMUNITY:
         assert weights is not None and len(weights) == len(odds)
         rich = stake_richness(weights)
+    elif kind == AGENTS:
+        agent_odds = [0] * len(odds) if agent_odds is None else list(agent_odds)
+        assert len(agent_odds) == len(odds)
+        rich = agent_richness(agent_odds)
+        odds_hash = ZERO32 if agent_hash is None else agent_hash
     else:
         rich = odds_richness(kind, odds, odds_6h)
-    return run(seed, len(odds), rich, ants, ticks, stake_hash=stake_hash, odds_hash=odds_snapshot_hash(odds, odds_6h))
+    return run(seed, len(odds), rich, ants, ticks, stake_hash=stake_hash, odds_hash=odds_hash)
 
 
 def market_colony(m):
@@ -372,18 +411,30 @@ def trail_shares(result):
     return shares
 
 
-def market_result(colony, runs):
-    """Combine the four forecaster runs (in KINDS order) of one market.
+def voters(weights, agent_odds):
+    """Which of the five forecasters (KINDS order) count in the swarm belief.
 
-    Swarm belief per option is the floored mean of the four trail shares; the
-    remainder goes to the option with the largest sum (lowest index on ties).
-    Market hash = sha256(tag, colony u16, n u8, four colony hashes, swarm u16 each).
+    A colony with no input abstains: Community when nobody staked on the
+    market (all weights zero), Agents when no agent posted (all zeros). It
+    still runs, on an even map, and its hash is still committed; an even map
+    is not a belief, so it doesn't pull the swarm towards an even split.
     """
-    assert len(runs) == len(KINDS)
+    return [True, True, True, any(weights), any(agent_odds)]
+
+
+def market_result(colony, runs, counted):
+    """Combine the five forecaster runs (in KINDS order) of one market.
+
+    counted: five bools from `voters`. Swarm belief per option is the floored
+    mean of the counted colonies' trail shares; the remainder goes to the
+    option with the largest sum (lowest index on ties). Market hash =
+    sha256(tag, colony u16, n u8, five colony hashes, swarm u16 each).
+    """
+    assert len(runs) == len(KINDS) and len(counted) == len(KINDS) and all(counted[:3])
     shares = [trail_shares(r) for r in runs]
     n = len(shares[0])
-    sums = [sum(s[o] for s in shares) for o in range(n)]
-    swarm = [x // len(KINDS) for x in sums]
+    sums = [sum(s[o] for s, c in zip(shares, counted) if c) for o in range(n)]
+    swarm = [x // sum(counted) for x in sums]
     top = 0
     for o in range(1, n):
         if sums[o] > sums[top]:
@@ -393,24 +444,27 @@ def market_result(colony, runs):
     buf += b"".join(bytes.fromhex(r["hash"]) for r in runs) + struct.pack(">%dH" % n, *swarm)
     return {
         "colony": colony,
-        "colonies": [dict(r, shares=sh) for r, sh in zip(runs, shares)],
+        "colonies": [dict(r, shares=sh, counted=c) for r, sh, c in zip(runs, shares, counted)],
         "swarm": swarm,
         "hash": hashlib.sha256(buf).hexdigest(),
     }
 
 
-def forecast_market(round_seed, colony, odds, odds_6h, weights, stake_hash,
+def forecast_market(round_seed, colony, odds, odds_6h, weights, stake_hash, agent_odds, agent_hash,
                     ants=FORECAST_ANTS, ticks=FORECAST_TICKS):
-    """The four forecasters on one market, each on its own map.
+    """The five forecasters on one market, each on its own map.
 
     colony: the market's colony id (`market_colony(m)`). weights: that
     colony's stake weights, one per outcome (zeros when nobody staked).
+    agent_odds, agent_hash: the forecaster agents' per-outcome median odds and
+    the agent-odds snapshot hash (zeros when no agent posted).
     """
     runs = [
-        forecast_run(colony_seed(round_seed, colony, k), k, odds, odds_6h, weights, stake_hash, ants, ticks)
+        forecast_run(colony_seed(round_seed, colony, k), k, odds, odds_6h, weights, stake_hash,
+                     agent_odds, agent_hash, ants, ticks)
         for k in KINDS
     ]
-    return market_result(colony, runs)
+    return market_result(colony, runs, voters(weights, agent_odds))
 
 
 def seed_from_int(i):

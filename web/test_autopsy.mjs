@@ -1,7 +1,8 @@
 // Offline tests for ant autopsy: node web/test_autopsy.mjs
 import assert from "node:assert/strict";
 import { antLives, tripAt, deliveredBy, notableAnts, TripTracker } from "./autopsy.mjs";
-import { roundColonies, burnColony } from "./round.mjs";
+import { burnColony } from "./round.mjs";
+import { roundColonies } from "./fixtures.mjs";
 import { seedFromInt } from "../sim/js/antosim.mjs";
 
 const finish = (col) => { while (col.t < col.ticks) col.step(); return col.result(); };

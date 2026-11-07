@@ -1,117 +1,326 @@
-// Offline tests for the burn day clock and burn history: node web/test_burn.mjs
+// Offline tests for the Burn page's data layer: node web/test_burn.mjs
+// Everything runs on canned contract JSON; no network. The determinism vector
+// below comes from the Rust contract code itself: a scratch crate (path
+// dependencies on token/ and sim/rust) calls
+//   BurnRun::start(noon of day 20000, entropy [7; 32], "antonomy-oracle.testnet", &snapshot, 20000)
+// on the snapshot below, advances it to the last tick and prints the run's
+// seed, stake hash, burn_weights and result. The JS sim must reproduce all of it.
 import assert from "node:assert/strict";
-import { burnHistory, burnAmount, fmtTokens, ONE, GENESIS_DAY, TREASURY_START, BURN_MENU_BPS } from "./burn.mjs";
 import {
-  burnDay, demoBurnDay, drawnBurnDay, dayPhase, runProgress, dayProgress, stakesAt, daySeed,
-  DAY_MS, STAKING_MS, BURN_WALLETS, roundColonies,
-} from "./round.mjs";
-import { toHex, seedFromInt, BURN_TICKS } from "../sim/js/antosim.mjs";
+  burnAmount, fmtTokens, fmtTokens2, toTokens, isqrt, snapshotWeights, snapshotHash, snapshotWallets, snapshotTotals,
+  clockTick, shownTick, dayRunAt, dayEndAt, dayStart, dayOf, dayDate, weightsFromSqrtYocto, parseBurnLogs,
+  ONE, BURN_MENU_BPS, DAY_MS, STAKING_MS, hexToBytes,
+} from "./burn.mjs";
+import { burnDay, drawnBurnDay, dayPhase, runProgress, dayProgress, rememberBurnDay, knownBurnDay, burnColony } from "./round.mjs";
+import {
+  loadBurn, burnView, runSpec, verifyRun, indexerBurns, burnRow, loadHistory, chainSkew, ensureBurnDay, treasuryId,
+} from "./burnchain.mjs";
+import { BURN_TICKS, trailShares } from "../sim/js/antosim.mjs";
 
-const finish = (col) => { while (col.t < col.ticks) col.step(); return col.result(); };
+// ---- result vector from Rust ----
+const V = {
+  day: 20000,
+  seed: "70031d40c3c4aa1ad4e101c1c2d106b298d227f8c4a9bc873c3c72b6533e56a0",
+  stake_hash: "cb9afd1adb41063bfe9677046a4659c7d9dd333f5ee571d5de8026f5efc9a065",
+  entries: [
+    ["alice.testnet", 0, 1, "25000000000000000000000000"],
+    ["bob.testnet", 0, 1, "2333333333333333333333333"],
+    ["bob.testnet", 0, 3, "64000000000000000000000000"],
+    ["carol.testnet", 0, 4, "500000000000000000012345"],
+    ["carol.testnet", 3, 0, "9000000000000000000000000"], // another colony: ignored by the Burn colony
+  ],
+  weights: [0, 6527, 0, 8000, 707],
+  winner_option: 1,
+  result_hash: "02c2b76fb10a172e0e394789e42fe3a20c166a9482874ffe5cfeaea344f35788",
+  scores: [11993864, 16308216, 39270930, 41861751, 16348107],
+  perm: [4, 3, 0, 2, 1],
+};
+const doneRun = {
+  day: V.day, t: BURN_TICKS, ticks: BURN_TICKS, seed: V.seed, stake_hash: V.stake_hash, done: true,
+  winner_option: V.winner_option, result_hash: V.result_hash, scores: V.scores, perm: V.perm,
+};
+const snap = { day: V.day, hash: V.stake_hash, entries: V.entries, ok: true };
 
-// Amounts match token/src/burn.rs: floor(treasury × bps / 10000), capped menu.
+// ---- amounts, as token/src/burn.rs ----
 assert.equal(burnAmount(10_000n, 4), 200n);
 assert.equal(burnAmount(9_800n, 0), 9n);
 assert.equal(burnAmount(50n, 1), 0n);
 assert.throws(() => burnAmount(1n, 5), RangeError);
 assert.ok(Math.max(...BURN_MENU_BPS) <= 200);
 assert.equal(fmtTokens(1_234_567n * ONE + ONE / 2n), "1,234,567");
+assert.equal(fmtTokens2(ONE / 2n), "0.5");
+assert.equal(fmtTokens2(25n * ONE), "25");
+assert.equal(toTokens(ONE / 4n), 0.25);
 
-// A burn day is one UTC day; the colony is final at its end.
-assert.equal(GENESIS_DAY, 20745);
-const g = burnDay(GENESIS_DAY);
-assert.equal(g.date, "2026-10-19");
-assert.equal(g.startMs, Date.UTC(2026, 9, 19));
-assert.equal(g.endMs - g.startMs, DAY_MS);
-assert.equal(demoBurnDay(g.startMs).day, GENESIS_DAY);
-assert.equal(demoBurnDay(g.endMs - 1).day, GENESIS_DAY);
-assert.equal(demoBurnDay(g.endMs).day, GENESIS_DAY + 1);
-const at = (h, m, s = 0) => g.startMs + ((h * 60 + m) * 60 + s) * 1000;
-// Staking 00:00 to 12:00 UTC, then the run.
-assert.equal(g.runMs, at(12, 0));
+// ---- the day clock: half-day schedule, as token/src/day.rs ----
+const D = 20_745; // 2026-10-19
+assert.equal(DAY_MS, 86_400_000);
 assert.equal(STAKING_MS, DAY_MS / 2);
-assert.equal(dayPhase(g, g.startMs), "staking");
+assert.equal(dayRunAt(D), D * DAY_MS + 43_200_000);
+assert.equal(dayEndAt(D) - dayRunAt(D), BURN_TICKS * 1000);
+assert.equal(dayDate(D), "2026-10-19");
+assert.equal(dayOf(dayStart(D) + 5), D);
+const at = (h, m, s = 0) => dayStart(D) + ((h * 60 + m) * 60 + s) * 1000;
+assert.equal(clockTick(D, at(11, 59, 59)), 0);
+assert.equal(clockTick(D, at(12, 0)), 0);
+assert.equal(clockTick(D, at(12, 0, 1)), 1);
+assert.equal(clockTick(D, at(18, 0)), BURN_TICKS / 2);
+assert.equal(clockTick(D, dayEndAt(D)), BURN_TICKS);
+assert.equal(clockTick(D, dayEndAt(D) + DAY_MS), BURN_TICKS);
+
+// The shown tick follows the clock, never the stored tick backwards, and says how far ahead it is.
+{
+  const run = { day: D, t: 600, ticks: BURN_TICKS };
+  assert.deepEqual(shownTick(run, at(12, 20)), { chain: 600, clock: 1200, shown: 1200, lag: 600 });
+  assert.deepEqual(shownTick(run, at(12, 20), { ahead: false }), { chain: 600, clock: 1200, shown: 600, lag: 600 });
+  assert.equal(shownTick({ ...run, t: 5000 }, at(12, 1)).chain, 60, "the chain never runs ahead of the clock");
+}
+
+// ---- the round.mjs clock helpers the other pages import ----
+const g = burnDay(D);
+assert.equal(g.date, "2026-10-19");
+assert.equal(g.endMs - g.startMs, DAY_MS);
+assert.equal(g.runMs, at(12, 0));
 assert.equal(dayPhase(g, at(11, 59, 59)), "staking");
 assert.equal(dayPhase(g, at(12, 0)), "running");
-assert.equal(dayPhase(g, g.endMs - 1), "running");
-// The run's ticks fill 12:00 to 24:00 UTC, one a second.
-const tick = (now) => runProgress(g, now) * g.burn.ticks;
-assert.equal(g.burn.ticks, BURN_TICKS);
-assert.equal(g.burn.ticks, (DAY_MS - STAKING_MS) / 1000);
-assert.equal(tick(g.startMs), 0);
-assert.equal(tick(at(11, 59, 59)), 0);
-assert.equal(tick(at(12, 0)), 0);
-assert.equal(tick(at(12, 0, 1)), 1);
-assert.equal(tick(at(18, 0)), BURN_TICKS / 2);
-assert.equal(tick(at(23, 59, 59)), BURN_TICKS - 1);
-assert.equal(tick(g.endMs), BURN_TICKS);
-assert.equal(tick(g.endMs + DAY_MS), BURN_TICKS);
+assert.equal(runProgress(g, at(18, 0)) * BURN_TICKS, BURN_TICKS / 2);
 assert.equal(dayProgress(g, at(12, 0)), 0.5);
-// A day's seed counts as drawn from its 12:00 UTC, not before.
-assert.equal(drawnBurnDay(at(11, 59, 59)).day, GENESIS_DAY - 1);
-assert.equal(drawnBurnDay(at(12, 0)).day, GENESIS_DAY);
-assert.equal(drawnBurnDay(g.endMs - 1).day, GENESIS_DAY);
-assert.equal(drawnBurnDay(g.endMs).day, GENESIS_DAY);
-// Sugar piles up while staking is open, and every wallet is in at the close.
-assert.equal(stakesAt(g, g.startMs).length, 0);
-for (let m = 1; m < 12 * 60; m++) assert.ok(stakesAt(g, at(0, m - 1)).length <= stakesAt(g, at(0, m)).length);
-assert.ok(BURN_WALLETS.every((w) => w.at > 0 && w.at < STAKING_MS / 60_000));
-assert.deepEqual(stakesAt(g, g.runMs), BURN_WALLETS);
-// Day seeds differ from round seeds and from each other.
-assert.notEqual(toHex(daySeed(5)), toHex(seedFromInt(5)));
-assert.notEqual(toHex(daySeed(5)), toHex(daySeed(6)));
-// Rounds carry only forecasters now.
-assert.ok(roundColonies(seedFromInt(1)).all.every((s) => s.key !== "burn"));
+assert.equal(drawnBurnDay(at(11, 59, 59)).day, D - 1);
+assert.equal(drawnBurnDay(at(12, 0)).day, D);
+assert.equal(drawnBurnDay(dayEndAt(D)).day, D);
+// A day this browser has no chain data for has no seed, and never invents one.
+assert.equal(g.known, false);
+assert.equal(g.seed, null);
+assert.equal(g.burn.seed, null);
+assert.throws(() => g.burn.make(), /seed isn't known/);
 
-// A clone mid-run finishes on the same hash (the replay seeks from clones).
+// ---- stake snapshot maths vs the contract ----
+assert.equal(isqrt(0n), 0n);
+assert.equal(isqrt(99n), 9n);
+assert.equal(isqrt(10n ** 48n), 10n ** 24n);
+assert.equal(isqrt(10n ** 24n - 1n), 10n ** 12n - 1n);
+assert.deepEqual(snapshotWeights(V.entries), V.weights);
+assert.equal(snapshotHash(V.entries), V.stake_hash);
+assert.notEqual(snapshotHash(V.entries.slice(1)), V.stake_hash);
+assert.deepEqual(weightsFromSqrtYocto(["5000000000000000", "0"]), [5000000, 0]);
+assert.deepEqual(snapshotTotals(V.entries).map(String), ["0", "27333333333333333333333333", "0", "64000000000000000000000000", "500000000000000000012345"]);
+const wallets = snapshotWallets(V.entries);
+assert.deepEqual(wallets.map((w) => w.id), ["alice.testnet", "bob.testnet", "carol.testnet"]);
+assert.equal(wallets[2].stakes[3], 0, "other colonies' stakes are not Burn stakes");
+
+// ---- determinism: the JS run reproduces the Rust run, bit for bit ----
+const spec = runSpec(doneRun, snap);
+assert.equal(spec.ticks, BURN_TICKS);
+assert.deepEqual(spec.weights, V.weights);
+const col = spec.make();
+while (col.step());
+const res = col.result();
+assert.equal(res.hash, V.result_hash);
+assert.equal(res.winner_option, V.winner_option);
+assert.deepEqual(res.scores, V.scores);
+assert.deepEqual(res.perm, V.perm);
+assert.equal(trailShares(res).reduce((a, b) => a + b, 0), 10_000);
+
+// verifyRun accepts it (reusing a finished colony or re-running), and notices any difference.
 {
-  const col = burnDay(GENESIS_DAY).burn.make();
-  for (let i = 0; i < 5000; i++) col.step();
-  const copy = col.clone();
-  for (let i = 0; i < 3000; i++) { col.step(); copy.step(); }
-  assert.deepEqual(copy.scores(), col.scores());
-  assert.deepEqual(copy.last, col.last);
+  const ok = await verifyRun(doneRun, snap, { col });
+  assert.equal(ok.ok, true);
+  assert.deepEqual(ok.mismatches, []);
+  const rerun = await verifyRun(doneRun, snap, { chunk: 5000, yieldTo: async () => {} });
+  assert.equal(rerun.ok, true);
+  assert.equal(knownBurnDay(V.day).verified, true, "a verified day is kept with its inputs");
+  const bad = await verifyRun({ ...doneRun, result_hash: "00".repeat(32) }, snap, { col });
+  assert.equal(bad.ok, false);
+  assert.ok(bad.mismatches.includes("result hash differs"));
+  const wrong = await verifyRun({ ...doneRun, winner_option: 2 }, snap, { col });
+  assert.ok(wrong.mismatches.includes("winner differs"));
+  const badSnap = { ...snap, entries: V.entries.slice(0, 3) };
+  await assert.rejects(() => verifyRun(doneRun, badSnap, {}), /does not match/);
+  assert.equal((await verifyRun({ ...doneRun, done: false }, snap)).pending, true);
 }
 
-// The live leader reads standing(): the scores a run stopped at that tick
-// would end with, on and off the 100-tick checkpoints.
+// runSpec refuses a snapshot that isn't the one the run committed to.
+assert.throws(() => runSpec({ ...doneRun, stake_hash: "11".repeat(32) }, snap), /does not match/);
+
+// ---- known days: what the chain gave this browser lets Replay re-run it ----
+rememberBurnDay({ day: V.day, seed: V.seed, stakeHash: V.stake_hash, entries: V.entries, winner: V.winner_option, hash: V.result_hash });
+const kd = burnDay(V.day);
+assert.equal(kd.known, true);
+assert.equal(kd.winner, V.winner_option);
 {
-  const col = burnDay(GENESIS_DAY).burn.make();
-  for (const t of [1, 99, 100, 101, 250]) {
-    while (col.t < t - 1) col.step();
-    const stop = col.clone();
-    stop.ticks = t; // its last step is a final tick, so it takes the checkpoint
-    stop.step();
-    col.step();
-    assert.deepEqual(col.standing(), stop.result().scores, `tick ${t}`);
-  }
+  const c = kd.burn.make();
+  while (c.step());
+  assert.equal(c.result().hash, V.result_hash);
+  assert.ok(kd.burn.stakers.total > 0);
+}
+const two = burnColony(null);
+assert.equal(two.stakers.total, 0);
+assert.equal(burnColony(hexToBytes(V.seed), { weights: V.weights, stakeHash: hexToBytes(V.stake_hash) }).make().ticks, BURN_TICKS);
+
+// ---- loadBurn and burnView on canned contract JSON ----
+const noon = (d) => dayRunAt(d);
+function chainOf({ day, phase, run = null, last = null, snaps = {}, treasury = "999800000000000000000000000000", me = null }) {
+  return async (method, args = {}) => {
+    switch (method) {
+      case "burn_schedule": return { day, phase, run_at_ms: dayRunAt(day), end_at_ms: dayEndAt(day), drawn_day: phase === "running" ? day : day - 1 };
+      case "burn_run": return run;
+      case "last_burn_day": return last;
+      case "stake_totals": return ["0", "27333333333333333333333333", "0", "64000000000000000000000000", "500000000000000000012345"];
+      case "stake_weights": return ["0", "6527000000000", "0", "8000000000000", "707000000000"];
+      case "stake_config": return { cap_per_wallet: "100000000000000000000000000", close_at_ms: 1, publish_at_ms: 2 };
+      case "ft_balance_of": return args.account_id === treasuryId() ? treasury : (me?.balance ?? "0");
+      case "ft_total_supply": return "1000000000000000000000000000000";
+      case "reward_pool": return "0";
+      case "burn_snapshot": if (snaps[args.day]) return { hash: snaps[args.day].hash, entries: snaps[args.day].entries }; throw new Error("no snapshot");
+      case "has_claimed": return !!me;
+      case "staked_by": return me?.staked ?? "0";
+      case "stakes_of": return me?.stakes ?? [];
+      case "rewards_earned": return "0";
+      default: throw new Error(`unexpected ${method}`);
+    }
+  };
+}
+{
+  // Before 12:00, nothing drawn: staking.
+  const early = await loadBurn({ account: null, read: chainOf({ day: V.day, phase: "staking" }) });
+  const v0 = burnView(early, dayStart(V.day) + 3600_000);
+  assert.equal(v0.phase, "staking");
+  assert.equal(v0.run, null);
+  assert.equal(v0.prev, null);
+  assert.equal(early.treasury, 999_800n * ONE);
+  assert.deepEqual(early.weights, [0, 6527, 0, 8000, 707]);
+  assert.equal(early.cap, 100n * ONE);
+  assert.equal(early.me, null);
+
+  // After 12:00, no crank yet: waiting, and no run, seed or map.
+  const wait = await loadBurn({ account: null, read: chainOf({ day: V.day, phase: "running", snaps: { [V.day]: snap } }) });
+  const v1 = burnView(wait, noon(V.day) + 5000);
+  assert.equal(v1.phase, "waiting");
+  assert.equal(v1.run, null);
+  assert.equal(v1.tick, null);
+  assert.equal(v1.snap.ok, true);
+
+  // Running: the run is on chain, and the page runs ahead of its stored tick.
+  const live = { ...doneRun, t: 600, done: false, winner_option: null, result_hash: null, scores: null, perm: null };
+  const run = await loadBurn({ account: null, read: chainOf({ day: V.day, phase: "running", run: live, snaps: { [V.day]: snap } }) });
+  const v2 = burnView(run, noon(V.day) + 1_200_000);
+  assert.equal(v2.phase, "running");
+  assert.deepEqual(v2.tick, { chain: 600, clock: 1200, shown: 1200, lag: 600 });
+  assert.equal(runSpec(v2.run, v2.snap).make().ticks, BURN_TICKS);
+  assert.ok(knownBurnDay(V.day).entries.length === 5, "the run's inputs are kept for later");
+
+  // The next day's staking half, with yesterday's finished run not yet burned.
+  const next = await loadBurn({ account: "me.testnet", read: chainOf({
+    day: V.day + 1, phase: "staking", run: doneRun, last: V.day - 1, snaps: { [V.day]: snap },
+    me: { balance: ONE.toString(), staked: (3n * ONE).toString(), stakes: [[0, 2, (3n * ONE).toString()], [1, 0, "5"]] },
+  }) });
+  const v3 = burnView(next, dayStart(V.day + 1) + 10_000);
+  assert.equal(v3.phase, "staking");
+  assert.equal(v3.prev.state, "done");
+  assert.equal(v3.prev.snap.ok, true);
+  assert.equal(next.me.stakes[2], 3n * ONE);
+  assert.equal(next.me.stakes[0], 0n, "only Burn colony stakes count");
+  assert.equal(next.me.balance, ONE);
+  // Once executed, nothing is left to settle.
+  const burned = await loadBurn({ account: null, read: chainOf({ day: V.day + 1, phase: "staking", run: doneRun, last: V.day }) });
+  assert.equal(burnView(burned, dayStart(V.day + 1) + 10).prev, null);
+  // An unfinished run of an earlier day is reported as such.
+  const stuck = await loadBurn({ account: null, read: chainOf({ day: V.day + 1, phase: "staking", run: { ...doneRun, done: false, t: 43000, result_hash: null, winner_option: null }, last: null, snaps: { [V.day]: snap } }) });
+  assert.equal(burnView(stuck, dayStart(V.day + 1) + 10).prev.state, "unfinished");
+  // A failing optional reader leaves a null and an error, not a crash; the schedule is required.
+  const flaky = chainOf({ day: V.day, phase: "staking" });
+  const part = await loadBurn({ account: null, read: async (m, a) => { if (m === "reward_pool" || m === "ft_balance_of") throw new Error("rpc down"); return flaky(m, a); } });
+  assert.equal(part.pool, null);
+  assert.equal(part.treasury, null);
+  assert.equal(part.errors.length, 2);
+  await assert.rejects(() => loadBurn({ account: null, read: async () => { throw new Error("down"); } }), /down/);
 }
 
-// History: one row per finished day, each burning from the day before's
-// treasury. A day's run is 43,200 ticks, so keep N small.
-const N = 3;
-const h = await burnHistory(GENESIS_DAY + N);
-assert.equal(h.rows.length, N);
-assert.equal(h.rows[0].before, TREASURY_START);
-for (const [i, r] of h.rows.entries()) {
-  assert.equal(r.day, GENESIS_DAY + i);
-  assert.equal(r.burned, burnAmount(r.before, r.index));
-  assert.equal(r.after, r.before - r.burned);
-  assert.ok(r.burned * 50n <= r.before, "never more than 2%");
-  if (i) assert.equal(r.before, h.rows[i - 1].after);
-  // The row's hash is the Burn colony's result hash for that day.
-  const res = finish(burnDay(r.day).burn.make());
-  assert.equal(r.hash, res.hash);
-  assert.equal(r.index, res.winner_option);
-  assert.equal(r.shares.reduce((a, b) => a + b, 0), 10_000);
+// A snapshot whose hash doesn't match is flagged, and its run isn't remembered as verified input.
+{
+  const forged = { hash: V.stake_hash, entries: V.entries.slice(0, 2) };
+  const st = await loadBurn({ account: null, read: chainOf({ day: V.day, phase: "running", run: { ...doneRun, done: false, t: 5, result_hash: null }, snaps: { [V.day]: forged } }) });
+  assert.equal(st.snaps[V.day].ok, false);
 }
-assert.equal(h.treasury, h.rows[N - 1].after);
-assert.equal(h.burned, TREASURY_START - h.treasury);
 
-// Deterministic, and a shorter history is a prefix of a longer one.
-assert.deepEqual(await burnHistory(GENESIS_DAY + N), h);
-assert.deepEqual((await burnHistory(GENESIS_DAY + 2)).rows, h.rows.slice(0, 2));
-assert.equal((await burnHistory(GENESIS_DAY)).rows.length, 0);
-assert.equal((await burnHistory(GENESIS_DAY - 3)).treasury, TREASURY_START);
+// ensureBurnDay reads the chain for a day that isn't known yet, once.
+{
+  const rd = chainOf({ day: 20_001, phase: "running", run: { ...doneRun, day: 20_001 }, snaps: { 20_001: { hash: V.stake_hash, entries: V.entries } } });
+  const k = await ensureBurnDay(20_001, { read: rd });
+  assert.equal(k.seed, V.seed);
+  assert.equal(await ensureBurnDay(20_002, { read: rd }), null);
+}
 
-console.log("burn history: ok");
+// chainSkew: the offset between the browser clock and the newest block.
+{
+  const fake = async () => ({ json: async () => ({ result: { header: { timestamp: String(BigInt(1_000_000 + 7000) * 1_000_000n) } } }) });
+  const skew = await chainSkew({ fetchFn: fake, now: () => 1_000_000, rpcs: ["x"] });
+  assert.equal(skew, 7000);
+  assert.equal(await chainSkew({ fetchFn: async () => { throw new Error("down"); }, rpcs: ["x", "y"] }), 0);
+}
+
+// ---- contract events ----
+{
+  const p = parseBurnLogs([
+    "EVENT burn_seed day=20000 seed=ab stakes=cd",
+    "EVENT burn_crank day=20000 t=10 steps=10 someone.testnet",
+    "EVENT burn_run_done day=20000 winner=1 hash=ee",
+    "EVENT burn day=20000 index=1 amount=2499500000000000000000000 stakes=cd",
+    "EVENT reward day=20000 a.testnet amount=1",
+    "EVENT burn day=x index=1 amount=1 stakes=cd",
+  ]);
+  assert.deepEqual(p.burn, { day: 20000, index: 1, amount: 2499500000000000000000000n, stakes: "cd" });
+  assert.deepEqual(p.done, { day: 20000, winner: 1, hash: "ee" });
+  assert.deepEqual(p.seed, { day: 20000, seed: "ab", stakes: "cd" });
+  assert.deepEqual(parseBurnLogs(undefined), { burn: null, done: null, seed: null });
+}
+
+// ---- history: the indexer's execute_burn list, then the contract at each block ----
+{
+  const txn = (day, tx, height, status = true) => ({
+    transaction_hash: tx, predecessor_account_id: "keeper.testnet", receiver_account_id: "antonomy-oracle.testnet",
+    receipt_block: { block_height: height }, block_timestamp: String(BigInt(dayEndAt(day) + 60_000) * 1_000_000n),
+    actions: [{ action: "FUNCTION_CALL", method: "execute_burn", args: JSON.stringify({ day }) }], outcomes: { status },
+  });
+  const fetchFn = async (url) => {
+    assert.ok(url.includes("/account/antonomy-oracle.testnet/txns?method=execute_burn"));
+    return { ok: true, json: async () => ({ txns: [txn(V.day, "TX20000", 5000), txn(V.day, "TX20000b", 5001, false), txn(V.day - 1, "TX19999", 4000)] }) };
+  };
+  const list = await indexerBurns({ fetchFn });
+  assert.deepEqual(list.map((x) => [x.day, x.tx, x.height]), [[V.day, "TX20000", 5000], [V.day - 1, "TX19999", 4000]]);
+  assert.equal(list[0].ms, dayEndAt(V.day) + 60_000);
+
+  const calls = [];
+  const readAt = async (h, method, args) => {
+    calls.push([h, method]);
+    if (h !== 4999) throw new Error("archive has no such block");
+    if (method === "burn_run") return doneRun;
+    if (method === "burn_snapshot") return { hash: V.stake_hash, entries: V.entries };
+    return (999_800n * ONE).toString(); // ft_balance_of treasury
+  };
+  const row = await burnRow(list[0], { read: readAt });
+  assert.equal(row.detail, true);
+  assert.equal(row.index, V.winner_option);
+  assert.equal(row.before, 999_800n * ONE);
+  assert.equal(row.burned, burnAmount(999_800n * ONE, 1)); // 0.25%
+  assert.equal(row.after, row.before - row.burned);
+  assert.equal(row.hash, V.result_hash);
+  assert.equal(row.entries.length, 5);
+  assert.ok(calls.every(([h]) => h === 4999), "reads the block before the burn ran");
+  // The row's inputs re-run to the chain's hash.
+  const again = await verifyRun({ ...doneRun, seed: row.seed }, { hash: row.stakeHash, entries: row.entries }, {});
+  assert.equal(again.ok, true);
+  // An archive that can't answer degrades to the indexer's facts, not an invented row.
+  const bad = await burnRow(list[1], { read: readAt });
+  assert.equal(bad.detail, false);
+  assert.equal(bad.index, undefined);
+  assert.equal(bad.day, V.day - 1);
+  // loadHistory: indexer down -> empty list and a flag; never fixtures.
+  const down = await loadHistory({ fetchFn: async () => { throw new Error("offline"); } });
+  assert.deepEqual([down.rows, down.indexer], [[], false]);
+  const full = await loadHistory({ fetchFn, read: readAt });
+  assert.equal(full.indexer, true);
+  assert.equal(full.rows.length, 2);
+}
+
+console.log("burn: ok");

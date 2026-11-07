@@ -381,7 +381,7 @@
     <h3 class="demo-label">Swarm versus market</h3>
     <div class="table-wrap">
       <table class="table">
-        <caption><span class="tag-forecast">Forecast · not advice</span>&nbsp; Fixture market, round seed-1042, run in your browser by <code>forecastMarket</code> (60 ants, 300 ticks per forecaster, each on its own map). Swarm belief is the average of the four colonies' trail shares and is not yet calibrated as a probability.</caption>
+        <caption><span class="tag-forecast">Forecast · not advice</span>&nbsp; Fixture market, round seed-1042, run in your browser by <code>forecastMarket</code> (60 ants, 300 ticks per forecaster, each on its own map). Swarm belief is the average of the five colonies' trail shares and is not yet calibrated as a probability.</caption>
         <thead>
           <tr>
             <th scope="col">Outcome</th>
@@ -390,12 +390,13 @@
             <th scope="col" class="num">Contrarian</th>
             <th scope="col" class="num">Momentum</th>
             <th scope="col" class="num">Community</th>
+            <th scope="col" class="num">Agents</th>
             <th scope="col" class="num">Swarm belief</th>
             <th scope="col" class="num">Δ vs market</th>
           </tr>
         </thead>
         <tbody id="swarm-rows">
-          <tr><td colspan="8" class="text-faint">Running four colonies…</td></tr>
+          <tr><td colspan="9" class="text-faint">Running five colonies…</td></tr>
         </tbody>
       </table>
     </div>
@@ -409,7 +410,7 @@
 
 <script type="module">
 /* Showcase behaviour. The sim panels run the real sim from sim/js/antosim.mjs. */
-import { Colony, run, seedFromInt, toHex, W, H, TICKS, forecastMarket, marketColony } from "../../sim/js/antosim.mjs";
+import { Colony, run, seedFromInt, toHex, sha256, W, H, TICKS, forecastMarket, marketColony } from "../../sim/js/antosim.mjs";
 import { ColonyView, leadingSource } from "./colony-view.mjs";
 
 // Swatches: read token values from CSS so this page cannot drift from tokens.css.
@@ -667,14 +668,15 @@ loadSeed(1042);
 // Badges are canvas text, so redraw once the web font arrives.
 document.fonts.ready.then(() => { if (!raf) view.draw(1); });
 
-// Swarm versus market: the four forecasters on a fixture market (the same one
-// sim/tests/crosscheck.py uses), computed here with the real sim.
+// Swarm versus market: the five forecasters on a fixture market (the same one
+// sim/tests/crosscheck.py uses, agents included), computed here with the real sim.
 {
   const outcomes = ["Cut", "Hold", "Hike"];
   const odds = [6200, 2800, 1000], odds6h = [5500, 3300, 1200], stakes = [3000, 0, 12000];
+  const agentOdds = [4500, 4000, 1500], agentHash = sha256(new TextEncoder().encode("agents"));
   const pct = (b) => (b / 100).toFixed(1);
   const show = () => {
-    const m = forecastMarket(seedFromInt(1042), marketColony(0), odds, odds6h, stakes, new Uint8Array(32));
+    const m = forecastMarket(seedFromInt(1042), marketColony(0), odds, odds6h, stakes, new Uint8Array(32), agentOdds, agentHash);
     $("swarm-rows").innerHTML = outcomes.map((label, o) => {
       const d = m.swarm[o] - odds[o];
       const cls = d > 0 ? "delta--up" : d < 0 ? "delta--down" : "delta--flat";
@@ -687,7 +689,7 @@ document.fonts.ready.then(() => { if (!raf) view.draw(1); });
     copy.dataset.copy = m.hash;
     copy.hidden = false;
   };
-  // About 72k ant-steps; let the page paint first.
+  // About 90k ant-steps; let the page paint first.
   setTimeout(show, 0);
 }
 </script>

@@ -11,9 +11,14 @@
 
 <main>
   <div class="page-head container">
-    <p class="eyebrow">Replay &amp; verify</p>
-    <h1>Re-run any colony from its seed.</h1>
-    <p class="lede">Same integer code as the contract. Scrub, follow any ant through its whole run, compare the hash.</p>
+    <div class="page-head__split">
+      <div class="page-head__title">
+        <p class="eyebrow">Replay &amp; verify</p>
+        <h1>Re-run any colony from its seed.</h1>
+      </div>
+      <p class="lede">The contract's integer code, fed the chain's seed, odds and stakes. Scrub the run, follow any ant, and compare the hash with the one the contract stored. <a class="what" href="docs.html#playback">Reading a replay</a></p>
+    </div>
+    <div class="notice notice--info" id="replay-empty" hidden><p></p></div>
   </div>
 
   <section class="page-section">
@@ -28,10 +33,10 @@
           <select class="input" id="colony-in"></select>
         </div>
         <button class="btn" type="submit">Load</button>
-        <a class="btn btn--ghost" href="index.html">← Live colonies</a>
+        <a class="btn btn--ghost" href="live.html">← Live colonies</a>
       </form>
 
-      <div class="workbench">
+      <div class="workbench" id="replay-bench">
         <div class="workbench__col">
           <div id="player"></div>
           <div class="chamber">
@@ -40,14 +45,14 @@
               <span class="eyebrow" id="share-tick">tick 0</span>
             </div>
             <ul class="share-bars" id="bars"></ul>
-            <p class="text-xs text-faint" id="forecast-note" style="margin: var(--space-4) 0 0" hidden><span class="tag-forecast">Forecast · not advice</span> One of four forecasters. <a class="what" href="docs.html#swarm-belief">Swarm belief</a></p>
+            <p class="text-xs text-faint" id="forecast-note" style="margin: var(--space-4) 0 0" hidden><span class="tag-forecast">Forecast · not advice</span> One of five forecasters. <a class="what" href="docs.html#swarm-belief">Swarm belief</a></p>
           </div>
           <div class="chamber" id="stakers-box">
             <div class="chamber__header">
-              <h3 class="chamber__title">Staker ants</h3>
+              <h3 class="chamber__title" id="stakers-title">Staker ants</h3>
               <span class="eyebrow" id="stakers-sum"></span>
             </div>
-            <p class="text-xs text-faint" style="margin: 0 0 var(--space-3)">Hover a wallet to light up its ants, click to keep the light on. <a class="what" href="docs.html#staker-ants">Staker ants</a></p>
+            <p class="text-xs text-faint" style="margin: 0 0 var(--space-3)" id="stakers-note">Hover a wallet to light up its ants, click to keep the light on. <a class="what" href="docs.html#staker-ants">Staker ants</a></p>
             <div id="stakers"></div>
           </div>
         </div>
@@ -96,7 +101,7 @@
             <div class="field">
               <label class="field__label" for="expected">Hash stored on-chain</label>
               <input class="input" id="expected" placeholder="64 hex characters" spellcheck="false" autocomplete="off" aria-describedby="expected-hint">
-              <span class="field__hint" id="expected-hint">No contract yet: paste one from Live or the burn history. <a class="what" href="docs.html#result-hash">What it commits</a></span>
+              <span class="field__hint" id="expected-hint">Filled in from the contract when it has one for this colony; paste another to compare. <a class="what" href="docs.html#result-hash">What it commits</a></span>
             </div>
             <div class="verify-panel__result">
               <span class="verify-badge" data-state="idle" id="badge" role="status" aria-live="polite">Not verified</span>
@@ -113,9 +118,15 @@
 
 <script type="module">
 import { toHex, W, CAP } from "../sim/js/antosim.mjs";
-import { roundById, demoRound, burnDay, drawnBurnDay } from "./round.mjs";
+import { BURN_MENU } from "./round.mjs";
+import { loadRound, walletsFor, slugTitle } from "./roundchain.mjs";
+import { recentRequests, forecastersOf, cranked } from "./recruit.mjs";
+import { loadBurnCard, burnColonyFor } from "./burncard.mjs";
+import { stakerAnts } from "./ds/staker-ants.mjs";
+import { hexToBytes, chain } from "./chain.mjs";
+import { colonySeed, BURN_COLONY, N_ANTS, BURN_TICKS } from "../sim/js/antosim.mjs";
 import { antLives, tripAt, deliveredBy, notableAnts } from "./autopsy.mjs";
-import { $, esc, hashHTML, installCopy, liveShares, shareBars, Player, topbar, footer, stakerRoster, pad4 } from "./ui.mjs";
+import { $, esc, hashHTML, installCopy, liveShares, shareBars, Player, topbar, footer, stakerRoster, pad4, postedHTML, BRIER_NOTE } from "./ui.mjs";
 
 $("topbar").outerHTML = topbar("replay");
 $("footer").outerHTML = footer();
@@ -123,11 +134,52 @@ installCopy();
 
 const q = new URLSearchParams(location.search);
 // The Burn colony runs once per UTC day and is picked by day number; the
-// forecasters run per round. `unit` is "day" or "round", `id` its number.
+// forecasters run per round, and a requested forecast's five colonies per
+// request. `unit` is "day", "round" or "request", `id` its number.
 // A day's seed is drawn at 12:00 UTC, so the newest day is drawnBurnDay().
 let unit, id, seed, markets, spec, bars, lives = [], picks = [];
-const unitOf = (key) => (key === "burn" ? "day" : "round");
-const currentId = (u) => (u === "day" ? drawnBurnDay().day : demoRound().id);
+const unitOf = (key) => (key === "burn" ? "day" : /^r\d+-/.test(key) ? "request" : "round");
+// What the contract holds: the round (current once it runs, and the previous
+// finished one), today's burn run and the newest requests. Reloaded on every Load.
+let loaded = null, burn = null;
+const reqs = new Map(); // request id -> RequestView
+async function readChain() {
+  let recent;
+  [loaded, burn, recent] = await Promise.all([loadRound(), loadBurnCard().catch(() => null), recentRequests(8).catch(() => [])]);
+  for (const r of recent) reqs.set(r.id, r);
+}
+// A request outside the newest few, read on demand.
+async function ensureRequest(n) {
+  if (!reqs.has(n)) { const r = await chain.request(n).catch(() => null); if (r) reqs.set(n, r); }
+  return reqs.get(n) ?? null;
+}
+const roundOf = (n) => (loaded.hasRun && loaded.id === n ? loaded : loaded.previous?.id === n ? loaded.previous : null);
+const burnRun = () => (burn?.run && burn.weights ? burn.run : null);
+const seededRequests = () => [...reqs.values()].filter((r) => r.seed).sort((a, b) => b.id - a.id);
+const currentId = (u) => (u === "day" ? burnRun()?.day ?? 0 : u === "request" ? seededRequests()[0]?.id ?? 0 : loaded.shown.id);
+
+// A requested forecast's five colonies, from what the contract stored.
+function requestSpecs(r) {
+  const title = slugTitle(r.market_id);
+  return (forecastersOf(r) ?? []).map((f, k) => ({
+    ...f, market: title, chainHash: r.colony_hashes[k] ?? null, cranked: k < cranked(r),
+  }));
+}
+// Forecaster keys differ only in their m/p prefix between current and previous round.
+const sameKey = (a, b) => a.slice(1) === b.slice(1);
+
+// The Burn colony as the contract runs it, from the chain's day seed and the
+// day's stake snapshot.
+function burnSpec() {
+  const run = burn.run;
+  const wallets = walletsFor(burn.entries, BURN_COLONY, 5);
+  return {
+    key: "burn", seed: colonySeed(hexToBytes(run.seed), BURN_COLONY, 0), colony: BURN_COLONY, name: "Burn colony", labels: BURN_MENU,
+    ants: N_ANTS, ticks: BURN_TICKS, stakers: wallets.length ? stakerAnts(wallets, N_ANTS) : null,
+    chainHash: run.result_hash ?? null,
+    make: () => burnColonyFor(run, burn.weights),
+  };
+}
 
 const player = new Player($("player"), {
   onTick(col) {
@@ -148,6 +200,7 @@ const optHTML = (o) => `<span class="opt" data-opt="${o}">${esc(spec.labels[o])}
 const roster = stakerRoster($("stakers"), (w) => player.spot(w));
 const plural = (n, one) => `${n} ${one}${n === 1 ? "" : "s"}`;
 const PICK_NAMES = { busiest: "Busiest", first: "First home", loyal: "Most loyal", wanderer: "Lost", late: "Late bloomer", staker: "Staker ant" };
+const isAgents = () => spec.stakers?.kind === "agent";
 const pickNote = (p) => p.key === "loyal" ? `only ${optHTML(p.opt)}`
   : p.key === "wanderer" ? "never found food"
   : p.key === "first" ? `home at t${pad4(lives[p.ant].find((x) => x.home !== null).home)}`
@@ -181,7 +234,7 @@ function autopsy(col) {
   });
   const tl = $("timeline");
   tl.style.setProperty("--t", col.t);
-  tl.querySelectorAll(".ant-timeline__trip").forEach((b, j) => b.classList.toggle("is-future", trips[j].pick > col.t));
+  tl.querySelectorAll(".ant-timeline__trip").forEach((b, j) => trips[j] && b.classList.toggle("is-future", trips[j].pick > col.t));
 }
 
 // One row per trip in the whole run, with ticks that seek the replay, and
@@ -191,8 +244,10 @@ function tripRows() {
   const home = trips.filter((x) => x.home !== null);
   const per = deliveredBy(trips, spec.ticks, spec.labels.length);
   const w = spec.stakers?.owner?.[a] ?? -1;
+  const row = w >= 0 ? spec.stakers.rows[w] : null;
   $("ant-who").innerHTML = `<b class="num">Ant #${a}</b>` +
-    (w >= 0 ? ` · <span class="wallet" style="--wallet-hue: ${spec.stakers.rows[w].hue}">staker ant of ${esc(spec.stakers.rows[w].id)}</span>` : "") +
+    (row ? ` · <span class="wallet" style="--wallet-hue: ${row.hue}">${row.agent ? "agent ant" : "staker ant"} of ${esc(row.id)}</span>` : "") +
+    (row?.agent ? ` · posted ${postedHTML(row.odds, spec.labels)} · ${BRIER_NOTE}` : "") +
     ` · ${home.length ? `${plural(home.length, "crumb")} home over the run: ` + per.map((v, o) => (v ? `${optHTML(o)} ×${v}` : "")).filter(Boolean).join(" · ") : "no crumbs home in the whole run"}`;
   $("timeline").style.setProperty("--ticks", spec.ticks);
   $("timeline").innerHTML = trips.map((x, j) =>
@@ -220,7 +275,7 @@ function pickButtons() {
     if (ant >= 0) picks.push({ key: "staker", ant, w: big.i });
   }
   $("ant-picks").innerHTML = picks.map((p) =>
-    `<li><button type="button" class="ant-pick" data-ant="${p.ant}" aria-pressed="false">${PICK_NAMES[p.key]} <b class="num">#${p.ant}</b> <span>${pickNote(p)}</span></button></li>`).join("");
+    `<li><button type="button" class="ant-pick" data-ant="${p.ant}" aria-pressed="false">${p.key === "staker" && isAgents() ? "Agent ant" : PICK_NAMES[p.key]} <b class="num">#${p.ant}</b> <span>${pickNote(p)}</span></button></li>`).join("");
 }
 
 function syncUrl() {
@@ -229,35 +284,60 @@ function syncUrl() {
 
 const cleanHex = (v) => v.trim().toLowerCase().replace(/^0x/, "");
 
-// Colony picker: Burn (daily) first, then one group per market.
+// Colony picker: today's Burn colony (when the chain has its run), then one
+// group per market of the round, then one per recent requested forecast with
+// a seed. Colonies not cranked yet have no seed to replay.
 function colonyOptions() {
   const opt = (key, name) => `<option value="${key}"${key === spec.key ? " selected" : ""}>${esc(name)}</option>`;
-  return opt("burn", "Burn colony · daily") + markets.map((m) =>
-    `<optgroup label="${esc(m.title)}">${m.forecasters.map((f) => opt(f.key, `${f.name} forecaster`)).join("")}</optgroup>`).join("");
+  const group = (label, fs) => `<optgroup label="${esc(label)}">${fs.map((f) => opt(f.key, `${f.name} forecaster${f.cranked ? "" : " (not cranked)"}`)).join("")}</optgroup>`;
+  return (burnRun() ? opt("burn", "Burn colony · today") : "") +
+    markets.map((m) => group(m.title, m.forecasters ?? [])).join("") +
+    seededRequests().map((r) => group(`Request #${r.id} · ${slugTitle(r.market_id)}`, requestSpecs(r))).join("");
+}
+
+function showEmpty(text) {
+  $("replay-empty").hidden = !text;
+  $("replay-empty").firstElementChild.textContent = text ?? "";
+  $("replay-bench").hidden = !!text;
 }
 
 function load(n, key, ant = player.view.selected) {
   unit = unitOf(key);
-  id = unit === "day" ? Math.min(n, currentId("day")) : n; // no day before its seed is drawn
   if (unit === "day") {
-    const d = burnDay(id);
-    seed = d.seed;
-    spec = d.burn;
-    markets = roundById(demoRound().id).markets; // picker labels only
+    if (!burnRun()) { showEmpty("The contract has no Burn run to replay yet: today's seed is drawn at 12:00 UTC, when the first run call starts the colony."); return; }
+    id = burn.run.day; // the chain holds one burn run at a time
+    seed = hexToBytes(burn.run.seed);
+    spec = burnSpec();
+    markets = loaded.shown.markets; // picker labels only
+  } else if (unit === "request") {
+    const r = reqs.get(n);
+    if (!r?.seed) { showEmpty(r ? `Request #${n} has no seed yet: its first crank draws it, once the agents' window has closed.` : `There is no request #${n} on the contract.`); return; }
+    id = n;
+    seed = hexToBytes(r.seed);
+    markets = loaded.shown.markets; // picker labels only
+    const specs = requestSpecs(r), kind = key.replace(/^r\d+-/, "");
+    spec = specs.find((s) => s.key.endsWith(`-${kind}`)) ?? specs.find((s) => s.cranked) ?? specs[0];
   } else {
-    const round = roundById(id);
-    seed = round.seed;
+    const round = roundOf(n) ?? (loaded.shown.seed ? loaded.shown : null);
+    if (!round?.seed) { showEmpty("No round has run on the contract yet. A round's colonies get their seed at the first crank, after staking closes and the agents' window ends; then they can be replayed here."); return; }
+    id = round.id;
+    seed = hexToBytes(round.seed);
     markets = round.markets;
-    spec = round.all.find((s) => s.key === key) ?? round.all[0];
+    spec = round.all.find((s) => sameKey(s.key, key)) ?? round.all.find((s) => s.cranked) ?? round.all[0];
+    if (!spec) { showEmpty("The round's market has no colonies yet."); return; }
   }
+  showEmpty(null);
   $("round-in").value = id;
-  $("round-label").textContent = unit === "day" ? "Day" : "Round";
-  $("v-seed-label").textContent = unit === "day" ? "Day seed" : "Round seed";
+  const UNIT = { day: "Day", round: "Round", request: "Request" }[unit];
+  $("round-label").textContent = UNIT;
+  $("v-seed-label").textContent = `${UNIT} seed`;
   $("colony-in").innerHTML = colonyOptions();
   $("v-colony").textContent = `${spec.ants} ants · ${spec.ticks} ticks` +
-    (unit === "day" ? ` · ${new Date(burnDay(id).startMs).toISOString().slice(0, 10)}` : "");
+    (unit === "day" ? ` · day ${id}` : unit === "request" ? ` · request #${id}` : "");
   $("v-round-seed").innerHTML = hashHTML(toHex(seed), `${unit} seed`);
   $("v-colony-seed").innerHTML = hashHTML(toHex(spec.seed), "colony seed");
+  $("expected").value = spec.chainHash ?? "";
+  $("expected").setAttribute("aria-invalid", "false");
   $("v-hash").textContent = "not run yet";
   $("forecast-note").hidden = spec.key === "burn";
   bars = shareBars($("bars"), spec.labels);
@@ -268,21 +348,32 @@ function load(n, key, ant = player.view.selected) {
   pickButtons();
   roster(spec.stakers, spec.labels);
   $("stakers-box").hidden = !spec.stakers?.total;
+  $("stakers-title").textContent = isAgents() ? "Agent ants" : "Staker ants";
+  $("stakers-note").innerHTML = isAgents()
+    ? `Each forecaster agent's ants hatch in its colour, an equal share each: the Agents colony follows the agents' median, where every post counts the same. Hover an agent to light up its ants. <a class="what" href="docs.html#agents-colony">Agents colony</a>`
+    : `Hover a wallet to light up its ants, click to keep the light on. <a class="what" href="docs.html#staker-ants">Staker ants</a>`;
   if (spec.stakers?.total) {
     const ws = spec.stakers.rows.filter((r) => r.ants > 0);
-    $("stakers-sum").textContent = `${ws.reduce((n, r) => n + r.ants, 0)} of ${spec.ants} ants · ${plural(ws.length, "wallet")}`;
+    $("stakers-sum").textContent = `${ws.reduce((n, r) => n + r.ants, 0)} of ${spec.ants} ants · ${plural(ws.length, isAgents() ? "agent" : "wallet")}`;
   }
   player.select(ant);
 }
 
 function setBadge(state, text) { $("badge").dataset.state = state; $("badge").textContent = text; }
 
-$("pick").addEventListener("submit", (e) => {
+$("pick").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const key = $("colony-in").value;
-  // Switching between Burn and a forecaster switches days for rounds, so
-  // start from the current one rather than reading a day as a round.
-  const n = unitOf(key) === unit ? Math.max(0, Math.floor(+$("round-in").value || 0)) : currentId(unitOf(key));
+  try { await readChain(); } catch (err) { showEmpty(`Could not read the contract: ${String(err.message || err).slice(0, 160)}`); return; }
+  let key = $("colony-in").value || (burnRun() ? "burn" : "");
+  // Switching between Burn, a round and a request switches what the number
+  // means, so start from the picked one rather than reading a day as a round.
+  const typed = Math.max(0, Math.floor(+$("round-in").value || 0));
+  let n = unitOf(key) === unit ? typed : currentId(unitOf(key));
+  // A request colony from the picker carries its own id.
+  const rk = /^r(\d+)-/.exec(key);
+  if (rk && (unit !== "request" || +rk[1] !== id)) n = +rk[1];
+  else if (rk) key = key.replace(/^r\d+-/, `r${n}-`);
+  if (unitOf(key) === "request") await ensureRequest(n);
   load(n, key);
 });
 $("colony-in").addEventListener("change", () => $("pick").requestSubmit());
@@ -324,13 +415,17 @@ $("verify").addEventListener("click", (e) => {
   }, 60);
 });
 
-{
-  const key = q.get("colony") ?? "burn", u = unitOf(key);
-  load(q.has(u) ? Math.max(0, Math.floor(+q.get(u) || 0)) : currentId(u), key,
-    q.has("ant") ? Math.max(0, Math.floor(+q.get("ant") || 0)) : undefined);
+(async () => {
+  try { await readChain(); } catch (err) { showEmpty(`Could not read the contract: ${String(err.message || err).slice(0, 160)}`); return; }
+  let key = q.get("colony") ?? (q.has("request") ? `r${+q.get("request") || 0}-follower`
+    : burnRun() ? "burn" : loaded.shown.all.find((s) => s.cranked)?.key ?? "m0-follower");
+  const u = unitOf(key);
+  const n = q.has(u) ? Math.max(0, Math.floor(+q.get(u) || 0)) : u === "request" ? +/^r(\d+)-/.exec(key)[1] : currentId(u);
+  if (u === "request") { key = key.replace(/^r\d+-/, `r${n}-`); await ensureRequest(n); }
+  load(n, key, q.has("ant") ? Math.max(0, Math.floor(+q.get("ant") || 0)) : undefined);
   // ?t= opens at that tick, as the follow cards on Live and Burn link here.
-  if (q.has("t")) player.seek(Math.max(0, Math.floor(+q.get("t") || 0)));
-}
+  if (spec && q.has("t")) player.seek(Math.max(0, Math.floor(+q.get("t") || 0)));
+})();
 </script>
 </body>
 </html>

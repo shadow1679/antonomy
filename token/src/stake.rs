@@ -15,11 +15,16 @@
 //! since nothing changed them in between. A day with no calls between its
 //! 12:00 and the next day's 12:00 gets no snapshot and can't be burned.
 //!
+//! Requested markets (colony `0x8000 + id`, `request::REQUEST_COLONY_BASE`)
+//! follow their request instead: `Requests::stake` and `Requests::unstake`
+//! check its window and call `stake_request` / `unstake_request` here. They
+//! are left out of the round's snapshot and its refunds.
+//!
 //! Sybil caveat: weights are per wallet, and isqrt is concave, so splitting one
 //! stake over k wallets multiplies influence by about sqrt(k). Nothing here
 //! prevents that.
 
-use crate::{day, isqrt, ledger::AccountId, ledger::Ledger, Error};
+use crate::{day, isqrt, ledger::AccountId, ledger::Ledger, request::REQUEST_COLONY_BASE, Error};
 use antosim::{sha256, BURN_COLONY};
 use std::collections::BTreeMap;
 
@@ -44,6 +49,16 @@ pub struct StakeConfig {
 }
 
 pub type Entry = (AccountId, u16, u8, u128);
+
+/// True for a requested market's colony, which stakes on its request's clock.
+pub fn is_request_colony(colony: u16) -> bool {
+    colony >= REQUEST_COLONY_BASE
+}
+
+/// Colonies the round's schedule, snapshot and refunds cover.
+fn round_colony(colony: u16) -> bool {
+    colony != BURN_COLONY && !is_request_colony(colony)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Snapshot {
@@ -101,9 +116,38 @@ impl Staking {
         amount: u128,
     ) -> Result<(), Error> {
         self.roll(now);
+        if is_request_colony(colony) {
+            return Err(Error::BadColony);
+        }
         if colony != BURN_COLONY && (now >= self.cfg.close_at || self.settled) {
             return Err(Error::StakingClosed);
         }
+        self.lock(ledger, who, colony, option, amount)
+    }
+
+    /// Stake on a requested market's colony. `Requests::stake` checks the
+    /// request's window first.
+    pub(crate) fn stake_request(
+        &mut self,
+        ledger: &mut Ledger,
+        now: u64,
+        who: &str,
+        colony: u16,
+        option: u8,
+        amount: u128,
+    ) -> Result<(), Error> {
+        self.roll(now);
+        self.lock(ledger, who, colony, option, amount)
+    }
+
+    fn lock(
+        &mut self,
+        ledger: &mut Ledger,
+        who: &str,
+        colony: u16,
+        option: u8,
+        amount: u128,
+    ) -> Result<(), Error> {
         if amount == 0 {
             return Err(Error::ZeroAmount);
         }
@@ -137,6 +181,9 @@ impl Staking {
         amount: u128,
     ) -> Result<(), Error> {
         self.roll(now);
+        if is_request_colony(colony) {
+            return Err(Error::BadColony);
+        }
         let locked = if colony == BURN_COLONY {
             day::running(now)
         } else {
@@ -145,6 +192,32 @@ impl Staking {
         if locked {
             return Err(Error::Locked);
         }
+        self.release(ledger, who, colony, option, amount)
+    }
+
+    /// Withdraw from a requested market's colony. `Requests::unstake` checks
+    /// that the request isn't running on these stakes.
+    pub(crate) fn unstake_request(
+        &mut self,
+        ledger: &mut Ledger,
+        now: u64,
+        who: &str,
+        colony: u16,
+        option: u8,
+        amount: u128,
+    ) -> Result<(), Error> {
+        self.roll(now);
+        self.release(ledger, who, colony, option, amount)
+    }
+
+    fn release(
+        &mut self,
+        ledger: &mut Ledger,
+        who: &str,
+        colony: u16,
+        option: u8,
+        amount: u128,
+    ) -> Result<(), Error> {
         if amount == 0 {
             return Err(Error::ZeroAmount);
         }
@@ -177,15 +250,62 @@ impl Staking {
         Ok(())
     }
 
+    /// Start the next round with a new schedule. Every forecast colony stake
+    /// goes back to its owner (the markets of the new round are different, so
+    /// old stakes would point at the wrong outcomes); Burn colony stakes and
+    /// requested markets' stakes stay.
+    /// Returns the refunds.
+    pub fn reopen(
+        &mut self,
+        ledger: &mut Ledger,
+        cfg: StakeConfig,
+    ) -> Result<Vec<(AccountId, u128)>, Error> {
+        if cfg.close_at >= cfg.publish_at {
+            return Err(Error::BadSchedule);
+        }
+        let old: Vec<((AccountId, u16, u8), u128)> = self
+            .stakes
+            .iter()
+            .filter(|((_, c, _), _)| round_colony(*c))
+            .map(|(k, v)| (k.clone(), *v))
+            .collect();
+        let mut refunds: BTreeMap<AccountId, u128> = BTreeMap::new();
+        for ((who, _, _), v) in &old {
+            *refunds.entry(who.clone()).or_insert(0) += v;
+        }
+        for (who, v) in &refunds {
+            ledger.ft_transfer(VAULT, who, *v)?;
+            let total = self.staked_by(who) - v;
+            if total == 0 {
+                self.wallet_total.remove(who);
+            } else {
+                self.wallet_total.insert(who.clone(), total);
+            }
+        }
+        for (k, _) in old {
+            self.stakes.remove(&k);
+        }
+        self.cfg = cfg;
+        self.settled = false;
+        Ok(refunds.into_iter().collect())
+    }
+
     /// The round's final stake snapshot and its hash: every colony but the
-    /// Burn colony, which has its own per-day snapshot. Only available once
+    /// Burn colony, which has its own per-day snapshot, and the requested
+    /// markets, which have theirs (`colony_snapshot`). Only available once
     /// staking has closed, so the hash that goes into the seed cannot change
     /// afterwards.
     pub fn snapshot(&self, now: u64) -> Result<Snapshot, Error> {
         if now < self.cfg.close_at {
             return Err(Error::StakingStillOpen);
         }
-        Ok(Snapshot::of(self.entries(|c| c != BURN_COLONY)))
+        Ok(Snapshot::of(self.entries(round_colony)))
+    }
+
+    /// One colony's stakes as they stand and their hash. A requested market
+    /// freezes this when its seed is drawn.
+    pub fn colony_snapshot(&self, colony: u16) -> Snapshot {
+        Snapshot::of(self.entries(|c| c == colony))
     }
 
     fn entries(&self, keep: impl Fn(u16) -> bool) -> Vec<Entry> {
@@ -223,6 +343,15 @@ impl Staking {
             return Ok(Snapshot::of(self.entries(|c| c == BURN_COLONY)));
         }
         Err(Error::NoBurnSnapshot(burn_day))
+    }
+
+    /// `burn_snapshot` after making sure the newest drawn day is frozen into
+    /// storage, so the day can still be burned and rewarded after the next
+    /// 12:00 even if no stake changed in between. The Burn colony run calls
+    /// this when it starts.
+    pub fn freeze_burn(&mut self, burn_day: u64, now: u64) -> Result<Snapshot, Error> {
+        self.roll(now);
+        self.burn_snapshot(burn_day, now)
     }
 
     /// `burn_snapshot`, then forget that day and every earlier one: a burn
@@ -277,6 +406,21 @@ impl Staking {
             .map(|w| u32::try_from(w / SIM_WEIGHT_DIV).unwrap_or(u32::MAX))
             .collect()
     }
+}
+
+/// Sim weights (milli sqrt-tokens per option, five menu options) of a Burn
+/// colony snapshot: the sum over its entries of `isqrt(stake)`, the same
+/// unit as `Staking::sim_weights`. Entries of other colonies are ignored.
+pub fn burn_weights(entries: &[Entry]) -> Vec<u32> {
+    let mut w = vec![0u128; 5];
+    for (_, c, o, v) in entries {
+        if *c == BURN_COLONY && (*o as usize) < 5 {
+            w[*o as usize] += isqrt(*v);
+        }
+    }
+    w.into_iter()
+        .map(|x| u32::try_from(x / SIM_WEIGHT_DIV).unwrap_or(u32::MAX))
+        .collect()
 }
 
 impl Snapshot {

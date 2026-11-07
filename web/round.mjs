@@ -1,136 +1,78 @@
-// Where the pages get a round's colonies. There is no contract yet, so the
-// live round comes from a demo clock: every viewer derives the same round
-// number from the wall clock, and the round seed is sha256("seed-<round>").
-// Stakes and odds are fixtures. Once the contract runs rounds, replace
-// demoRound() with a read of the current round (seed, stake and odds
-// snapshots, each colony's tick) and keep the shape it returns.
+// Shared colony builders. The round itself (markets, odds, stakes, seed,
+// hashes) is read from the contract by roundchain.mjs, which feeds
+// marketForecasters() below with the on-chain inputs. The Burn half of this
+// file is the Burn page's.
 //
 // The Burn colony runs on its own daily clock, one run per UTC day in two
 // halves. 00:00 to 12:00 UTC: staking is open and sugar piles up. 12:00:
-// stakes close and the day seed is drawn. 12:00 to 24:00: BURN_TICKS
-// (43,200) ticks play live, one a second, and the burn executes at the final
-// tick. Sugar dropped after 12:00 counts for tomorrow's colony. The demo day
-// seed is sha256("burn-day-<day>"); demoBurnDay() is the seam for the
-// contract's current burn day.
+// stakes close and the first crank_burn draws the day seed on chain.
+// 12:00 to 24:00: BURN_TICKS (43,200) ticks, one a second, and the burn
+// executes after the final tick. Sugar dropped after 12:00 counts for
+// tomorrow's colony.
 
+import { DAY_MS, STAKING_MS, hexToBytes, snapshotWeights, snapshotWallets } from "./burn.mjs";
 import {
-  Colony, sha256, seedFromInt, colonySeed, marketColony, stakeRichness, oddsRichness, oddsSnapshotHash,
-  BURN_COLONY, KINDS, COMMUNITY, N_ANTS, BURN_TICKS, FORECAST_ANTS, FORECAST_TICKS,
+  Colony, sha256, colonySeed, stakeRichness, oddsRichness, oddsSnapshotHash,
+  agentRichness, voters, BURN_COLONY, KINDS, COMMUNITY, AGENTS, N_ANTS, BURN_TICKS, FORECAST_ANTS, FORECAST_TICKS,
 } from "../sim/js/antosim.mjs";
-import { walletWeights, stakerAnts } from "./ds/staker-ants.mjs";
+import { walletWeights, stakerAnts, agentAnts } from "./ds/staker-ants.mjs";
 
 export const GLYPHS = ["▲", "■", "◆", "●", "★"];
 export const BURN_MENU = ["0.10%", "0.25%", "0.50%", "1.00%", "2.00%"];
-export const KIND_NAMES = ["Follower", "Contrarian", "Momentum", "Community"];
+export const KIND_NAMES = ["Follower", "Contrarian", "Momentum", "Community", "Agents"];
 // One line per tile; the Docs page has the long version.
 export const KIND_BLURB = [
   "Backs the favourite.",
   "Backs the underdog.",
   "Follows the 6-hour move.",
   "Follows $ANTO stakes.",
+  "Follows AI agents' odds.",
 ];
 
-export const ROUND_MS = 150_000; // one demo round
-export const RUN_MS = 120_000;   // the colonies run for this long, then the result shows
+// How long a page takes to play a colony's 300 ticks on screen. Only
+// recruit.html still imports it; nothing on the round pages uses it.
+export const RUN_MS = 120_000;
 
 const ZERO32 = new Uint8Array(32);
 
-// Fixture snapshots. The market is the one sim/tests/crosscheck.py uses.
-// Stakes are fixture wallets (whole tokens per option). The weights the sim
-// reads are derived from them the way Staking::sim_weights does (milli
-// sqrt-tokens per option), so the staker ants and the food richness agree.
-// `at` is when the wallet stakes, in minutes after 00:00 UTC, so the demo's
-// sugar piles up through the staking half of the day.
-export const BURN_WALLETS = [
-  { id: "alice.testnet", stakes: [0, 4, 0, 0, 0], at: 40 },
-  { id: "bob.testnet", stakes: [0, 4, 0, 0, 0], at: 155 },
-  { id: "carol.testnet", stakes: [0, 0, 9, 0, 0], at: 230 },
-  { id: "dave.testnet", stakes: [0, 0, 9, 0, 0], at: 380 },
-  { id: "erin.testnet", stakes: [0, 0, 9, 0, 0], at: 515 },
-  { id: "frank.testnet", stakes: [0, 0, 0, 4, 0], at: 655 },
-];
-const BURN_WEIGHTS = walletWeights(BURN_WALLETS, 5); // [0, 4000, 9000, 2000, 0]
-// Six fixture markets so the Live page shows a board of forecasts; how many
-// markets a round can afford on chain is still open (gas). Market 0 is the
-// one crosscheck.py uses, so keep it first and unchanged.
-const MARKETS = [
-  {
-    title: "Fed decision at the next meeting",
-    topic: "Macro",
-    outcomes: ["Cut", "Hold", "Hike"],
-    odds: [6200, 2800, 1000],
-    odds6h: [5500, 3300, 1200],
-    wallets: [
-      { id: "grace.testnet", stakes: [9, 0, 0] },
-      { id: "heidi.testnet", stakes: [0, 0, 16] },
-      { id: "ivan.testnet", stakes: [0, 0, 16] },
-      { id: "judy.testnet", stakes: [0, 0, 16] },
-    ],
-  },
-  {
-    title: "Bitcoin above $150k on 31 December",
-    topic: "Crypto",
-    outcomes: ["Yes", "No"],
-    odds: [2300, 7700],
-    odds6h: [2600, 7400],
-    wallets: [
-      { id: "kim.testnet", stakes: [25, 0] },
-      { id: "leo.testnet", stakes: [0, 9] },
-      { id: "mia.testnet", stakes: [4, 0] },
-    ],
-  },
-  {
-    title: "US inflation for November, year on year",
-    topic: "Macro",
-    outcomes: ["2.5% or less", "2.6% to 2.9%", "3.0% or more"],
-    odds: [1800, 5900, 2300],
-    odds6h: [2000, 5600, 2400],
-    wallets: [
-      { id: "nina.testnet", stakes: [0, 16, 0] },
-      { id: "omar.testnet", stakes: [0, 0, 9] },
-    ],
-  },
-  {
-    title: "NEAR price on 30 November",
-    topic: "Crypto",
-    outcomes: ["Under $2", "$2 to $4", "$4 to $6", "Over $6"],
-    odds: [1500, 5200, 2400, 900],
-    odds6h: [1200, 5000, 2800, 1000],
-    wallets: [
-      { id: "pia.testnet", stakes: [0, 0, 16, 0] },
-      { id: "quinn.testnet", stakes: [0, 0, 9, 0] },
-      { id: "rosa.testnet", stakes: [0, 0, 0, 25] },
-      { id: "sam.testnet", stakes: [0, 4, 0, 0] },
-    ],
-  },
-  {
-    title: "Champions League 2026–27 winner",
-    topic: "Sport",
-    outcomes: ["Real Madrid", "Man City", "Bayern", "Arsenal", "Other"],
-    odds: [1900, 1600, 1400, 1300, 3800],
-    odds6h: [2000, 1700, 1300, 1100, 3900],
-    wallets: [
-      { id: "tom.testnet", stakes: [0, 0, 0, 16, 0] },
-      { id: "uma.testnet", stakes: [9, 0, 0, 0, 0] },
-      { id: "vic.testnet", stakes: [0, 0, 4, 0, 0] },
-    ],
-  },
-  {
-    title: "Next Ethereum upgrade live before 1 March",
-    topic: "Crypto",
-    outcomes: ["Yes", "No"],
-    odds: [4100, 5900],
-    odds6h: [3500, 6500],
-    wallets: [
-      { id: "wes.testnet", stakes: [0, 16] },
-      { id: "xia.testnet", stakes: [0, 16] },
-    ],
-  },
-].map((m) => ({ ...m, weights: walletWeights(m.wallets, m.outcomes.length) })); // [3000, 0, 12000]
+// ---- The Burn colony ----
+// A day's seed is drawn on chain by the first crank_burn after 12:00 UTC, and
+// its stakes are the snapshot frozen at 12:00. The contract keeps only the
+// newest run and forgets a day's snapshot once it is burned, so this browser
+// remembers the days it has seen (seed, stake hash, snapshot entries, and the
+// result once verified) in memory and in localStorage. burnchain.mjs fills
+// the memory from the contract (rememberBurnDay); replay re-runs from it.
+export { DAY_MS, STAKING_MS };
 
-// The Burn colony for one day seed. make() returns a fresh Colony at tick 0.
-export function burnColony(daySeed) {
-  const seed = colonySeed(daySeed, BURN_COLONY);
+const KNOWN_KEY = "antonomy:burn-days:v1";
+const KEEP_DAYS = 60;
+const known = new Map(); // day -> { day, seed, stakeHash, entries, winner?, hash? } (hex strings; entries as the contract returns them)
+const store = () => (typeof window === "undefined" ? null : window.localStorage);
+try {
+  for (const k of JSON.parse(store()?.getItem(KNOWN_KEY) ?? "[]")) known.set(k.day, k);
+} catch { /* no storage, or a stale value */ }
+
+// Keep what the chain returned for `day`. Merges, so a later call can add the
+// verified result to what an earlier one stored.
+export function rememberBurnDay(info) {
+  const old = known.get(info.day) ?? {};
+  const next = { ...old, ...Object.fromEntries(Object.entries(info).filter(([, v]) => v !== undefined && v !== null)) };
+  known.set(info.day, next);
+  const days = [...known.keys()].sort((a, b) => a - b);
+  for (const d of days.slice(0, Math.max(0, days.length - KEEP_DAYS))) known.delete(d);
+  try { store()?.setItem(KNOWN_KEY, JSON.stringify([...known.values()])); } catch { /* storage full or blocked */ }
+  return next;
+}
+export const knownBurnDay = (day) => known.get(day) ?? null;
+export const knownBurnDays = () => [...known.keys()].sort((a, b) => a - b);
+
+// The Burn colony for one day seed (32 bytes, or null while it isn't known to
+// this browser) with the stake inputs the chain committed to: `weights` (milli
+// sqrt-tokens per option), `stakeHash` (32 bytes) and `wallets` (for the staker
+// ants, which are cosmetic). make() returns a fresh Colony at tick 0 and is
+// what must reproduce the contract's result hash.
+export function burnColony(daySeed, { weights = new Array(5).fill(0), stakeHash = ZERO32, wallets = [] } = {}) {
+  const seed = daySeed ? colonySeed(daySeed, BURN_COLONY) : null;
   return {
     key: "burn",
     seed,
@@ -139,31 +81,42 @@ export function burnColony(daySeed) {
     labels: BURN_MENU,
     ants: N_ANTS,
     ticks: BURN_TICKS,
-    stakers: stakerAnts(BURN_WALLETS, N_ANTS),
-    make: () => new Colony(seed, 5, stakeRichness(BURN_WEIGHTS), N_ANTS, BURN_TICKS, ZERO32),
+    weights,
+    stakeHash,
+    stakers: stakerAnts(wallets, N_ANTS),
+    make: () => {
+      if (!seed) throw new Error("This day's seed isn't known to this browser yet: open the Burn page while the day runs, or after the first crank_burn.");
+      return new Colony(seed, 5, stakeRichness(weights), N_ANTS, BURN_TICKS, stakeHash);
+    },
   };
 }
 
-export const DAY_MS = 86_400_000;
-export const STAKING_MS = DAY_MS - BURN_TICKS * 1000; // 00:00 to 12:00 UTC
-const enc = new TextEncoder();
-export const daySeed = (day) => sha256(enc.encode(`burn-day-${day}`));
-
-// Burn day `day` (days since 1970-01-01 UTC): its seed, its clock and its
-// colony. Staking runs from startMs to runMs, the colony from runMs to endMs.
+// Burn day `day` (days since 1970-01-01 UTC): its clock and, if this browser
+// has the chain's inputs for it, its seed and colony. `known` says whether it
+// does; when it doesn't, seed is null and burn.make() throws. Staking runs from
+// startMs to runMs, the colony from runMs to endMs. For a day that was never
+// seen, `await ensureBurnDay(day)` from burnchain.mjs tries the chain first.
 export function burnDay(day) {
-  const seed = daySeed(day);
   const startMs = day * DAY_MS, runMs = startMs + STAKING_MS, endMs = startMs + DAY_MS;
+  const k0 = known.get(day);
+  const k = k0?.seed && k0.stakeHash && k0.entries ? k0 : null; // a partial record is not enough to re-run
+  const seed = k ? hexToBytes(k.seed) : null;
   return {
-    day, seed, startMs, runMs, endMs,
+    day, seed, known: !!k, startMs, runMs, endMs,
     date: new Date(startMs).toISOString().slice(0, 10),
-    burn: burnColony(seed),
+    stakeHash: k?.stakeHash ?? null,
+    winner: k?.winner ?? null,   // the chain's pick, once this browser has seen the finished run
+    hash: k?.hash ?? null,       // the chain's result hash, likewise
+    burn: burnColony(seed, k ? {
+      weights: snapshotWeights(k.entries), stakeHash: hexToBytes(k.stakeHash), wallets: snapshotWallets(k.entries),
+    } : undefined),
   };
 }
 
-export const demoBurnDay = (now = Date.now()) => burnDay(Math.floor(now / DAY_MS));
+export const currentBurnDay = (now = Date.now()) => burnDay(Math.floor(now / DAY_MS));
+export const demoBurnDay = currentBurnDay; // old name; delete once nothing imports it
 
-// The newest day whose seed is drawn: today from 12:00 UTC, else yesterday.
+// The newest day whose seed can be drawn: today from 12:00 UTC, else yesterday.
 // Pages must not show a seed, a map or a result before then.
 export const drawnBurnDay = (now = Date.now()) => burnDay(Math.floor((now - STAKING_MS) / DAY_MS));
 
@@ -179,61 +132,49 @@ export const runProgress = (d, now = Date.now()) =>
 export const dayProgress = (d, now = Date.now()) =>
   Math.min(1, Math.max(0, (now - d.startMs) / DAY_MS));
 
-// The wallets that have staked on day `d` by `now`: all of them once staking
-// has closed. Stakes are a fixture, so this is the demo's stand-in for the
-// contract's stake_totals view while staking is open.
-export const stakesAt = (d, now = Date.now()) =>
-  BURN_WALLETS.filter((w) => d.startMs + w.at * 60_000 <= now);
+// Old name: there is no per-wallet list while staking
+// is open (the contract's views give per-option totals only), so this is empty.
+// The day's wallets come from the frozen snapshot (burnchain.mjs). Delete once
+// nothing imports it.
+export const stakesAt = () => [];
 
-// Each market's four forecasters in KINDS order. make() returns a fresh
-// Colony at tick 0. The Burn colony isn't part of a round; see burnDay().
-export function roundColonies(roundSeed) {
-  const markets = MARKETS.map((m, i) => {
-    const colony = marketColony(i);
-    const oddsHash = oddsSnapshotHash(m.odds, m.odds6h);
-    const forecasters = KINDS.map((k) => {
-      const rich = k === COMMUNITY ? stakeRichness(m.weights) : oddsRichness(k, m.odds, m.odds6h);
-      const seed = colonySeed(roundSeed, colony, k);
-      return {
-        key: `m${i}-${KIND_NAMES[k].toLowerCase()}`,
-        seed,
-        colony,
-        kind: k,
-        name: KIND_NAMES[k],
-        market: m.title,
-        labels: m.outcomes,
-        ants: FORECAST_ANTS,
-        ticks: FORECAST_TICKS,
-        // Only Community reads stakes, so only it has staker ants.
-        stakers: k === COMMUNITY ? stakerAnts(m.wallets, FORECAST_ANTS) : null,
-        make: () => new Colony(seed, m.outcomes.length, rich,
-          FORECAST_ANTS, FORECAST_TICKS, ZERO32, oddsHash),
-      };
-    });
-    return { ...m, index: i, colony, forecasters };
+// One market's five forecasters in KINDS order, as specs whose make()
+// returns a fresh Colony at tick 0. `m` has outcomes, odds, odds6h, weights,
+// stakeHash (optional, zeros by default), wallets and agentOdds (an
+// agentSnapshot: odds, hash and, for agent ants, posts). Requested markets
+// reuse this with their own colony id.
+export function marketForecasters(roundSeed, colony, m, keyPrefix) {
+  const oddsHash = oddsSnapshotHash(m.odds, m.odds6h);
+  const stakeHash = m.stakeHash ?? ZERO32;
+  // A colony with no input (no stakes, no agent posts) runs but abstains.
+  const counted = voters(m.weights, m.agentOdds.odds);
+  return KINDS.map((k) => {
+    const rich = k === COMMUNITY ? stakeRichness(m.weights)
+      : k === AGENTS ? agentRichness(m.agentOdds.odds)
+      : oddsRichness(k, m.odds, m.odds6h);
+    // Agents commits the agent-odds snapshot in place of the market odds.
+    const commit = k === AGENTS ? m.agentOdds.hash : oddsHash;
+    const seed = colonySeed(roundSeed, colony, k);
+    return {
+      key: `${keyPrefix}-${KIND_NAMES[k].toLowerCase()}`,
+      seed,
+      colony,
+      kind: k,
+      name: KIND_NAMES[k],
+      market: m.title,
+      labels: m.outcomes,
+      ants: FORECAST_ANTS,
+      ticks: FORECAST_TICKS,
+      counted: counted[k],
+      // Only Community reads stakes, so only it has staker ants; Agents has
+      // agent ants when the agents' posts are known (agentOdds.posts).
+      stakers: k === COMMUNITY && m.wallets.length ? stakerAnts(m.wallets, FORECAST_ANTS)
+        : k === AGENTS && m.agentOdds.posts?.length ? agentAnts(m.agentOdds.posts, FORECAST_ANTS) : null,
+      make: () => new Colony(seed, m.outcomes.length, rich,
+        FORECAST_ANTS, FORECAST_TICKS, stakeHash, commit),
+    };
   });
-  return { markets, all: markets.flatMap((m) => m.forecasters) };
 }
 
-export function demoRound(now = Date.now()) {
-  const id = Math.floor(now / ROUND_MS);
-  const startMs = id * ROUND_MS;
-  const seed = seedFromInt(id);
-  return {
-    id,
-    seed,
-    startMs,
-    runEndMs: startMs + RUN_MS,
-    nextMs: startMs + ROUND_MS,
-    ...roundColonies(seed),
-  };
-}
-
-// 0 to 1: how far through its ticks every colony of the round should be at `now`.
-export const roundProgress = (round, now = Date.now()) =>
-  Math.min(1, Math.max(0, (now - round.startMs) / (round.runEndMs - round.startMs)));
-
-export function roundById(id) {
-  const seed = seedFromInt(id);
-  return { id, seed, ...roundColonies(seed) };
-}
+// The round's markets are read from the contract: see loadRound() in
+// roundchain.mjs. The Burn colony isn't part of a round; see burnDay().

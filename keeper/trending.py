@@ -1,7 +1,9 @@
 """Antonomy keeper: pick the round's trending Polymarket markets and print the
-`post_trending` arguments for the contract.
+`post_trending` arguments for the contract, or read one requested market and
+print the `post_request_odds` arguments.
 
 Usage: python3 -I keeper/trending.py [--count N] [--save-raw DIR] > args.json
+       python3 -I keeper/trending.py --request ID --market SLUG [--save-raw DIR] > args.json
 
 Trending (design doc section 15, decided 2026-10-26): open events from the
 public Gamma API sorted by 24-hour volume, kept only if they pass the floors
@@ -22,15 +24,27 @@ Odds six hours ago come from the CLOB price history: the last point at or
 before now - 6h. `raw_hash` is sha256 over every raw response the post was
 built from, in fetch order; `--save-raw` keeps the bytes so anyone can check it.
 
+On request (Recruit the swarm): someone paid the fee for a forecast on the
+Polymarket event with slug SLUG, and the contract gave it request id ID. The
+keeper reads that one event (`/events?slug=`), skips the trending floors
+(volume, liquidity, end date: the requester chose the market), but still
+applies the content filter, the open check and the decided check, and posts
+with `market_id` set to the slug, which is what the contract matches on. A
+market the filter blocks is not posted (exit status 1); without a keeper
+quorum the contract skips the request and refunds the fee.
+
 Post with the NEAR CLI, for example:
   near contract call-function as-transaction <contract> post_trending \\
     file-args args.json prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' \\
     sign-as <keeper> network-config testnet sign-with-keychain send
+(`post_request_odds` the same way for a request.)
 
 Not checked yet: Polymarket's terms for display and redistribution. Read-only,
 no authentication, no links to the market are published.
 """
 import argparse
+import http.client
+import time
 import datetime as dt
 import hashlib
 import json
@@ -192,11 +206,50 @@ def build_post(event, now, history):
     if max(odds) == 0 or min(odds) == BPS:
         return "degenerate odds"
     return {
-        "market_id": str(event["id"]),
+        # The slug is readable on the pages and links to the event; the id is
+        # the fallback for an event without one.
+        "market_id": str(event.get("slug") or event["id"]),
         "outcomes": labels,
         "odds": odds,
         "odds_6h": odds_6h,
     }
+
+
+def request_post(event, now, slug, history):
+    """The `market` argument of `post_request_odds` for a requested slug, or a
+    reason string. No trending floors; filter, open and decided checks apply."""
+    if event.get("slug") != slug:
+        return "no event with slug %r" % slug
+    why = blocked(event)
+    if why:
+        return why
+    if event.get("closed") or not event.get("active"):
+        return "not open"
+    post = build_post(event, now, history)
+    if isinstance(post, str):
+        return post
+    post["market_id"] = slug
+    return post
+
+
+def seal(post, used, save_raw):
+    """Set `raw_hash` over the raw responses `used`, and keep them if asked."""
+    h = hashlib.sha256()
+    for _, body in used:
+        h.update(body)
+    post["raw_hash"] = h.hexdigest()
+    if save_raw:
+        d = os.path.join(save_raw, post["market_id"])
+        os.makedirs(d, exist_ok=True)
+        for i, (url, body) in enumerate(used):
+            with open(os.path.join(d, "%02d.json" % i), "wb") as fh:
+                fh.write(body)
+        with open(os.path.join(d, "urls.txt"), "w") as fh:
+            fh.write("".join(u + "\n" for u, _ in used))
+
+
+RETRIES = 4
+RETRY_PAUSE_S = 1.5
 
 
 class Fetcher:
@@ -207,8 +260,17 @@ class Fetcher:
 
     def get(self, url):
         req = urllib.request.Request(url, headers={"User-Agent": "antonomy-keeper/0", "Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=20) as r:
-            body = r.read()
+        # A dropped connection mid-read is routine; a keeper that crashes on
+        # one misses the round, so retry a few times before giving up.
+        for attempt in range(RETRIES):
+            try:
+                with urllib.request.urlopen(req, timeout=20) as r:
+                    body = r.read()
+                break
+            except (OSError, http.client.HTTPException):
+                if attempt == RETRIES - 1:
+                    raise
+                time.sleep(RETRY_PAUSE_S * (attempt + 1))
         self.raw.append((url, body))
         return json.loads(body, parse_float=Decimal)
 
@@ -219,13 +281,29 @@ class Fetcher:
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--count", type=int, default=1, help="markets to post (contract MAX_TRENDING)")
+    ap.add_argument("--count", type=int, default=12, help="markets to post (contract MAX_TRENDING)")
     ap.add_argument("--scan", type=int, default=100, help="events to fetch, by 24h volume")
     ap.add_argument("--save-raw", metavar="DIR", help="write every raw response here")
+    ap.add_argument("--request", type=int, metavar="ID", help="requested market: the contract's request id")
+    ap.add_argument("--market", metavar="SLUG", help="requested market: the Polymarket event slug it names")
     a = ap.parse_args(argv)
+    if (a.request is None) != (a.market is None):
+        ap.error("--request and --market go together")
 
     now = dt.datetime.now(dt.timezone.utc)
     f = Fetcher()
+    if a.request is not None:
+        found = f.get("%s/events?%s" % (GAMMA, urllib.parse.urlencode({"slug": a.market})))
+        e = found[0] if found else {}
+        post = request_post(e, now, a.market, f.history)
+        if isinstance(post, str):
+            print("refuse request %d %r: %s" % (a.request, a.market, post), file=sys.stderr)
+            return 1
+        seal(post, f.raw, a.save_raw)
+        print("take request %d %r" % (a.request, (e.get("title") or "")[:60]), file=sys.stderr)
+        print(json.dumps({"request_id": a.request, "market": post}, indent=2))
+        return 0
+
     q = urllib.parse.urlencode({
         "active": "true", "closed": "false", "order": "volume24hr", "ascending": "false", "limit": a.scan,
     })
@@ -242,19 +320,7 @@ def main(argv=None):
         if isinstance(post, str):
             print("skip %s %r: %s" % (e.get("id"), (e.get("title") or "")[:60], post), file=sys.stderr)
             continue
-        used = [listing] + f.raw[start:]
-        h = hashlib.sha256()
-        for _, body in used:
-            h.update(body)
-        post["raw_hash"] = h.hexdigest()
-        if a.save_raw:
-            d = os.path.join(a.save_raw, post["market_id"])
-            os.makedirs(d, exist_ok=True)
-            for i, (url, body) in enumerate(used):
-                with open(os.path.join(d, "%02d.json" % i), "wb") as fh:
-                    fh.write(body)
-            with open(os.path.join(d, "urls.txt"), "w") as fh:
-                fh.write("".join(u + "\n" for u, _ in used))
+        seal(post, [listing] + f.raw[start:], a.save_raw)
         print("take %s %r" % (post["market_id"], (e.get("title") or "")[:60]), file=sys.stderr)
         out.append(post)
 

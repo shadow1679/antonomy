@@ -29,6 +29,7 @@ version = "0.0.0"
 dependencies = [
  "antotoken",
  "near-sdk",
+ "near-sys 0.2.14",
 ]
 
 [[package]]

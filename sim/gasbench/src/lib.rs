@@ -2,9 +2,13 @@
 //! (`Colony::to_bytes`) and advances it a few ticks per call, the way the
 //! product contract will, so `tests/gas.rs` can read real gas per call from a
 //! local sandbox. Testnet and sandbox only; not the product contract.
+//!
+//! It also stands in for a NEP-141 receiver (`ft_on_transfer`) in the product
+//! contract's `ft_transfer_call` sandbox test (`runner/tests/ft.rs`).
 
 use antosim::{seed_from_int, sha256, Colony};
-use near_sdk::{env, near};
+use near_sdk::json_types::U128;
+use near_sdk::{env, near, AccountId};
 
 const KEY: &[u8] = b"colony";
 
@@ -67,5 +71,20 @@ impl Bench {
             h[..32].copy_from_slice(&d);
         }
         antosim::to_hex(&h[..32])
+    }
+
+    /// Stand-in NEP-141 receiver: keeps `keep:<yocto>` of the transfer (all
+    /// of it with any other `msg`) and reports the rest unused. `panic` fails.
+    pub fn ft_on_transfer(&mut self, sender_id: AccountId, amount: U128, msg: String) -> U128 {
+        env::log_str(&format!("received {} from {sender_id}: {msg}", amount.0));
+        if msg == "panic" {
+            env::panic_str("receiver refused");
+        }
+        let keep = msg
+            .strip_prefix("keep:")
+            .and_then(|k| k.parse::<u128>().ok())
+            .unwrap_or(amount.0)
+            .min(amount.0);
+        U128(amount.0 - keep)
     }
 }

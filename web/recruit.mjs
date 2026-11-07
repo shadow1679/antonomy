@@ -1,162 +1,288 @@
-// Recruit an ant, in the browser: the strategies of the recruit kit
-// (bots/recruit.py's decide(r) over a Round, bots/my_ant.py and the
-// bots/swarm.py built-ins) run against the demo's Burn stakes, so the Recruit
-// page can show what an agent would stake and the ants it would hatch. Pure
-// data, no DOM, so Node can test it. Amounts here are whole tANTO and weights
-// milli sqrt-tokens; the kit itself reads the contract views in yocto. Same
-// rules and tie-breaks as the kit, so the same stakes give the same plan.
+// Recruit the swarm, in the browser: anyone pays a $ANTO fee for a forecast
+// on a market of their choice, and agents are paid from the fee for work,
+// never for being right. Keepers post the market's odds, forecaster agents
+// post their own odds (the Agents colony reads their lower median), and
+// crankers run the five colonies, one per call. All of that happens on the
+// contract; this file is the pure part the pages share: it reads the
+// contract's `RequestView` JSON (views `forecast_request`, `forecast_requests`)
+// and works out what to show, what is due next, what each party was paid, and
+// whether a browser re-run of the five colonies matches the chain's hashes.
+// No DOM and no wallet, so Node can test it (web/test_recruit.mjs).
+//
+// Amounts are yocto (BigInt) here, as on chain; the views carry them as
+// decimal strings. The fee size and split come from the `request_config` view.
 
-import { walletWeights, stakeWeight } from "./ds/staker-ants.mjs";
-import { burnDay, stakesAt, BURN_WALLETS, STAKING_MS, DAY_MS } from "./round.mjs";
-import { previewSide, SUGAR_CAP, N_OPTIONS } from "./sugar.mjs";
+import { toHex, marketResult, voters, oddsSnapshotHash, KINDS } from "../sim/js/antosim.mjs";
+import { marketForecasters, KIND_NAMES } from "./round.mjs";
+import { agentSnapshot } from "./agents.mjs";
+import { chain, hexToBytes, ZERO_HASH } from "./chain.mjs";
+import { walletsFor } from "./roundchain.mjs";
 
-export const MENU_BPS = [10, 25, 50, 100, 200]; // token/src/burn.rs
-export const ROUND_SHARE_BPS = 1_000;           // token/src/reward.rs: 10% of the pool per burn day
-export const COMMUNITY_BASE = 2_500;            // milli sqrt-tokens of food every option starts with
-export const POOL = 50_000;                     // demo reward pool, tANTO (a fixture)
-export const BALANCE = 100;                     // the demo recruit's balance, tANTO (a sample)
-const FLOW_AMOUNT = 10;                         // bots/swarm.py
-const HEAVY_FAVOURITE = 4;                      // 2.00%, the top of the menu
-const VALUE_STAKE = 20;                         // bots/my_ant.py STAKE_TOKENS
-const ONE = 10n ** 24n;                         // yocto per token
+export const ONE = 10n ** 24n;                 // yocto per token
+export const CRANK_CALLS = KINDS.length;       // one colony per call
+export const REQUEST_COLONY_BASE = 0x8000;     // token/src/request.rs: request id -> colony
+const BPS = 10_000n;
 
-// Everything decide() may read, as in bots/recruit.py's Round.
-export class Round {
-  constructor({ wallets, mine = new Array(N_OPTIONS).fill(0), balance = BALANCE, cap = SUGAR_CAP, pool = POOL }) {
-    this.n = N_OPTIONS;
-    this.menuBps = MENU_BPS.slice();
-    this.weights = walletWeights(wallets, N_OPTIONS);
-    this.totals = Array.from({ length: N_OPTIONS }, (_, o) => wallets.reduce((a, w) => a + (w.stakes[o] ?? 0), 0));
-    this.mine = mine.slice();
-    this.balance = balance;
-    this.staked = this.mine.reduce((a, b) => a + b, 0);
-    this.cap = cap;
-    this.headroom = Math.max(0, cap - this.staked);
-    this.pool = pool;
-    this.pot = Math.floor((pool * ROUND_SHARE_BPS) / 10_000);
-  }
+export const requestColony = (id) => REQUEST_COLONY_BASE + id;
 
-  // Option o's weight if this account adds `extra` tokens on it.
-  weightAfter(o, extra = 0) {
-    return this.weights[o] - stakeWeight(this.mine[o]) + stakeWeight(this.mine[o] + extra);
-  }
-
-  // o's share of food weight in the sim after that: a rough proxy for its chance to win.
-  foodShare(o, extra = 0) {
-    const food = Array.from({ length: this.n }, (_, k) => COMMUNITY_BASE + this.weightAfter(k, k === o ? extra : 0));
-    return food[o] / food.reduce((a, b) => a + b, 0);
-  }
-
-  // This account's reward if o wins, at current stakes, split by raw stake.
-  payoutIfWins(o, extra = 0) {
-    const total = this.totals[o] + extra;
-    return total ? (this.pot * (this.mine[o] + extra)) / total : 0;
-  }
+// Whole tokens for display, with up to `dp` decimals. Takes yocto as a
+// BigInt or the decimal string the views return.
+export function tokens(yocto, dp = 2) {
+  yocto = BigInt(yocto);
+  const neg = yocto < 0n, y = neg ? -yocto : yocto;
+  const whole = y / ONE, frac = (y % ONE) * 10n ** BigInt(dp) / ONE;
+  const f = dp ? `.${frac.toString().padStart(dp, "0")}`.replace(/\.?0+$/, "") : "";
+  return `${neg ? "-" : ""}${whole.toLocaleString("en")}${f}`;
 }
 
-// Highest (lowest) value, ties to the lowest index, like the sim and the kit.
-const argmax = (xs) => xs.reduce((b, x, i) => (x > xs[b] ? i : b), 0);
-const argmin = (xs) => xs.reduce((b, x, i) => (x < xs[b] ? i : b), 0);
+// ---- config and the fee split ----
 
-// The kit's strategies. `arg` is what goes after --strategy.
-export const STRATEGIES = {
-  value: {
-    name: "Value seeker", arg: "bots/my_ant.py",
-    blurb: "The example file. Weighs each option's chance to win against its reward.",
-    decide(r) {
-      const amount = Math.min(VALUE_STAKE, r.balance, r.headroom);
-      if (amount <= 0) return [];
-      const value = Array.from({ length: r.n }, (_, o) => r.foodShare(o, amount) * r.payoutIfWins(o, amount));
-      return [[argmax(value), amount]];
-    },
-  },
-  follower: {
-    name: "Follower", arg: "follower",
-    blurb: "Backs the option with the most weight.",
-    decide: (r) => [[argmax(r.weights), FLOW_AMOUNT]],
-  },
-  contrarian: {
-    name: "Contrarian", arg: "contrarian",
-    blurb: "Backs the option with the least weight.",
-    decide: (r) => [[argmin(r.weights), FLOW_AMOUNT]],
-  },
-  heavy: {
-    name: "Heavy", arg: "heavy",
-    blurb: "Puts its whole cap on the biggest burn, 2.00%.",
-    decide: (r) => [[HEAVY_FAVOURITE, r.cap - r.staked]],
-  },
-};
-
-// decide()'s answer as stakes the contract will accept: valid options,
-// positive whole amounts, in total within the balance and the cap headroom
-// (earlier entries first). Same notes as bots/recruit.py's clip().
-export function clip(r, wanted) {
-  let left = Math.min(r.balance, r.headroom);
-  const stakes = [], notes = [];
-  for (const item of wanted ?? []) {
-    const [o, amt] = Array.isArray(item) ? item : [];
-    if (!Number.isInteger(o) || o < 0 || o >= r.n) { notes.push(`dropped option ${o}: the menu has ${r.n} options`); continue; }
-    if (!Number.isInteger(amt) || amt <= 0) { notes.push(`dropped amount ${amt} on option ${o}: want a positive whole amount`); continue; }
-    if (left === 0) { notes.push(`dropped option ${o}: no balance or wallet cap headroom left`); continue; }
-    let a = amt;
-    if (a > left) { notes.push(`option ${o}: clipped ${a} to ${left} (balance and wallet cap)`); a = left; }
-    stakes.push([o, a]);
-    left -= a;
-  }
-  return { stakes, notes };
-}
-
-// The demo's stakes a recruit meets at `now`, and the map its preview runs
-// on. Before 12:00 UTC a stake counts today: the stakes so far, on
-// yesterday's map (today's seed isn't drawn). From 12:00 it counts tomorrow:
-// today's closed stakes, on today's map. Same as the Burn page's drop sugar.
-export function recruitDay(now = Date.now()) {
-  const today = burnDay(Math.floor(now / DAY_MS));
-  const staking = now < today.startMs + STAKING_MS;
-  return staking
-    ? { staking, countsFor: today, seed: burnDay(today.day - 1).seed, wallets: stakesAt(today, now), map: "yesterday's map" }
-    : { staking, countsFor: burnDay(today.day + 1), seed: today.seed, wallets: BURN_WALLETS, map: "today's map" };
-}
-
-// One recruit: the strategy's plan against `wallets`, with the kit's
-// estimates per line (each including the earlier lines), and the preview
-// colony with the recruit's wallet added. `wallet` is its row in
-// side.stakers (-1 if it stakes nothing), `ants` how many ants it hatches.
-export function recruit(id, key, wallets, seed, opts = {}) {
-  const r = new Round({ wallets, ...opts });
-  const { stakes, notes } = clip(r, STRATEGIES[key].decide(r));
-  const extra = new Array(r.n).fill(0);
-  const lines = stakes.map(([o, amount]) => {
-    extra[o] += amount;
-    return { option: o, bps: r.menuBps[o], amount, weightAfter: r.weightAfter(o, extra[o]),
-      foodShare: r.foodShare(o, extra[o]), payoutIfWins: r.payoutIfWins(o, extra[o]) };
-  });
-  const all = extra.some((x) => x > 0) ? [...wallets, { id, stakes: extra }] : wallets;
-  const side = previewSide(seed, all);
-  const wallet = side.stakers.rows.findIndex((x) => x.id === id && x.ants > 0);
-  return { round: r, lines, notes, wallet, ants: wallet >= 0 ? side.stakers.rows[wallet].ants : 0, side };
-}
-
-// The NEAR CLI call the kit signs for one stake (bots/swarm.py near_call),
-// quoted the way the kit prints it (Python's shlex.join).
-const quote = (x) => (/^[\w@%+=:,./-]+$/.test(x) ? x : `'${x.replace(/'/g, `'"'"'`)}'`);
-export function stakeCall(contract, account, option, tokens, network = "testnet") {
-  const args = JSON.stringify({ colony: 0, option, amount: (BigInt(tokens) * ONE).toString() });
-  return ["near", "contract", "call-function", "as-transaction", contract, "stake",
-    "json-args", args, "prepaid-gas", "100.0 Tgas", "attached-deposit", "0 NEAR",
-    "sign-as", account, "network-config", network, "sign-with-keychain", "send"].map(quote).join(" ");
-}
-
-// The kit's own command lines for this account and strategy. The value
-// seeker starts from a copy of bots/my_ant.py named after the account.
-export function kitCommands(contract, account, key) {
-  const base = `python3 -I bots/recruit.py --contract ${quote(contract)} --account ${quote(account)}`;
-  const file = key === "value" ? `bots/${account.replace(/\.[^.]*$/, "").replace(/\W+/g, "_") || "my_ant"}_strategy.py` : null;
-  const strategy = file ?? STRATEGIES[key].arg;
+// `request_config` view -> BigInt amounts and bps numbers.
+export function parseConfig(v) {
   return {
-    copy: file ? `cp bots/my_ant.py ${file}` : null,
-    dry: `${base} --strategy ${strategy}`,
-    send: `${base} --strategy ${strategy} --send`,
-    withdraw: `${base} --withdraw --send`,
+    fee: BigInt(v.fee), keeperBps: BigInt(v.keeper_bps), agentBps: BigInt(v.agent_bps), crankBps: BigInt(v.crank_bps),
+    oddsWindowMs: v.odds_window_ms, forecastWindowMs: v.forecast_window_ms,
+    agentDeposit: BigInt(v.agent_deposit), crankBounty: BigInt(v.crank_bounty),
   };
 }
+
+// The fee split as fixed pools: keepers, agents and crank. Burn is the rest.
+export function feePools(cfg) {
+  const keepers = (cfg.fee * cfg.keeperBps) / BPS, agents = (cfg.fee * cfg.agentBps) / BPS, crank = (cfg.fee * cfg.crankBps) / BPS;
+  return { keepers, agents, crank, burn: cfg.fee - keepers - agents - crank };
+}
+
+// ---- reading a request ----
+
+const ms = (x) => (x == null ? null : Number(x));
+const big = (x) => BigInt(x ?? 0);
+
+// Colonies cranked so far; the next crank runs KIND_NAMES[cranked(r)].
+export const cranked = (r) => r.colony_hashes.length;
+export const isOver = (r) => r.phase === "done" || r.phase === "skipped";
+
+// The request colony's frozen stakes: { weights, hash, wallets } (wallets as
+// staker-ant rows). Before the first crank freezes them, and on a contract
+// older than request stakes, zero weights and a zero hash.
+export function stakesOf(r) {
+  const n = r.market?.outcomes.length ?? 0, st = r.stakes;
+  if (!st) return { weights: new Array(n).fill(0), hash: ZERO_HASH, wallets: [] };
+  return { weights: st.weights, hash: st.hash, wallets: walletsFor(st.entries, r.colony, n) };
+}
+
+// The five colonies' inputs as `marketForecasters` takes them, from what the
+// contract stored. Null until the first crank freezes the agents' snapshot
+// and the stakes (holders stake on the request during the agents' window)
+// and draws the seed.
+export function specOf(r) {
+  const m = r.market, ag = r.agents;
+  if (!m || !ag || !r.seed) return null;
+  const st = stakesOf(r);
+  return {
+    title: r.market_id, outcomes: m.outcomes, odds: m.odds, odds6h: m.odds_6h,
+    weights: st.weights, stakeHash: hexToBytes(st.hash), wallets: st.wallets,
+    agentOdds: { odds: ag.odds, hash: hexToBytes(ag.hash), posts: ag.posts },
+  };
+}
+
+// The five forecaster colony specs ({ name, make(), counted, ... }), or null.
+export function forecastersOf(r) {
+  const spec = specOf(r);
+  return spec && marketForecasters(hexToBytes(r.seed), r.colony, spec, `r${r.id}`);
+}
+
+// Which colonies vote in the swarm belief: Follower, Contrarian and Momentum
+// always; Community only with stakes; Agents with a post.
+export const countedOf = (r) => voters(stakesOf(r).weights, r.agents?.odds ?? []);
+
+// Run colony k to its final tick: its result (with `hash`).
+export function runColony(spec) {
+  const c = spec.make();
+  while (c.step());
+  return c.result();
+}
+
+// Re-run the colonies the chain has cranked (all five once done) from its
+// stored inputs and compare. { ok, colonies: [{ kind, name, chain, replay,
+// match }], market: { chain, replay, match } | null, swarm: match | null,
+// oddsHash, agentsHash } or { ok: false, reason }. `ok` needs every cranked
+// colony to match, plus the market hash and swarm belief once done.
+export function verifyRequest(r) {
+  if (!r) return { ok: false, reason: "no such request" };
+  const fs = forecastersOf(r);
+  if (!fs) return { ok: false, reason: `nothing to re-run yet (phase ${r.phase})` };
+  const runs = fs.slice(0, cranked(r)).map(runColony);
+  const colonies = runs.map((x, k) => ({ kind: k, name: KIND_NAMES[k], chain: r.colony_hashes[k], replay: x.hash, match: x.hash === r.colony_hashes[k] }));
+  const m = r.market, n = m.outcomes.length;
+  // The snapshots the colonies commit: recompute them from the raw posts.
+  const oddsHash = toHex(oddsSnapshotHash(m.odds, m.odds_6h)) === m.odds_hash;
+  const posts = r.agents.posts.map(([id, odds]) => ({ id, odds }));
+  const agentsHash = (posts.length ? toHex(agentSnapshot(posts, n).hash) : ZERO_HASH) === r.agents.hash;
+  let market = null, swarm = null;
+  if (r.phase === "done" && runs.length === CRANK_CALLS) {
+    const res = marketResult(r.colony, runs, countedOf(r));
+    market = { chain: r.market_hash, replay: res.hash, match: res.hash === r.market_hash };
+    swarm = res.swarm.length === r.swarm.length && res.swarm.every((x, i) => x === r.swarm[i]);
+  }
+  const ok = colonies.every((c) => c.match) && oddsHash && agentsHash && (r.phase !== "done" || (!!market?.match && swarm));
+  return { ok, colonies, market, swarm, oddsHash, agentsHash };
+}
+
+// Who was paid what, as rows { role, account, amount } (BigInt), one per
+// payment; the burn row has no account. Once the request is done the rows sum
+// to the fee exactly; a skipped request refunds the fee to the requester.
+export function payoutRows(r) {
+  if (r.phase === "skipped") return [{ role: "refund", account: r.requester, amount: big(r.fee) }];
+  if (r.phase !== "done") return [];
+  const rows = [];
+  for (const [account, amount] of r.paid_keepers) rows.push({ role: "keeper", account, amount: big(amount) });
+  for (const [account, amount] of r.paid_agents) rows.push({ role: "agent", account, amount: big(amount) });
+  r.paid_cranks.forEach(([account, amount], k) => rows.push({ role: "cranker", account, amount: big(amount), call: k + 1 }));
+  rows.push({ role: "burn", account: null, amount: big(r.burned) });
+  return rows;
+}
+
+// ---- what is due ----
+
+// The permissionless call request r is waiting for at `nowMs`, or null:
+// "finalize_request_odds" once the keepers' window is over (or all of
+// `keepers`, if given, have posted), "crank_request" once the agents' window
+// is over and until the fifth colony has run. Posting odds is not permissionless
+// (keepers) and posting forecasts is for registered agents, so neither is due.
+export function due(r, nowMs, keepers = null) {
+  if (r.phase === "odds") {
+    const all = keepers && keepers.length > 0 && keepers.every((k) => r.keepers_posted.includes(k));
+    return nowMs >= r.odds_by_ms || all ? "finalize_request_odds" : null;
+  }
+  if (r.phase === "forecasting") return nowMs >= r.forecast_by_ms ? "crank_request" : null;
+  if (r.phase === "running") return "crank_request";
+  return null;
+}
+
+// Whether registered agents may post their odds now. Holders may stake on the
+// request's colony in the same window.
+export const agentsMayPost = (r, nowMs) => r.phase === "forecasting" && nowMs < r.forecast_by_ms;
+export const stakingOpen = agentsMayPost;
+
+// Whether stakes on the request's colony can be withdrawn: not from the end
+// of the agents' window until the fifth colony has run.
+export const stakesLocked = (r, nowMs) => r.phase === "running" || (r.phase === "forecasting" && nowMs >= r.forecast_by_ms);
+
+// The lifecycle as steps with a state: "done", "now" or "" (to come).
+// { key, title, text, state }.
+export function timeline(r, cfg, nowMs = Date.now()) {
+  const phase = r.phase;
+  const at = { odds: 1, forecasting: 3, running: 4 + cranked(r), done: 4 + CRANK_CALLS + 1, skipped: 2 }[phase];
+  const steps = [
+    { key: "request", title: "Request", text: `Fee of ${tokens(r.fee)} tANTO held by the contract` },
+    { key: "odds", title: "Keepers post odds", text: `${r.keepers_posted.length} keeper${r.keepers_posted.length === 1 ? "" : "s"} posted so far; the window is ${Math.round(cfg.oddsWindowMs / 60_000)} minutes` },
+  ];
+  if (phase === "skipped") {
+    steps.push({ key: "skip", title: "No quorum", text: "Not enough keepers agreed on the market, so the request was skipped and the fee refunded" });
+    return steps.map((s, i) => ({ ...s, state: i < 2 ? "done" : "now" }));
+  }
+  steps.push({ key: "final", title: "Odds final", text: "The keepers' median odds are on chain" });
+  steps.push({ key: "agents", title: "Agents post, holders stake", text: `For ${Math.round(cfg.forecastWindowMs / 1000)} seconds, registered forecaster agents post their own odds and holders stake $ANTO on outcomes for Community` });
+  KIND_NAMES.forEach((name, k) => steps.push({ key: `crank-${k}`, title: `Crank ${k + 1}: ${name}`,
+    text: `${k === 0 ? "Draws the seed, then runs" : "Runs"} the ${name} colony${r.crankers[k] ? ` · ${r.crankers[k]}` : ""}` }));
+  steps.push({ key: "done", title: "Result", text: "Swarm belief and market hash stored, fee paid out" });
+  // The step index `at` is the one in progress (or "now"); everything before it is done.
+  const cur = phase === "forecasting" && nowMs >= r.forecast_by_ms ? 4 : at;
+  return steps.map((s, i) => ({ ...s, state: i < cur || phase === "done" ? "done" : i === cur ? "now" : "" }));
+}
+
+// Short labels for the progress strip.
+export const SHORT = { request: "Fee held", odds: "Keepers post", final: "Odds final", agents: "Agents post", skip: "Refunded", done: "Result" };
+
+// ---- agents' own odds ----
+
+// The odds an agent's form starts from: the keepers' median, made whole.
+export function marketOdds(odds) {
+  const o = [...odds];
+  const top = o.indexOf(Math.max(...o));
+  o[top] += 10_000 - o.reduce((a, b) => a + b, 0);
+  return o;
+}
+
+// Percent strings from the form -> { odds: basis points } or { why }; an
+// empty form is { odds: null }.
+export function readOdds(vals) {
+  vals = vals.map((v) => String(v).trim());
+  if (vals.every((v) => v === "")) return { odds: null };
+  if (vals.some((v) => v === "")) return { why: "fill in every outcome" };
+  const odds = vals.map((v) => Math.round(Number(v) * 100));
+  if (odds.some((o) => !Number.isFinite(o) || o < 0 || o > 10_000)) return { why: "each outcome is 0 to 100%" };
+  const sum = odds.reduce((a, b) => a + b, 0);
+  if (sum !== 10_000) return { why: `adds up to ${(sum / 100).toFixed(1)}%, not 100%` };
+  return { odds };
+}
+
+// ---- reading the chain ----
+
+// The newest `n` requests, oldest first. `c` is the chain reader (chain.mjs).
+export async function recentRequests(n = 12, c = chain) {
+  const count = await c.requestCount();
+  const from = Math.max(0, count - n);
+  return count ? c.requests(from, Math.min(50, count - from)) : [];
+}
+
+// The newest request for this market made by `requester`, from id `from` on:
+// how the page finds the id a `request_forecast` call returned.
+export async function findRequest(market, requester, from = 0, c = chain) {
+  const list = await c.requests(from, 50);
+  return [...list].reverse().find((r) => r.market_id === market && (!requester || r.requester === requester)) ?? null;
+}
+
+// A transaction outcome from the wallet -> the failure message, or null. A
+// contract panic or a failed receipt comes back as an outcome, not a throw.
+export function failureOf(outcome) {
+  const fail = (s) => (s && typeof s === "object" && s.Failure) || null;
+  const text = (f) => {
+    const e = f.ActionError?.kind?.FunctionCallError?.ExecutionError ?? f.ActionError?.kind ?? f;
+    return typeof e === "string" ? e : JSON.stringify(e);
+  };
+  const top = outcome?.status && fail(outcome.status);
+  if (top) return text(top);
+  for (const ro of outcome?.receipts_outcome ?? []) {
+    const f = fail(ro.outcome?.status);
+    if (f) return text(f);
+  }
+  return null;
+}
+
+// ---- commands ----
+
+// Shell quoting the way the tool prints commands (Python's shlex.join).
+const quote = (x) => (/^[\w@%+=:,./-]+$/.test(x) ? x : `'${x.replace(/'/g, `'"'"'`)}'`);
+const nearCall = (contract, account, method, args, gas = "30.0 Tgas", network = "testnet") =>
+  ["near", "contract", "call-function", "as-transaction", contract, method,
+    "json-args", JSON.stringify(args), "prepaid-gas", gas, "attached-deposit", "0 NEAR",
+    "sign-as", account, "network-config", network, "sign-with-keychain", "send"].map(quote).join(" ");
+
+// The agent tool's command lines and the NEAR CLI calls they sign. `mine`
+// ({ outcomes, odds }) is the asker's own forecast: ask then waits and posts
+// it by label once agents may post.
+export function commands(contract, account, marketId, id = 0, odds = null, mine = null) {
+  const tool = (sub, rest = "") => `python3 -I bots/recruit.py ${sub} --contract ${quote(contract)}${rest}`;
+  const acct = ` --account ${quote(account)}`;
+  const oddsArg = (odds ?? []).join(",");
+  const mineArg = mine ? ` --wait --odds ${quote(mine.outcomes.map((o, i) => `${o}=${mine.odds[i]}`).join(","))}` : "";
+  return {
+    ask: tool("ask", `${acct} --market ${quote(marketId)}`),
+    askSend: tool("ask", `${acct} --market ${quote(marketId)}${mineArg} --send`),
+    register: tool("register", `${acct} --send`),
+    post: tool("post", `${acct} --request ${id} --odds ${oddsArg} --send`),
+    crank: tool("crank", `${acct} --request ${id} --send`),
+    verify: tool("verify", ` --request ${id}`),
+    mcp: tool("mcp", acct),
+    keeper: `python3 -I keeper/trending.py --request ${id} --market ${quote(marketId)}`,
+    signs: {
+      request: nearCall(contract, account, "request_forecast", { market_id: marketId }),
+      post: nearCall(contract, account, "post_forecast", { colony: requestColony(id), odds: odds ?? [] }),
+      crank: nearCall(contract, account, "crank_request", { request_id: id }, "100.0 Tgas"),
+      stake: nearCall(contract, account, "stake", { colony: requestColony(id), option: 0, amount: String(ONE) }),
+    },
+  };
+}
+
+export { toHex };

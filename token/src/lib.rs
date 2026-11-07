@@ -5,14 +5,25 @@
 //! `market` holds the forecast market registry: keepers post the trending list
 //! and odds, and the contract keeps the per-outcome median. `reward` holds the
 //! Burn colony's play-token reward pool, and `day` its burn-day schedule.
+//! `request` and `agents` are Recruit the swarm: requested forecasts paid in
+//! $ANTO, and the forecaster agents whose median odds feed the Agents colony.
 //!
-//! Not covered yet: the drand commit.
+//! The drand commit lives in the contract (`contract/src/drand.rs`), which
+//! needs NEAR's BLS12-381 host functions; this crate takes its randomness as
+//! plain `entropy` bytes.
 
+/// The sim, re-exported so the contract can re-run a result in its tests.
+pub use antosim;
+
+pub mod agents;
 pub mod burn;
+pub mod burnrun;
 pub mod day;
 pub mod ledger;
 pub mod market;
+pub mod request;
 pub mod reward;
+pub mod round;
 pub mod stake;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,6 +77,31 @@ pub enum Error {
     AlreadyFinalized,
     /// Rewards already paid for this burn day or a later one.
     AlreadyRewarded(u64),
+    /// Request fee split doesn't fit the fee, or the fee is zero.
+    BadRequestConfig,
+    /// The requested slug contains a deny-listed word.
+    DeniedMarket,
+    NoSuchRequest(u32),
+    TooManyRequests,
+    /// The request is not waiting for a crank (odds still open, done or skipped).
+    NotCrankable,
+    /// Not a request colony, or not a colony agents can post on.
+    BadColony,
+    AlreadyRegistered,
+    /// Only registered forecaster agents may post forecasts.
+    NotAgent,
+    /// Agent odds must be one value per outcome summing to 10000.
+    BadForecast,
+    /// Option index outside the market's outcomes.
+    BadOption,
+    /// The Burn colony of this day can only run between 12:00 and 24:00 UTC.
+    BurnNotRunning(u64),
+    /// A crank had nothing to do: the clock allows no new tick, or the run is done.
+    NothingToCrank,
+    /// That burn day's colony has not run its last tick yet.
+    BurnNotFinished(u64),
+    /// No Burn colony run is stored for that day.
+    NoBurnRun(u64),
 }
 
 /// Integer square root, floor. Newton's method, no float.
@@ -95,7 +131,11 @@ pub fn mul_div(a: u128, b: u128, d: u128) -> u128 {
     let hi = p11 + (p01 >> 64) + (p10 >> 64) + (mid >> 64);
     let (mut q, mut r) = (0u128, 0u128);
     for i in (0..256).rev() {
-        let bit = if i >= 128 { (hi >> (i - 128)) & 1 } else { (lo >> i) & 1 };
+        let bit = if i >= 128 {
+            (hi >> (i - 128)) & 1
+        } else {
+            (lo >> i) & 1
+        };
         let carry = r >> 127;
         r = (r << 1) | bit;
         q <<= 1;
@@ -113,7 +153,12 @@ mod tests {
 
     #[test]
     fn mul_div_matches_narrow_math_and_handles_wide() {
-        for (a, b, d) in [(0, 0, 1), (10, 3, 7), (1000, 1, 3), (u64::MAX as u128, 5, 9)] {
+        for (a, b, d) in [
+            (0, 0, 1),
+            (10, 3, 7),
+            (1000, 1, 3),
+            (u64::MAX as u128, 5, 9),
+        ] {
             assert_eq!(mul_div(a, b, d), a * b / d, "{a} {b} {d}");
         }
         let one = 10u128.pow(24);

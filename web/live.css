@@ -1,0 +1,337 @@
+/* Live page (web/live.html) and the market page (web/market.html). Their own look on top of the design system:
+   IBM Plex Sans for UI and prose, mono only for numbers, ids and hashes,
+   Fraunces only for the page, section and market titles. Flat panels with
+   hairlines instead of raised chambers. The design
+   system's rules still hold: amber is reserved, options show their glyph,
+   every forecast output carries .tag-forecast. See docs/DESIGN_SYSTEM.md. */
+
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap");
+
+body.lv {
+  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --lv-max: 1240px;
+  --lv-radius: 12px;
+  font-family: var(--font-ui);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+/* The shared shell keeps the mono of every other page. */
+body.lv .topbar, body.lv .demo-strip, body.lv .page-foot { font-family: var(--font-mono); }
+body.lv .container { max-width: var(--lv-max); }
+body.lv main { padding-bottom: var(--space-8); }
+body.lv code { font-size: 0.86em; }
+body.lv .what { font-family: var(--font-ui); font-size: var(--text-sm); }
+body.lv .btn { font-family: var(--font-ui); font-weight: 600; letter-spacing: 0; }
+body.lv .eyebrow { font-size: 11px; margin: 0; }
+.lv-g { font-family: var(--font-mono); font-size: 0.92em; }
+
+/* ---- Round bar: which round, where it is, the one clock that matters ---- */
+.lv-round {
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgb(242 165 65 / 0.045), transparent 80%);
+}
+.lv-round__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(11rem, auto);
+  gap: var(--space-5) var(--space-7);
+  align-items: center;
+  padding-block: var(--space-6) var(--space-5);
+}
+.lv-round h1 { font-size: clamp(1.75rem, 1.2rem + 1.5vw, 2.375rem); margin: var(--space-1) 0 0; line-height: 1.05; }
+.lv-round__lede { margin: var(--space-2) 0 0; max-width: 44ch; color: var(--text-muted); font-size: var(--text-sm); text-wrap: pretty; }
+
+.lv-steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; }
+.lv-steps li { display: grid; gap: 6px; align-content: start; min-width: 0; font-size: var(--text-xs); color: var(--text-faint); }
+.lv-steps li::before { content: ""; height: 4px; border-radius: 2px; background: var(--border); }
+.lv-steps li[data-state="past"]::before { background: var(--text-faint); }
+.lv-steps li[data-state="now"]::before { background: var(--accent); box-shadow: 0 0 12px rgb(242 165 65 / 0.45); }
+.lv-steps li[data-state="now"] { color: var(--text); }
+.lv-steps li[data-state="skipped"]::before { background: var(--danger); }
+.lv-steps b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lv-steps__at { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+
+.lv-round__clock { display: grid; justify-items: end; text-align: right; gap: 2px; }
+.lv-clock { font-family: var(--font-mono); font-size: 2rem; font-weight: 500; line-height: 1.1; letter-spacing: -0.02em; color: var(--text); }
+
+.lv-round__foot {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-5);
+  padding: var(--space-3) 0 var(--space-5);
+  border-top: 1px solid var(--border);
+  font-size: var(--text-sm); color: var(--text-muted);
+}
+.lv-round__foot p { margin: 0; flex: 1 1 30rem; }
+.lv-round__seed { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text-faint); }
+
+/* The market page's round bar: smaller, with the way back. */
+.lv-round--slim .lv-round__row { padding-block: var(--space-4) var(--space-3); }
+.lv-round--slim .lv-round__foot { padding-bottom: var(--space-3); }
+.lv-round--slim .lv-clock { font-size: 1.375rem; }
+.lv-back { font-size: var(--text-sm); color: var(--text-muted); text-decoration: none; }
+.lv-back:hover { color: var(--text); }
+.lv-round__name { margin: var(--space-1) 0 0; font-family: var(--font-display); font-size: var(--text-xl); font-weight: 600; line-height: 1.1; }
+
+@media (max-width: 1000px) {
+  .lv-round__row { grid-template-columns: minmax(0, 1fr) auto; }
+  .lv-steps { grid-column: 1 / -1; grid-row: 2; }
+}
+@media (max-width: 560px) {
+  .lv-round__row { grid-template-columns: 1fr; padding-top: var(--space-5); }
+  .lv-round__clock { justify-items: start; text-align: left; }
+  .lv-round__lede { display: none; }
+  .lv-steps b { font-size: 10px; }
+  .lv-steps__at { display: none; }
+}
+
+/* ---- Sections ---- */
+.lv-section { padding-top: var(--space-7); scroll-margin-top: var(--topbar-h); }
+.lv-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin-bottom: var(--space-4); }
+.lv-head h2 { font-size: var(--text-xl); margin: 0; }
+.lv-head__count { font-size: var(--text-sm); color: var(--text-faint); }
+.lv-head .what { margin-left: auto; }
+.lv-subhead { margin: var(--space-6) 0 var(--space-3); font-family: var(--font-ui); font-size: var(--text-sm); font-weight: 600; letter-spacing: 0; color: var(--text-muted); }
+.lv-subhead span { font-weight: 400; color: var(--text-faint); }
+.lv-note { margin: var(--space-3) 0 0; font-size: var(--text-xs); color: var(--text-faint); }
+.lv-empty { margin: 0; padding: var(--space-4) var(--space-5); border: 1px dashed var(--border); border-radius: var(--lv-radius); color: var(--text-muted); font-size: var(--text-sm); }
+
+/* ---- Dense rows (requested forecasts): one line per market ---- */
+.lv-table { border: 1px solid var(--border); border-radius: var(--lv-radius); background: var(--surface); overflow: hidden; }
+.lv-rows { margin: 0; padding: 0; list-style: none; }
+.lv-grid {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 2.3fr) minmax(0, 1.5fr) minmax(7rem, 1.1fr) minmax(9rem, 1fr) 1rem;
+  grid-template-areas: "n title lead bar state go";
+  gap: var(--space-4);
+  align-items: center;
+  padding: 0 var(--space-4);
+}
+.lv-row { position: relative; min-height: 58px; padding-block: var(--space-2); border-top: 1px solid var(--border); color: var(--text); text-decoration: none; transition: background var(--dur-fast); }
+.lv-rows > li:first-child > .lv-row { border-top: 0; }
+.lv-row:hover { background: var(--surface-raised); color: var(--text); }
+.lv-row__n { grid-area: n; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-faint); }
+.lv-row__title { grid-area: title; display: grid; min-width: 0; }
+.lv-row__title b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lv-row__title code { font-size: 11px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lv-row__lead { grid-area: lead; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--space-3); min-width: 0; align-items: baseline; }
+.lv-row__lead .opt { min-width: 0; font-size: var(--text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lv-row__pct { font-family: var(--font-mono); font-weight: 600; }
+.lv-row__sub { grid-column: 1 / -1; font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+.lv-row__bar { grid-area: bar; min-width: 0; }
+.lv-row__state { grid-area: state; display: grid; min-width: 0; font-size: var(--text-xs); color: var(--text-faint); }
+.lv-row__state b { font-weight: 500; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lv-row__state[data-state="ok"] b { color: var(--success); }
+.lv-row__state[data-state="bad"] b { color: var(--danger); }
+.lv-row__go { grid-area: go; color: var(--text-faint); transition: transform var(--dur-fast), color var(--dur-fast); }
+.lv-row:hover .lv-row__go { color: var(--text); transform: translateX(2px); }
+
+/* One stacked bar per market: segments in the option colours, the glyph on
+   any segment wide enough to carry it (the lead column names the leader). */
+.lv-stack { display: flex; gap: 2px; height: 14px; border-radius: 4px; overflow: hidden; background: var(--bg-canvas); }
+.lv-stack i { flex: var(--w) 0 0; min-width: 0; background: var(--opt-color); font-style: normal; font-size: 9px; line-height: 14px; text-align: center; color: rgb(13 10 7 / 0.78); overflow: hidden; }
+.lv-stack i.is-wide::before { content: var(--opt-glyph); }
+
+@media (max-width: 860px) {
+  .lv-grid.lv-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "title title" "lead state" "bar bar";
+    gap: 6px var(--space-3);
+    min-height: 0;
+    padding-block: var(--space-3);
+  }
+  .lv-row__n, .lv-row__go, .lv-row__title code, .lv-row__sub, .lv-row__state > span { display: none; }
+  .lv-row__lead { grid-template-columns: minmax(0, auto) auto; justify-content: start; }
+  .lv-row__state { justify-items: end; text-align: right; }
+  .lv-stack { height: 12px; }
+  .lv-stack i { font-size: 8px; line-height: 12px; }
+}
+
+/* ---- Market cards: the round's markets, a page at a time, each with its
+   five colonies as mini maps (ColonyThumb) once the seed exists ---- */
+.lv-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
+@media (max-width: 860px) { .lv-cards { grid-template-columns: minmax(0, 1fr); } }
+.lv-card {
+  position: relative; display: grid; gap: var(--space-3); min-width: 0;
+  padding: var(--space-4) var(--space-5) var(--space-4);
+  border: 1px solid var(--border); border-radius: var(--lv-radius); background: var(--surface);
+  transition: border-color var(--dur-fast), background var(--dur-fast);
+}
+.lv-card:hover { border-color: var(--border-strong); background: var(--surface-raised); }
+.lv-card:focus-within { border-color: var(--border-strong); }
+.lv-card__top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-3); align-items: baseline; }
+.lv-card__n { font-size: var(--text-xs); color: var(--text-faint); }
+.lv-card__title { margin: 0; min-width: 0; font-family: var(--font-ui); font-size: var(--text-base); font-weight: 600; letter-spacing: 0; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lv-card__title a { color: var(--text); text-decoration: none; }
+/* The whole card opens the market; the title is the one link. */
+.lv-card__title a::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.lv-card__title a:focus-visible { outline: none; }
+.lv-card__title a:focus-visible::after { outline: 2px solid var(--focus, var(--accent)); outline-offset: 2px; }
+.lv-card__state { font-size: var(--text-xs); color: var(--text-muted); white-space: nowrap; }
+.lv-card__state[data-state="ok"] { color: var(--success); }
+.lv-card__state[data-state="bad"] { color: var(--danger); }
+.lv-card__lead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--space-3); min-width: 0; }
+.lv-card__lead .opt { min-width: 0; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); }
+.lv-card__pct { font-size: 1.25rem; font-weight: 600; line-height: 1; }
+.lv-card__sub { flex-basis: 100%; font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+.lv-card__go { position: absolute; right: var(--space-5); bottom: var(--space-4); font-size: var(--text-xs); color: var(--text-faint); opacity: 0; transition: opacity var(--dur-fast), transform var(--dur-fast); pointer-events: none; }
+.lv-card:hover .lv-card__go { opacity: 1; transform: translateX(2px); }
+
+.lv-cols { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-2); margin: var(--space-1) 0 var(--space-2); padding: 0; list-style: none; }
+.lv-cols__slot { display: grid; gap: 1px; min-width: 0; font-size: 11px; }
+.lv-cols canvas { display: block; width: 100%; aspect-ratio: 72 / 48; margin-bottom: 4px; border-radius: 6px; box-shadow: inset 0 0 0 1px var(--border); background: var(--soil-950, var(--bg-canvas)); }
+/* Before the seed: the bare plots (ColonyThumb.drawIdle) and what each colony will read. */
+.lv-cols__name { font-weight: 600; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lv-cols__lead { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lv-cols__lead[data-state="out"], .lv-cols__lead small { color: var(--warning); }
+.lv-cols__lead small { font-size: inherit; }
+.lv-cols__lead .opt { font-size: inherit; }
+@media (max-width: 480px) {
+  .lv-card { padding-inline: var(--space-4); }
+  .lv-cols { gap: 4px; }
+  .lv-cols__name { font-size: 10px; }
+  .lv-cols__lead { font-size: 9.5px; }
+}
+
+/* Pages of cards. */
+.lv-pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-4); }
+.lv-pager ol { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.lv-pager ol button {
+  min-width: 2rem; height: 2rem; padding: 0 var(--space-2);
+  border: 1px solid var(--border); border-radius: 8px; background: transparent;
+  font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-muted); cursor: pointer;
+}
+.lv-pager ol button:hover { border-color: var(--border-strong); color: var(--text); }
+.lv-pager ol button[aria-current="page"] { border-color: var(--text-muted); background: var(--surface-raised); color: var(--text); }
+.lv-pager__of { font-size: var(--text-xs); color: var(--text-faint); }
+
+/* ---- The market page (market.html) ---- */
+.lv-market { margin-top: var(--space-6); scroll-margin-top: calc(var(--topbar-h) + var(--space-3)); }
+.lv-market__head {
+  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--space-3) var(--space-5);
+  padding-bottom: var(--space-4); margin-bottom: var(--space-5); border-bottom: 1px solid var(--border);
+}
+.lv-market__head h1 { font-size: clamp(1.5rem, 1.1rem + 1.2vw, 2.125rem); margin: var(--space-1) 0 var(--space-2); }
+.lv-market__head h1:focus { outline: none; } /* focused on open, for screen readers */
+.lv-market__step { display: flex; align-items: center; gap: var(--space-2); }
+.lv-market__step [aria-disabled="true"] { opacity: 0.4; pointer-events: none; }
+.lv-market__of { min-width: 3.5rem; text-align: center; font-size: var(--text-xs); color: var(--text-faint); }
+.lv-state b { font-weight: 500; color: var(--text-muted); }
+.lv-state[data-state="ok"] b { color: var(--success); }
+.lv-state[data-state="bad"] b { color: var(--danger); }
+.lv-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-4); margin: 0; font-size: var(--text-xs); color: var(--text-faint); }
+.lv-meta > span { display: inline-flex; align-items: center; gap: var(--space-2); }
+
+.lv-market__grid { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+.lv-market__side { display: grid; gap: var(--space-4); min-width: 0; }
+.lv-market__main { min-width: 0; }
+@media (max-width: 1000px) { .lv-market__grid { grid-template-columns: minmax(0, 1fr); } }
+
+.lv-panel { min-width: 0; padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--lv-radius); background: var(--surface); }
+.lv-panel__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); margin-bottom: var(--space-4); }
+.lv-panel h3, .lv-h3 { margin: 0; font-family: var(--font-ui); font-size: var(--text-base); font-weight: 600; letter-spacing: 0; }
+.lv-panel__note { margin: 0 0 var(--space-4); font-size: var(--text-xs); color: var(--text-faint); }
+.lv-panel__foot { margin: var(--space-4) 0 0; font-size: var(--text-xs); color: var(--text-faint); }
+.lv-panel--quiet { background: transparent; border-style: dashed; color: var(--text-muted); font-size: var(--text-sm); }
+.lv-panel--quiet p { margin: 0; }
+
+/* Your part: stake or post odds on this market. */
+.lv-act .kv { margin-bottom: var(--space-4); font-size: var(--text-sm); }
+.lv-act .kv dt { font-family: var(--font-mono); font-size: 10.5px; }
+.lv-act .field { margin: 0; }
+.lv-act__form { display: grid; grid-template-columns: minmax(0, 1fr) 7rem; gap: var(--space-3); align-items: end; margin-bottom: var(--space-3); }
+.lv-act__form .btn { grid-column: 1 / -1; justify-content: center; }
+.lv-act__text { margin: 0 0 var(--space-4); font-size: var(--text-sm); color: var(--text-muted); }
+.lv-act__mine { margin: var(--space-4) 0 0; padding: var(--space-3) 0 0; border-top: 1px solid var(--border); list-style: none; display: grid; gap: var(--space-2); font-size: var(--text-sm); }
+.lv-act__mine li { display: flex; align-items: center; gap: var(--space-3); }
+.lv-act__mine .btn { margin-left: auto; }
+.lv-odds { display: grid; gap: var(--space-2); margin-bottom: var(--space-3); }
+.lv-odds .field { display: grid; grid-template-columns: minmax(0, 1fr) 6.5rem; align-items: center; gap: var(--space-3); }
+.lv-odds .field__label { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lv-posts { margin: var(--space-4) 0 0; padding: var(--space-3) 0 0; border-top: 1px solid var(--border); list-style: none; display: grid; gap: var(--space-1); font-size: var(--text-xs); color: var(--text-muted); }
+.lv-act .tx-status { min-height: 1.4em; margin: var(--space-3) 0 0; font-size: var(--text-sm); color: var(--text-muted); }
+
+/* Before the seed: what happens next, and what each colony will read. */
+.lv-plan { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.lv-timeline { margin: 0; padding: 0; list-style: none; }
+.lv-timeline li { display: grid; grid-template-columns: 4.25rem minmax(0, 1fr); gap: var(--space-3); }
+.lv-timeline__at { padding-top: 1px; text-align: right; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-faint); }
+.lv-timeline__body { position: relative; padding: 0 0 var(--space-4) var(--space-5); border-left: 1px solid var(--border); }
+.lv-timeline li:last-child .lv-timeline__body { border-left-color: transparent; padding-bottom: 0; }
+.lv-timeline__body::before { content: ""; position: absolute; left: -5px; top: 6px; width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface); }
+.lv-timeline li[data-state="past"] .lv-timeline__body::before { border-color: var(--text-faint); background: var(--text-faint); }
+.lv-timeline li[data-state="now"] .lv-timeline__body::before { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 10px rgb(242 165 65 / 0.5); }
+.lv-timeline b { display: block; font-weight: 500; }
+.lv-timeline li[data-state="past"] b { color: var(--text-muted); font-weight: 400; }
+.lv-timeline p { margin: 2px 0 0; font-size: var(--text-xs); color: var(--text-faint); }
+.lv-timeline__in { display: block; margin-top: 1px; font-size: var(--text-xs); font-weight: 500; color: var(--text-muted); }
+
+.lv-kinds { margin: 0; padding: 0; list-style: none; display: grid; gap: 1px; overflow: hidden; border: 1px solid var(--border); border-radius: 10px; background: var(--border); }
+.lv-kinds li { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: 2px var(--space-3); padding: var(--space-3) var(--space-4); background: var(--surface); font-size: var(--text-sm); }
+.lv-kinds b { font-weight: 600; }
+.lv-kinds span { color: var(--text-muted); }
+.lv-kinds small { grid-column: 2; font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+.lv-kinds small[data-state="out"] { color: var(--warning); }
+
+/* After the seed: one colony large, the five as tabs above it. */
+.lv-stage { display: grid; gap: var(--space-3); }
+.lv-picks { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-2); }
+.lv-pick {
+  display: grid; gap: 3px; min-width: 0; padding: 6px 6px 8px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+  color: var(--text-muted); font-size: var(--text-xs); text-align: left; cursor: pointer;
+  transition: border-color var(--dur-fast), background var(--dur-fast);
+}
+.lv-pick:hover { border-color: var(--border-strong); background: var(--surface-raised); }
+.lv-pick[aria-selected="true"] { border-color: var(--accent); background: var(--surface-raised); box-shadow: inset 0 0 0 1px var(--accent); }
+.lv-pick canvas { width: 100%; aspect-ratio: 72 / 48; margin-bottom: 3px; border-radius: 6px; box-shadow: inset 0 0 0 1px var(--border); }
+.lv-pick__name { padding-inline: 2px; font-weight: 600; color: var(--text); }
+.lv-pick__lead, .lv-pick__out { padding-inline: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lv-pick__out { font-family: var(--font-mono); font-size: 10.5px; color: var(--warning); }
+@media (max-width: 640px) {
+  .lv-picks { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 40%; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 2px; }
+  .lv-pick { scroll-snap-align: start; }
+}
+
+.lv-stage__map { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--lv-radius); background: var(--surface); }
+.lv-stage__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.lv-stage__head h3, .lv-stage__head .lv-h3 { margin: 0; font-family: var(--font-ui); font-size: var(--text-base); font-weight: 600; letter-spacing: 0; }
+.lv-stage__head .btn { margin-left: auto; }
+.lv-stage .sim-frame { border-radius: 10px; }
+.lv-stage [data-r="follow"]:not(:empty) { padding-top: var(--space-3); border-top: 1px solid var(--border); }
+.lv-roster { padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--lv-radius); background: var(--surface); }
+.lv-roster h3 { margin: 0 0 var(--space-1); font-family: var(--font-ui); font-size: var(--text-sm); font-weight: 600; letter-spacing: 0; }
+
+/* Checks and inputs, under the market. */
+.lv-checks { display: grid; gap: var(--space-4); margin-top: var(--space-5); }
+.lv-checks .table th, .lv-checks .table td { vertical-align: middle; }
+.lv-more { margin-top: var(--space-4); border: 1px solid var(--border); border-radius: var(--lv-radius); background: var(--surface); }
+.lv-more > summary { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-4) var(--space-5); cursor: pointer; list-style: none; font-weight: 500; }
+.lv-more > summary::-webkit-details-marker { display: none; }
+.lv-more > summary::before { content: "▸"; color: var(--text-faint); transition: transform var(--dur-fast); }
+.lv-more[open] > summary::before { transform: rotate(90deg); }
+.lv-more > summary span { font-weight: 400; color: var(--text-faint); }
+.lv-more__body { display: grid; gap: var(--space-5); grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); padding: 0 var(--space-5) var(--space-5); }
+.lv-more__body h4 { margin: 0 0 var(--space-3); }
+.lv-more__body ul { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--space-2); font-size: var(--text-sm); }
+.lv-more__body li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+
+/* ---- Today's burn: one strip ---- */
+.lv-burn {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: var(--space-5) var(--space-7); align-items: center;
+  padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--lv-radius); background: var(--surface);
+}
+.lv-burn__pick p { margin: 0; }
+.lv-burn__value { margin: var(--space-1) 0 !important; font-family: var(--font-display); font-size: 1.75rem; font-weight: 600; line-height: 1.15; }
+.lv-burn__value .opt { font-family: var(--font-mono); }
+.lv-burn__actions { display: grid; justify-items: stretch; gap: var(--space-2); text-align: center; }
+@media (max-width: 860px) { .lv-burn { grid-template-columns: minmax(0, 1fr); } .lv-burn__actions { justify-items: start; text-align: left; } }
+
+/* Runs itself: who keeps the round moving */
+.lv-auto { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
+.lv-auto__card { padding: var(--space-4) var(--space-5); border: 1px solid var(--border); border-radius: var(--lv-radius); background: var(--surface); }
+.lv-auto__card .lv-subhead { margin: 0 0 var(--space-1); }
+.lv-auto__status { margin: 0 0 var(--space-3); font-size: var(--text-sm, .875rem); }
+.lv-auto__who { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--space-1); font-size: var(--text-xs, .75rem); }
+.lv-auto__who code { overflow-wrap: anywhere; }
+.lv-auto__how { margin-top: var(--space-3); }
+.lv-auto__how summary { cursor: pointer; font-size: var(--text-sm, .875rem); }
+.lv-auto__cmd { margin: var(--space-2) 0 0; padding: var(--space-3) var(--space-4); overflow-x: auto; border: 1px solid var(--border); border-radius: var(--lv-radius); background: var(--surface); font-size: var(--text-xs, .75rem); }
+@media (max-width: 860px) { .lv-auto { grid-template-columns: minmax(0, 1fr); } }

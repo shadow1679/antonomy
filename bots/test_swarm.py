@@ -66,6 +66,22 @@ class Strategies(unittest.TestCase):
         self.assertEqual(s.plan("follower", wallet([1, 0, 0, 0, 0], balance=3 * ONE)), (0, 3 * ONE))
         self.assertEqual(s.plan("follower", wallet([1, 0, 0, 0, 0], staked=95 * ONE)), (0, 5 * ONE))
 
+    def test_echo_feeds_the_last_pick_or_follows(self):
+        self.assertEqual(s.plan("echo", s.Wallet([9, 0, 0, 0, 0], 1000 * ONE, 0, CAP, 3)), (3, s.FLOW_AMOUNT))
+        self.assertEqual(s.plan("echo", wallet([0, 0, 9, 0, 0])), (2, s.FLOW_AMOUNT), "no finished run yet")
+
+    def test_last_pick_needs_a_finished_run(self):
+        class C(s.Chain):
+            def __init__(self, run):
+                self.run = run
+
+            def view(self, method, args=None):
+                assert method == "burn_run"
+                return self.run
+        self.assertEqual(C({"done": True, "winner_option": 1}).last_pick(), 1)
+        self.assertIsNone(C({"done": False, "winner_option": None}).last_pick())
+        self.assertIsNone(C(None).last_pick())
+
     def test_nothing_to_stake_at_cap_or_broke(self):
         self.assertIsNone(s.plan("heavy", wallet([0] * 5, staked=CAP)))
         self.assertIsNone(s.plan("contrarian", wallet([0] * 5, balance=0)))

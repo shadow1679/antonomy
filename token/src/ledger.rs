@@ -1,6 +1,6 @@
 //! Fungible token ledger with the NEP-141 view/transfer shape (ft_total_supply,
-//! ft_balance_of, ft_transfer). Storage deposits, callbacks and the 1 yoctoNEAR
-//! rule belong to the contract wrapper.
+//! ft_balance_of, ft_transfer). `ft_transfer_call`'s callbacks, storage
+//! management and the 1 yoctoNEAR rule belong to the contract wrapper.
 
 use crate::Error;
 use std::collections::BTreeMap;
@@ -63,6 +63,19 @@ impl Ledger {
             self.balances.insert(to.to_string(), to_new);
         }
         Ok(())
+    }
+
+    /// Drop `who`'s entry if its balance is zero (storage unregister).
+    /// Returns whether there was an entry.
+    pub fn forget(&mut self, who: &str) -> Result<bool, Error> {
+        match self.balances.get(who) {
+            None => Ok(false),
+            Some(0) => {
+                self.balances.remove(who);
+                Ok(true)
+            }
+            Some(&have) => Err(Error::InsufficientBalance { have, need: 0 }),
+        }
     }
 
     /// Destroy tokens from `from`, lowering total supply.

@@ -76,6 +76,29 @@ export class ColonyThumb {
     this.phT = col.t;
   }
 
+  nest(a = 0.35) {
+    const { ctx, S, c } = this;
+    ctx.strokeStyle = css(c.bone, a);
+    ctx.lineWidth = Math.max(1, S * 0.4);
+    ctx.beginPath(); ctx.arc((NEST_X + 0.5) * S, (NEST_Y + 0.5) * S, S * 2, 0, TAU); ctx.stroke();
+  }
+
+  // Before the seed there is no map yet: the bare plot and its nest, no food,
+  // no ants. Needs no colony.
+  drawIdle() {
+    const { ctx, cv, S, c } = this;
+    const nx = (NEST_X + 0.5) * S, ny = (NEST_Y + 0.5) * S;
+    const g = ctx.createRadialGradient(nx, ny, 0, nx, ny, cv.width * 0.6);
+    g.addColorStop(0, tok("--soil-700"));
+    g.addColorStop(1, c.bg);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = css(c.bone, 0.16);
+    const d = Math.max(1, S * 0.6);
+    for (let y = 3; y < H; y += 6) for (let x = 3; x < W; x += 6) ctx.fillRect(x * S, y * S, d, d);
+    this.nest(0.5);
+  }
+
   // frac (0..1) places ants between the last two ticks.
   draw(frac = 1) {
     const { ctx, cv, col, S, c } = this;
@@ -86,9 +109,7 @@ export class ColonyThumb {
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(this.ph, 0, 0, cv.width, cv.height);
 
-    ctx.strokeStyle = css(c.bone, 0.35);
-    ctx.lineWidth = Math.max(1, S * 0.4);
-    ctx.beginPath(); ctx.arc((NEST_X + 0.5) * S, (NEST_Y + 0.5) * S, S * 2, 0, TAU); ctx.stroke();
+    this.nest();
 
     // Food piles as their option glyph (design system rule 2), on a dark disc.
     ctx.font = `700 ${Math.round(S * 6)}px ${this.font}`;

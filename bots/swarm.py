@@ -3,7 +3,8 @@ from the play-token reward pool when their burn size wins.
 
 Usage:
   python3 -I bots/swarm.py --contract <contract> \\
-      --bot follower=<account> --bot contrarian=<account> --bot heavy=<account> [--send]
+      --bot follower=<account> --bot contrarian=<account> --bot heavy=<account> \\
+      --bot echo=<account> [--send]
   python3 -I bots/swarm.py --contract <contract> --bot ... --withdraw [--send]
 
 Strategies (Burn colony only; forecast colonies never pay out):
@@ -14,6 +15,10 @@ Strategies (Burn colony only; forecast colonies never pay out):
   heavy       stakes everything up to the per-wallet cap on HEAVY_FAVOURITE,
               the largest burn. Shows that the cap and square-root weighting
               stop one rich wallet from taking over the colony.
+  echo        stakes FLOW_AMOUNT on the burn size the colony picked in its
+              newest finished run (`burn_run`), so yesterday's pick gets more
+              sugar today. A new seed draws a new map, so the pick doesn't
+              repeat by itself. Before any run has finished it acts like follower.
 Ties go to the lowest option index, as in the sim. Every amount is clipped to
 the bot's balance and to its headroom under the wallet cap.
 
@@ -73,7 +78,8 @@ GAS = "100.0 Tgas"
 
 # weights: per-option sqrt-yocto sums (contract `stake_weights`); balance,
 # staked and cap in yocto.
-Wallet = namedtuple("Wallet", "weights balance staked cap")
+# last_pick: the newest finished Burn colony run's winning option, or None.
+Wallet = namedtuple("Wallet", "weights balance staked cap last_pick", defaults=(None,))
 
 
 def argmax(xs):
@@ -96,7 +102,11 @@ def heavy(w):
     return HEAVY_FAVOURITE, w.cap - w.staked
 
 
-STRATEGIES = {"follower": follower, "contrarian": contrarian, "heavy": heavy}
+def echo(w):
+    return (follower(w)[0] if w.last_pick is None else w.last_pick), FLOW_AMOUNT
+
+
+STRATEGIES = {"follower": follower, "contrarian": contrarian, "heavy": heavy, "echo": echo}
 
 
 def plan(strategy, w):
@@ -121,7 +131,8 @@ class Chain:
                 "args_base64": base64.b64encode(json.dumps(args or {}).encode()).decode(),
             },
         }).encode()
-        req = urllib.request.Request(self.rpc, body, {"content-type": "application/json"})
+        # dRPC refuses Python-urllib's default user agent (403).
+        req = urllib.request.Request(self.rpc, body, {"content-type": "application/json", "user-agent": "antonomy/0"})
         with urllib.request.urlopen(req, timeout=20) as r:
             out = json.load(r)
         res = out.get("result") or {}
@@ -135,13 +146,38 @@ class Chain:
     def weights(self):
         return [int(x) for x in self.view("stake_weights", {"colony": BURN_COLONY, "n_options": BURN_OPTIONS})]
 
+    def last_pick(self):
+        run = self.view("burn_run")
+        return run["winner_option"] if run and run.get("done") else None
+
     def wallet(self, account, cap):
         return Wallet(
             self.weights(),
             int(self.view("ft_balance_of", {"account_id": account})),
             int(self.view("staked_by", {"account_id": account})),
             cap,
+            self.last_pick(),
         )
+
+
+DRAND_CHAIN = "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971"   # quicknet
+DRAND_URLS = ["https://api.drand.sh", "https://api2.drand.sh", "https://api3.drand.sh",
+              "https://drand.cloudflare.com"]
+
+
+def fetch_beacon(rnd, urls=DRAND_URLS, timeout=10):
+    """The hex signature of drand quicknet round `rnd`, or None if no
+    endpoint has it (not yet published, or all of them down). A call that
+    draws a seed passes it as `drand_signature`; the contract checks it."""
+    for base in urls:
+        try:
+            with urllib.request.urlopen("%s/%s/public/%d" % (base, DRAND_CHAIN, rnd), timeout=timeout) as r:
+                b = json.loads(r.read())
+            if b.get("round") == rnd and len(b.get("signature", "")) == 96:
+                return b["signature"]
+        except (OSError, ValueError):
+            continue
+    return None
 
 
 def near_call(contract, method, args, signer, network):

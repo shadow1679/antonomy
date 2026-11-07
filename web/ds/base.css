@@ -15,6 +15,9 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* `hidden` wins over any component's display (.cluster, .btn, flex rows). */
+[hidden] { display: none !important; }
+
 img, svg, canvas { display: block; max-width: 100%; }
 button, input, select, textarea { font: inherit; color: inherit; }
 

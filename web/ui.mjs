@@ -6,6 +6,7 @@ import { W, H } from "../sim/js/antosim.mjs";
 import { ColonyView, leadingSource } from "./ds/colony-view.mjs";
 import { GLYPHS } from "./round.mjs";
 import { tripAt, deliveredBy } from "./autopsy.mjs";
+import { wallet, contractId, NETWORK } from "./chain.mjs";
 
 export const $ = (id) => document.getElementById(id);
 export const short = (hex) => `${hex.slice(0, 8)}…${hex.slice(-8)}`;
@@ -47,6 +48,13 @@ export const whatHTML = (anchor, label = "What's this?") =>
 // biggest wallet's. Rows are buttons carrying data-wallet; stakerRoster()
 // turns them into a spotlight on the map. Empty string when the colony has
 // no stakes (an even map, no staker ants).
+// A forecaster agent's posted odds, "Cut 60.0% · Hold 30.0% · …".
+export function postedHTML(odds, labels = null) {
+  return odds.map((x, o) => `${labels ? `<span class="opt" data-opt="${o}">${esc(labels[o])}</span> ` : ""}<span class="num">${(x / 100).toFixed(1)}%</span>`).join(" · ");
+}
+
+// Roster rows for staker ants, or agent ants (rows with `agent`: posted odds
+// instead of tokens).
 export function stakerLegendHTML(stakers, labels = null) {
   if (!stakers || !stakers.total) return "";
   const live = stakers.rows.filter((r) => r.ants > 0);
@@ -54,11 +62,12 @@ export function stakerLegendHTML(stakers, labels = null) {
   const on = (r) => labels
     ? " on " + r.stakes.map((t, o) => (t ? `<span class="opt" data-opt="${o}">${esc(labels[o])}</span>` : "")).filter(Boolean).join(" ")
     : " staked";
+  const meta = (r) => r.agent ? `posted ${postedHTML(r.odds, labels)}` : `${r.tokens.toLocaleString("en")} tANTO${on(r)}`;
   const rows = live.map((r) =>
     `<li><button type="button" class="roster__row" data-wallet="${r.i}" aria-pressed="false" style="--wallet-hue: ${r.hue}; --ants: ${(r.ants / most).toFixed(3)}">` +
     `<span class="wallet roster__id">${esc(r.id)}</span>` +
     `<span class="roster__ants num">${r.ants} ant${r.ants === 1 ? "" : "s"}</span>` +
-    `<span class="roster__meta">${r.tokens.toLocaleString("en")} tANTO${on(r)}</span>` +
+    `<span class="roster__meta">${meta(r)}</span>` +
     `<span class="roster__bar" aria-hidden="true"></span></button></li>`).join("");
   return `<ul class="roster">${rows}</ul>`;
 }
@@ -110,6 +119,10 @@ export function wireMapPick(cv, view, { onPick, redraw }) {
   cv.addEventListener("click", (e) => { if (view.col) onPick(view.nearest(...toCells(e))[0]); });
 }
 
+// Agents get a Brier score once a market they posted on resolves (feature 3);
+// none has resolved, so there is no history to show yet.
+export const BRIER_NOTE = "No Brier history yet: no market it posted on has resolved.";
+
 // Follow card for one ant on a live map: what it is doing now, the crumbs it
 // has brought home and its trips so far, with a link into the full autopsy.
 // trips come from a TripTracker on the same colony.
@@ -122,9 +135,10 @@ export function followHTML({ a, col, trips, labels, stakers = null, href = "", c
   return `<div class="follow">
     <div class="follow__head">
       <span class="follow__id num">#${a}</span>
-      ${row ? `<span class="wallet text-xs" style="--wallet-hue: ${row.hue}">staker ant · ${esc(row.id)}</span>` : `<span class="text-xs text-faint">colony ant</span>`}
+      ${row ? `<span class="wallet text-xs" style="--wallet-hue: ${row.hue}">${row.agent ? "agent ant" : "staker ant"} · ${esc(row.id)}</span>` : `<span class="text-xs text-faint">colony ant</span>`}
       ${close ? `<button class="btn btn--icon btn--sm btn--ghost follow__close" type="button" data-follow="close" aria-label="Stop following">×</button>` : ""}
     </div>
+    ${row?.agent ? `<p class="text-xs" style="margin: 0">${esc(row.id)} posted ${postedHTML(row.odds, labels)}. ${BRIER_NOTE}</p>` : ""}
     <p class="follow__now"><span class="ant-state" data-state="${k >= 0 ? "returning" : "searching"}">${k >= 0 ? `carrying a crumb from ${opt(trips[k].opt)}` : "searching for food"}</span></p>
     <dl class="follow__stats">
       <div><dt>Crumbs home</dt><dd class="num">${home}</dd></div>
@@ -411,7 +425,7 @@ const MARK = `<svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"
   <circle cx="17" cy="6" r="3.5" fill="var(--amber-300)"/></svg>`;
 
 const PAGES = [
-  ["index.html", "live", "Live"],
+  ["live.html", "live", "Live"],
   ["burn.html", "burn", "Burn"],
   ["recruit.html", "recruit", "Recruit"],
   ["sandbox.html", "sandbox", "Sandbox"],
@@ -422,35 +436,93 @@ const PAGES = [
   ["docs.html", "docs", "Docs"],
 ];
 
-// Shared header. `page` is "live", "burn", "recruit", "sandbox", "replay",
-// "receipts" or "docs". `demo` adds the strip that says there is no contract yet.
+// Shared header. `page` is "home" (the landing page, which the brand links
+// to and the nav leaves out), "live", "burn", "recruit", "sandbox", "replay",
+// "receipts" or "docs". `demo` is kept as the name of the option that shows
+// the status strip (testnet, play token, which contract); pages that never
+// touch the chain pass `demo: false`. The wallet button sits at the end of the
+// bar on every page (`mountWallet` wires it).
 export function topbar(page, end = "", { demo = true } = {}) {
   const nav = PAGES.map((p) => p
     ? `<a href="${p[0]}"${p[1] === page ? ' aria-current="page"' : ""}>${p[2]}</a>`
     : `<span class="nav__sep" aria-hidden="true"></span>`).join("");
+  const cid = contractId();
+  queueMicrotask(mountWallet);
+  queueMicrotask(centerCurrentTab);
   return `<header class="topbar"><div class="container topbar__row">
     <a class="brand" href="index.html">${MARK}<b>Anto<span>nomy</span></b></a>
     <nav class="nav" aria-label="Pages">${nav}</nav>
-    <div class="topbar__end" id="topbar-end">${end}</div>
+    <div class="topbar__end" id="topbar-end">${end}<button class="btn btn--sm" id="wallet-btn" type="button">Connect wallet</button></div>
   </div></header>` + (demo ? `<div class="demo-strip"><div class="container"><p style="margin: 0">
-    <strong>Demo, no contract yet.</strong> Fixture stakes and odds; the sim and hashes are real. ${whatHTML("demo", "More")}</p></div></div>` : "");
+    <strong>${NETWORK} · play token.</strong> Everything here is read from the contract
+    <a href="https://testnet.nearblocks.io/address/${cid}" target="_blank" rel="noopener"><code>${cid}</code></a>;
+    the sim and hashes re-run in your browser. ${whatHTML("demo", "More")}</p></div></div>` : "");
 }
 
-// Shared footer, with the known limits the README also states.
+// On a phone the nav is its own scrolling row; bring the current tab into
+// view by scrolling the row only, never the page.
+function centerCurrentTab() {
+  const nav = document.querySelector(".topbar .nav");
+  const cur = nav?.querySelector('[aria-current="page"]');
+  if (!cur || nav.scrollWidth <= nav.clientWidth) return;
+  nav.scrollLeft = cur.offsetLeft - nav.offsetLeft - (nav.clientWidth - cur.offsetWidth) / 2;
+}
+
+// Wire the top bar's wallet button: connect, show the account, disconnect on
+// a second click. Safe to call twice. Pages listen with wallet.onChange.
+export function mountWallet() {
+  const btn = document.getElementById("wallet-btn");
+  if (!btn || btn.dataset.bound) return;
+  btn.dataset.bound = "1";
+  const paint = (acct) => {
+    btn.textContent = acct ? acct : "Connect wallet";
+    btn.title = acct ? "Connected. Click to disconnect." : "Connect a NEAR testnet wallet";
+    btn.classList.toggle("btn--primary", !acct);
+  };
+  wallet.onChange(paint);
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try {
+      if (wallet.accountId) await wallet.disconnect(); else await wallet.connect();
+    } catch (e) {
+      btn.title = String(e.message || e);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  paint(wallet.accountId);
+  wallet.restore();
+}
+
+// Shared footer, with the known limits the README also states. The pages
+// come in the nav's groups: the doing pages, then checking and Docs.
 export function footer() {
-  const links = PAGES.filter(Boolean).map((p) => `<li><a href="${p[0]}">${p[2]}</a></li>`).join("");
-  return `<footer class="page-foot"><div class="container page-foot__grid">
-    <div>
-      <a class="brand" href="index.html" style="font-size: var(--text-base)">${MARK}<b>Anto<span>nomy</span></b></a>
-      <p style="margin-top: var(--space-3)">Ant Colony Oracle on NEAR testnet · sim ANTO-SIM-v1.</p>
-      <p>Forecasts are not advice. Nobody is paid for being right, and nothing here links to a trading venue.</p>
+  const groups = [[]];
+  for (const p of PAGES) p ? groups[groups.length - 1].push(p) : groups.push([]);
+  const list = (ps) => `<ul>${ps.map((p) => `<li><a href="${p[0]}">${p[2]}</a></li>`).join("")}</ul>`;
+  const cid = contractId();
+  return `<footer class="page-foot"><div class="container">
+    <div class="page-foot__grid">
+      <div class="page-foot__brand">
+        <a class="brand" href="index.html">${MARK}<b>Anto<span>nomy</span></b></a>
+        <p>Forecasts by ant colonies, run on-chain from one public seed and re-run in your browser.</p>
+        <p>Forecasts are not advice. Nobody is paid for being right, and nothing here links to a trading venue.</p>
+      </div>
+      <nav class="page-foot__nav" aria-label="Footer">
+        <div><h2>Take part</h2>${list(groups[0])}</div>
+        <div><h2>Check &amp; learn</h2>${list(groups.slice(1).flat())}</div>
+      </nav>
+      <div>
+        <h2>Known limits</h2>
+        <ul class="page-foot__limits">
+          <li>Seeds come from the block's random seed, not the drand round yet.</li>
+        </ul>
+        ${whatHTML("demo", "What runs where")}
+      </div>
     </div>
-    <nav aria-label="Footer"><h2>Pages</h2><ul>${links}</ul></nav>
-    <div><h2>Known limits</h2><ul>
-      <li>Sybil resistance is unsolved.</li>
-      <li>The demo trusts the posted drand round.</li>
-      <li>The play-token reward pool resembles betting.</li>
-      <li>The prototype predates the build window.</li>
-    </ul></div>
+    <div class="page-foot__base">
+      <span>Ant Colony Oracle · ${NETWORK} · play token · sim ANTO-SIM-v1</span>
+      <span>Contract <a href="https://testnet.nearblocks.io/address/${cid}" target="_blank" rel="noopener"><code>${cid}</code></a></span>
+    </div>
   </div></footer>`;
 }

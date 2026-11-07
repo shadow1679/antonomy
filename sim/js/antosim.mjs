@@ -32,8 +32,8 @@ const MOMENTUM_FLOOR = 200;
 const COMMUNITY_BASE = 2500; // milli sqrt-tokens
 const ODDS_TAG = enc.encode("ANTO-ODDS-v0");
 const ZERO32 = new Uint8Array(32);
-export const FOLLOWER = 0, CONTRARIAN = 1, MOMENTUM = 2, COMMUNITY = 3;
-export const KINDS = [FOLLOWER, CONTRARIAN, MOMENTUM, COMMUNITY];
+export const FOLLOWER = 0, CONTRARIAN = 1, MOMENTUM = 2, COMMUNITY = 3, AGENTS = 4;
+export const KINDS = [FOLLOWER, CONTRARIAN, MOMENTUM, COMMUNITY, AGENTS];
 
 // --- Forecast colonies ---
 export const FORECAST_ANTS = 60, FORECAST_TICKS = 300;
@@ -120,6 +120,15 @@ function scaleRichness(weights) {
   return weights.map((w) => RICH_MIN + Math.floor((RICH_SPAN * Math.floor((w * BPS) / top)) / BPS));
 }
 
+// Food weights -> Q8 richness proportional to the weight, the richest source
+// at the band's top (1.3) and a zero weight at 0: the odds-driven colonies
+// (Follower, Contrarian, Momentum, Agents), so their trail shares track their food.
+function oddsScale(weights) {
+  const top = Math.max(...weights);
+  if (!(top > 0)) throw new RangeError("all food weights are zero");
+  return weights.map((w) => Math.floor(((RICH_MIN + RICH_SPAN) * w) / top));
+}
+
 function checkOdds(odds, odds6h) {
   if (odds.length < 2 || odds.length > 5 || odds6h.length !== odds.length) throw new RangeError("bad odds length");
   for (const o of [...odds, ...odds6h]) if (!Number.isInteger(o) || o < 0 || o > BPS) throw new RangeError("odds out of range");
@@ -134,7 +143,7 @@ export function oddsRichness(kind, odds, odds6h) {
   else if (kind === CONTRARIAN) w = odds.map((o) => Math.floor((BPS - o) / 4));
   else if (kind === MOMENTUM) w = odds.map((o, i) => Math.max(o + 2 * (o - odds6h[i]), MOMENTUM_FLOOR));
   else throw new RangeError("kind must be FOLLOWER, CONTRARIAN or MOMENTUM");
-  return scaleRichness(w);
+  return oddsScale(w);
 }
 
 // Per-option Q8 richness from stake weights (Burn and Community colonies):
@@ -143,6 +152,15 @@ export function stakeRichness(weights) {
   if (weights.length < 2 || weights.length > 5) throw new RangeError("bad weights length");
   for (const x of weights) if (!Number.isInteger(x) || x < 0 || x > 0xffffffff) throw new RangeError("stake weight out of u32 range");
   return scaleRichness(weights.map((x) => COMMUNITY_BASE + x));
+}
+
+// Per-option Q8 richness for the Agents colony: the Follower rule on the
+// forecaster agents' per-outcome median odds (basis points). All zeros means
+// no agent posted, and the map is even.
+export function agentRichness(agentOdds) {
+  if (agentOdds.length < 2 || agentOdds.length > 5) throw new RangeError("bad agent odds length");
+  for (const o of agentOdds) if (!Number.isInteger(o) || o < 0 || o > BPS) throw new RangeError("agent odds out of range");
+  return oddsScale(agentOdds.some((o) => o > 0) ? agentOdds : agentOdds.map(() => 1));
 }
 
 // Hash of the odds snapshot: the second input commitment in the result hash.
@@ -404,16 +422,25 @@ export function burnRun(seed, weights, stakeHash, ants = N_ANTS, ticks = TICKS) 
 }
 
 // One forecaster on one market. Community reads `weights` (that market's
-// stakes); the others read the odds snapshot.
-export function forecastRun(seed, kind, odds, odds6h, weights = null, stakeHash = ZERO32, ants = N_ANTS, ticks = TICKS) {
-  let rich;
+// stakes), Agents reads `agentOdds` (the forecaster agents' median odds) and the
+// others read the odds snapshot. Every forecaster commits the stake snapshot
+// hash; the second commitment is the odds snapshot hash, except for Agents,
+// which commits `agentHash` (the agent-odds snapshot) instead.
+export function forecastRun(seed, kind, odds, odds6h, weights = null, stakeHash = ZERO32,
+  agentOdds = null, agentHash = ZERO32, ants = N_ANTS, ticks = TICKS) {
+  let rich, oddsHash = oddsSnapshotHash(odds, odds6h);
   if (kind === COMMUNITY) {
     if (weights === null || weights.length !== odds.length) throw new RangeError("Community needs one stake weight per outcome");
     rich = stakeRichness(weights);
+  } else if (kind === AGENTS) {
+    const a = agentOdds ?? odds.map(() => 0);
+    if (a.length !== odds.length) throw new RangeError("Agents needs one median per outcome");
+    rich = agentRichness(a);
+    oddsHash = agentHash;
   } else {
     rich = oddsRichness(kind, odds, odds6h);
   }
-  return run(seed, odds.length, rich, ants, ticks, stakeHash, oddsSnapshotHash(odds, odds6h));
+  return run(seed, odds.length, rich, ants, ticks, stakeHash, oddsHash);
 }
 
 // Colony id (and staking colony id) of market m in the round.
@@ -440,16 +467,26 @@ export function trailShares(result) {
   return shares;
 }
 
-// Combine the four forecaster runs (in KINDS order) of one market. Swarm belief
-// per option is the floored mean of the four trail shares; the remainder goes
-// to the option with the largest sum (lowest index on ties).
-// Market hash = sha256(tag, colony u16, n u8, four colony hashes, swarm u16 each).
-export function marketResult(colony, runs) {
+// Which of the five forecasters (KINDS order) count in the swarm belief. A
+// colony with no input abstains: Community when nobody staked on the market,
+// Agents when no agent posted. It still runs, on an even map, and its hash is
+// still committed; an even map is not a belief.
+export const voters = (weights, agentOdds) => [true, true, true, weights.some((x) => x > 0), agentOdds.some((o) => o > 0)];
+
+// Combine the five forecaster runs (in KINDS order) of one market. counted:
+// five booleans from voters(). Swarm belief per option is the floored mean of
+// the counted colonies' trail shares; the remainder goes to the option with
+// the largest sum (lowest index on ties).
+// Market hash = sha256(tag, colony u16, n u8, five colony hashes, swarm u16 each).
+export function marketResult(colony, runs, counted) {
   if (runs.length !== KINDS.length) throw new RangeError("need one run per kind");
+  if (!Array.isArray(counted) || counted.length !== KINDS.length || !counted[0] || !counted[1] || !counted[2]) {
+    throw new RangeError("counted: five booleans from voters()");
+  }
   const shares = runs.map(trailShares);
-  const n = shares[0].length;
-  const sums = Array.from({ length: n }, (_, o) => shares.reduce((a, s) => a + s[o], 0));
-  const swarm = sums.map((x) => Math.floor(x / KINDS.length));
+  const n = shares[0].length, k = counted.filter(Boolean).length;
+  const sums = Array.from({ length: n }, (_, o) => shares.reduce((a, s, j) => a + (counted[j] ? s[o] : 0), 0));
+  const swarm = sums.map((x) => Math.floor(x / k));
   let top = 0;
   for (let o = 1; o < n; o++) if (sums[o] > sums[top]) top = o;
   swarm[top] += BPS - swarm.reduce((a, b) => a + b, 0);
@@ -458,20 +495,22 @@ export function marketResult(colony, runs) {
   for (const x of swarm) parts.push(Uint8Array.of(x >> 8, x & 255));
   return {
     colony,
-    colonies: runs.map((r, k) => ({ ...r, shares: shares[k] })),
+    colonies: runs.map((r, j) => ({ ...r, shares: shares[j], counted: !!counted[j] })),
     swarm,
     hash: toHex(sha256(concat(parts))),
   };
 }
 
-// The four forecasters on one market, each on its own map. colony: the
+// The five forecasters on one market, each on its own map. colony: the
 // market's colony id (marketColony(m)). weights: that colony's stake weights,
-// one per outcome (zeros when nobody staked).
-export function forecastMarket(roundSeed, colony, odds, odds6h, weights, stakeHash,
+// one per outcome (zeros when nobody staked). agentOdds, agentHash: the
+// forecaster agents' per-outcome median odds and the agent-odds snapshot hash
+// (zeros when no agent posted).
+export function forecastMarket(roundSeed, colony, odds, odds6h, weights, stakeHash, agentOdds, agentHash,
   ants = FORECAST_ANTS, ticks = FORECAST_TICKS) {
   const runs = KINDS.map((k) =>
-    forecastRun(colonySeed(roundSeed, colony, k), k, odds, odds6h, weights, stakeHash, ants, ticks));
-  return marketResult(colony, runs);
+    forecastRun(colonySeed(roundSeed, colony, k), k, odds, odds6h, weights, stakeHash, agentOdds, agentHash, ants, ticks));
+  return marketResult(colony, runs, voters(weights, agentOdds ?? odds.map(() => 0)));
 }
 
 export function seedFromInt(i) {
