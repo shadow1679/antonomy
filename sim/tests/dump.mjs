@@ -1,11 +1,12 @@
-// Usage: node dump.mjs <first_seed> <count>
+// Usage: node dump.mjs <first_seed> <count> [day]
+// With "day", prints only hd: the Burn colony's daily run (150 ants, BURN_TICKS).
 // Prints one JSON line per seed: the result hashes for n=5, n=2, a run with
 // fixed richness, a Burn colony with stakes and the four forecasters on one
 // market (60 ants, 300 ticks), plus two whole forecast markets (hs, hy).
 // crosscheck.py compares these with Python.
 import {
   run, seedFromInt, sha256, burnRun, forecastRun,
-  FOLLOWER, CONTRARIAN, MOMENTUM, COMMUNITY, forecastMarket, marketColony,
+  FOLLOWER, CONTRARIAN, MOMENTUM, COMMUNITY, forecastMarket, marketColony, N_ANTS, BURN_TICKS,
 } from "../js/antosim.mjs";
 
 // Fixtures shared with crosscheck.py and sim/rust/src/bin/dump.rs.
@@ -19,8 +20,13 @@ let seed;
 
 const first = parseInt(process.argv[2], 10);
 const count = parseInt(process.argv[3], 10);
+const day = process.argv[4] === "day";
 for (let i = first; i < first + count; i++) {
   seed = seedFromInt(i);
+  if (day) {
+    console.log(JSON.stringify({ i, hd: burnRun(seed, BURN_WEIGHTS, STAKE_HASH, N_ANTS, BURN_TICKS).hash }));
+    continue;
+  }
   const a = run(seed, 5);
   const b = run(seed, 2);
   const c = run(seed, 3, [300, 250, 200]);

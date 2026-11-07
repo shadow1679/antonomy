@@ -4,11 +4,12 @@
 //!
 //! `market` holds the forecast market registry: keepers post the trending list
 //! and odds, and the contract keeps the per-outcome median. `reward` holds the
-//! Burn colony's play-token reward pool.
+//! Burn colony's play-token reward pool, and `day` its burn-day schedule.
 //!
 //! Not covered yet: the drand commit.
 
 pub mod burn;
+pub mod day;
 pub mod ledger;
 pub mod market;
 pub mod reward;
@@ -30,8 +31,13 @@ pub enum Error {
     Overflow,
     /// Burn menu index outside the menu.
     BadBurnIndex(usize),
-    /// Burn already executed for this round.
+    /// Burn already executed for this burn day or a later one.
     AlreadyBurned(u64),
+    /// That burn day's colony is still running (it ends at 24:00 UTC).
+    BurnDayNotOver(u64),
+    /// No frozen Burn colony stakes for that day: it was skipped (no call
+    /// between its 12:00 and the next day's) or already burned.
+    NoBurnSnapshot(u64),
     /// Wallet total stake would exceed the per-wallet cap.
     WalletCapExceeded {
         cap: u128,
@@ -58,7 +64,7 @@ pub enum Error {
     /// No market list was posted by at least `quorum` keepers.
     NoQuorum,
     AlreadyFinalized,
-    /// Rewards already paid for this round.
+    /// Rewards already paid for this burn day or a later one.
     AlreadyRewarded(u64),
 }
 

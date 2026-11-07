@@ -15,6 +15,13 @@ Forecast colonies: `forecast_market` runs the four forecasters on one market,
 each on its own map (`colony_seed`), turns their scores into trail shares and
 averages them into the swarm belief, committed in one market hash.
 
+Scoring: a colony's score per source is the pheromone within 6 cells of it,
+summed at a checkpoint every SCORE_EVERY ticks and at the final tick, so a
+steady lead adds up over a long run instead of only the last few minutes of
+trail counting. With the 0.35..1.3 richness band and a low flat stake base,
+stakes steer: on the 43,200-tick Burn colony, 100 tANTO from one wallet on an
+option lifts its win rate from 20% to about 52%.
+
 Not yet implemented (see docs/HACKATHON_ROADMAP.md): map templates (walls,
 river), per-colony personality parameters.
 """
@@ -28,6 +35,7 @@ W, H = 72, 48
 NEST_X, NEST_Y = 36, 24
 N_ANTS = 150
 TICKS = 800
+BURN_TICKS = 43200         # Burn colony: 12:00 to 24:00 UTC at one tick per second; the longest run
 CAP = 20 * 256              # pheromone cap per cell, Q8
 DECAY_Q16 = 65536 - 524     # per-tick retention, ~0.8% evaporation
 SENSE_DIST = 3              # cells ahead that a searching ant samples
@@ -36,15 +44,16 @@ DEPOSIT_BASE = 512          # deposit strength at pickup, Q8, times richness
 FOOD_RADIUS_SQ = 4          # cells^2
 NEST_RADIUS_SQ = 4          # cells^2
 SCORE_RADIUS_SQ = 36        # cells^2 (6 cells)
-RICH_MIN, RICH_SPAN = 179, 155   # richness Q8: 0.7 .. 1.3
+RICH_MIN, RICH_SPAN = 90, 244    # richness Q8: 0.35 .. 1.3
 DIST_MIN, DIST_SPAN = 9, 13      # food distance from nest in cells: 9 .. 21
 MARGIN = 4                  # food is clamped at least this far from the edge
+SCORE_EVERY = 100           # ticks between score checkpoints
 VERSION = b"ANTO-SIM-v1"
 
 # --- Snapshot inputs --------------------------------------------------------
 BPS = 10000
 MOMENTUM_FLOOR = 200        # 2% floor on the Momentum food weight
-COMMUNITY_BASE = 10000      # flat food weight per outcome before stakes, milli sqrt-tokens
+COMMUNITY_BASE = 2500       # flat food weight per outcome before stakes, milli sqrt-tokens
 ODDS_TAG = b"ANTO-ODDS-v0"
 ZERO32 = bytes(32)
 FOLLOWER, CONTRARIAN, MOMENTUM, COMMUNITY = range(4)
@@ -66,10 +75,13 @@ COS64, SIN64 = _T["cos64"], _T["sin64"]
 DX = [COS64[k * 4] for k in range(16)]
 DY = [SIN64[k * 4] for k in range(16)]
 
-# Lazy evaporation: DECAY_T[n] = retention factor (Q16) after n ticks.
+# Lazy evaporation: DECAY_T[n] = retention factor (Q16) after n ticks. It
+# reaches 0 at n = FADE_TICKS (852), so any cell untouched for that long holds
+# no pheromone, and retention for every n >= FADE_TICKS is 0.
 DECAY_T = [65536]
-for _n in range(TICKS + 1):
+while DECAY_T[-1]:
     DECAY_T.append((DECAY_T[-1] * DECAY_Q16) >> 16)
+FADE_TICKS = len(DECAY_T) - 1
 
 
 class Rng:
@@ -98,7 +110,7 @@ class Rng:
 
 
 def _scale_richness(weights):
-    """Food weights -> Q8 richness in the 0.7..1.3 band, the richest source on top.
+    """Food weights -> Q8 richness in the 0.35..1.3 band, the richest source on top.
 
     Scaling by the largest weight makes the result independent of the total, so
     markets whose odds don't sum to exactly 10000 (per-outcome medians) work.
@@ -165,8 +177,13 @@ def run(seed, n=5, richness=None, ants=N_ANTS, ticks=TICKS, stake_hash=None, odd
     odds_hash = ZERO32 if odds_hash is None else odds_hash
     assert len(seed) == 32 and 2 <= n <= 5
     assert len(stake_hash) == 32 and len(odds_hash) == 32
+    assert 0 <= ticks <= BURN_TICKS
     assert richness is None or len(richness) == n
+    # The richness band's top; the Rust port stores deposit strength (2x) in a u16.
+    assert richness is None or all(0 <= r <= RICH_MIN + RICH_SPAN for r in richness)
     rng = Rng(seed)
+    # DECAY_T padded with zeros to the run length, so every age indexes it.
+    decay = DECAY_T + [0] * max(0, ticks - FADE_TICKS)
 
     # Food placement. Draws are always made so the stream stays aligned.
     sx, sy = [], []
@@ -199,6 +216,25 @@ def run(seed, n=5, richness=None, ants=N_ANTS, ticks=TICKS, stake_hash=None, odd
     strength = [0] * ants
     nest_tx, nest_ty = NEST_X * 256 + 128, NEST_Y * 256 + 128
 
+    def trail_at(t):
+        """Pheromone within 6 cells of each source at tick t."""
+        out = []
+        for s in range(n):
+            total = 0
+            for yy in range(sy[s] - 6, sy[s] + 7):
+                for xx in range(sx[s] - 6, sx[s] + 7):
+                    ddx = xx - sx[s]
+                    ddy = yy - sy[s]
+                    if ddx * ddx + ddy * ddy <= SCORE_RADIUS_SQ and 0 <= xx < W and 0 <= yy < H:
+                        i = yy * W + xx
+                        total += (val[i] * decay[t - last[i]]) >> 16
+            out.append(total)
+        return out
+
+    # Score: the trail summed at a checkpoint every SCORE_EVERY ticks and at
+    # the final tick, so a steady lead adds up over the run.
+    scores = [0] * n
+
     for t in range(1, ticks + 1):
         for a in range(ants):
             r = rng.next()
@@ -216,7 +252,7 @@ def run(seed, n=5, richness=None, ants=N_ANTS, ticks=TICKS, stake_hash=None, odd
                     cy = (y + DY[hh] * SENSE_DIST) >> 8
                     if 0 <= cx < W and 0 <= cy < H:
                         i = cy * W + cx
-                        v = (val[i] * DECAY_T[t - last[i]]) >> 16
+                        v = (val[i] * decay[t - last[i]]) >> 16
                     else:
                         v = 0
                     if v > best:
@@ -254,7 +290,7 @@ def run(seed, n=5, richness=None, ants=N_ANTS, ticks=TICKS, stake_hash=None, odd
                             break
                 else:
                     i = cy * W + cx
-                    v = ((val[i] * DECAY_T[t - last[i]]) >> 16) + strength[a]
+                    v = ((val[i] * decay[t - last[i]]) >> 16) + strength[a]
                     val[i] = CAP if v > CAP else v
                     last[i] = t
                     strength[a] -= strength[a] >> 5
@@ -269,18 +305,8 @@ def run(seed, n=5, richness=None, ants=N_ANTS, ticks=TICKS, stake_hash=None, odd
             ax[a] = x
             ay[a] = y
 
-    # Scoring: pheromone within 6 cells of each source at the final tick.
-    scores = []
-    for s in range(n):
-        total = 0
-        for yy in range(sy[s] - 6, sy[s] + 7):
-            for xx in range(sx[s] - 6, sx[s] + 7):
-                ddx = xx - sx[s]
-                ddy = yy - sy[s]
-                if ddx * ddx + ddy * ddy <= SCORE_RADIUS_SQ and 0 <= xx < W and 0 <= yy < H:
-                    i = yy * W + xx
-                    total += (val[i] * DECAY_T[ticks - last[i]]) >> 16
-        scores.append(total)
+        if t % SCORE_EVERY == 0 or t == ticks:
+            scores = [acc + v for acc, v in zip(scores, trail_at(t))]
 
     win_src = 0
     for s in range(1, n):

@@ -8,7 +8,7 @@ const flip = (h) => (h[0] === "0" ? "1" : "0") + h.slice(1);
 const round = roundById(7);
 const receipt = await issueReceipt(round);
 
-// Shape: seed, Burn, 4 forecasters, 1 market hash.
+// Shape: seed, 4 forecasters, 1 market hash. Burn runs per day, not per round.
 assert.equal(receipt.spec, SPEC);
 assert.equal(receipt.round, 7);
 assert.equal(receipt.colonies.length, round.all.length);

@@ -4,7 +4,7 @@ Draft v0.1 · 23 October 2026
 
 ## 1. Summary
 
-The Ant Colony Oracle turns a public random seed into a verifiable, watchable decision. Digital ants forage across a map with five food sources, and each source stands for a preset option. The source with the strongest pheromone trail at the final tick wins. The simulation is a deterministic function of the seed, so anyone can re-run it and check the result, and the contract computes the result itself by running the simulation on-chain.
+The Ant Colony Oracle turns a public random seed into a verifiable, watchable decision. Digital ants forage across a map with five food sources, and each source stands for a preset option. The source with the strongest pheromone trail over the run wins. The simulation is a deterministic function of the seed, so anyone can re-run it and check the result, and the contract computes the result itself by running the simulation on-chain.
 
 The ants add spectacle and a replayable story. They do not add entropy: all randomness comes from the seed source. A working prototype of the simulation is at https://claude.ai/artifact/FL3c2cR32WimU8FmcVPe1F.
 
@@ -46,12 +46,12 @@ The prototype uses the following parameters. All of them become immutable contra
 | --- | --- |
 | Grid | 72 × 48 cells, nest at the centre |
 | Food sources | 5, placed 9 to 21 cells from the nest at seed-derived angles |
-| Food richness | 0.7 to 1.3, derived from the seed |
+| Food richness | 0.35 to 1.3, derived from the seed or the snapshot (widened from 0.7 to 1.3 on 27 Oct 2026 so stakes steer) |
 | Ants | 150 |
 | Ticks | 800 |
 | Evaporation | 0.8% of every cell per tick |
 | Pheromone cap | 20 per cell |
-| Scoring | Sum of pheromone within 6 cells of each source at the final tick |
+| Scoring | Sum of pheromone within 6 cells of each source, added up every 100 ticks and at the final tick (27 Oct 2026; was the final tick only) |
 | Winner | Highest score, with ties broken by the lowest index |
 
 **Ant behaviour.** A searching ant senses pheromone at three headings ahead of it, steers toward the strongest, and adds random wander. On reaching food it switches to returning, heads for the nest and deposits pheromone that weakens by 3% each step, so trails are strongest at the food. Shorter paths complete more round trips and build stronger trails.

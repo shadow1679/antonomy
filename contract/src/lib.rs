@@ -8,10 +8,17 @@
 //! per-outcome median odds. The forecasters themselves don't run on-chain yet:
 //! that waits for the drand round lifecycle, like the Burn colony.
 //!
+//! Burn days (`antotoken::day`): Burn colony stakes follow the UTC day, not
+//! the round. They freeze at 12:00 UTC into that day's snapshot (a stake made
+//! later counts from the next day), can't be withdrawn from 12:00 to 24:00
+//! while the colony runs, and `execute_burn(day, index)` is allowed from that
+//! day's 24:00, once per day and in day order. `burn_schedule` and
+//! `burn_snapshot` are the views.
+//!
 //! Rewards: anyone moves play tokens into the pool with `fund_rewards`. When
-//! the colony executes the burn (only after staking has closed), 10% of the
-//! pool goes to the Burn colony stakers on the chosen index, pro rata to
-//! stake. Forecast colonies never pay. Testnet play token only.
+//! the colony executes a day's burn, 10% of the pool goes to the Burn colony
+//! stakers on the chosen index in that day's snapshot, pro rata to stake.
+//! Forecast colonies never pay. Testnet play token only.
 //!
 //! Known gaps: no `ft_transfer_call` or storage-management (wallets cannot
 //! register accounts yet), the whole state is read on every call (fine for a
@@ -20,10 +27,11 @@
 
 use antotoken::{
     burn::BurnExecutor,
+    day,
     ledger::{Ledger, DECIMALS, SYMBOL},
     market::{Market, MarketPost, Registry},
     reward::Rewards,
-    stake::{hash_hex, StakeConfig, Staking},
+    stake::{hash_hex, Snapshot, StakeConfig, Staking},
     Error,
 };
 use near_sdk::json_types::U128;
@@ -53,6 +61,30 @@ pub struct SnapshotView {
     pub hash: String,
     /// (account, colony, option, amount)
     pub entries: Vec<(AccountId, u16, u8, U128)>,
+}
+
+impl From<Snapshot> for SnapshotView {
+    fn from(s: Snapshot) -> Self {
+        SnapshotView {
+            hash: hash_hex(&s.hash),
+            entries: s
+                .entries
+                .into_iter()
+                .map(|(a, c, o, v)| (a.parse().unwrap(), c, o, U128(v)))
+                .collect(),
+        }
+    }
+}
+
+/// Today's burn day (UTC). `phase` is "staking" before 12:00 and "running"
+/// until 24:00. `drawn_day` is the newest day whose stakes have frozen.
+#[near(serializers = [json])]
+pub struct BurnScheduleView {
+    pub day: u64,
+    pub phase: String,
+    pub run_at_ms: u64,
+    pub end_at_ms: u64,
+    pub drawn_day: Option<u64>,
 }
 
 /// One market in a keeper's trending list. `raw_hash` is 64 hex chars.
@@ -278,16 +310,27 @@ impl Contract {
         U128(self.staking.staked_by(account_id.as_str()))
     }
 
-    /// Final stake snapshot; panics while staking is still open.
+    /// The round's final stake snapshot (every colony but the Burn colony);
+    /// panics while staking is still open.
     pub fn stake_snapshot(&self) -> SnapshotView {
-        let s = ok(self.staking.snapshot(env::block_timestamp_ms()));
-        SnapshotView {
-            hash: antotoken::stake::hash_hex(&s.hash),
-            entries: s
-                .entries
-                .into_iter()
-                .map(|(a, c, o, v)| (a.parse().unwrap(), c, o, U128(v)))
-                .collect(),
+        ok(self.staking.snapshot(env::block_timestamp_ms())).into()
+    }
+
+    /// Burn colony stakes frozen at `day`'s 12:00 UTC, the stake input of
+    /// that day's colony. Panics before then, and once the day is burned.
+    pub fn burn_snapshot(&self, day: u64) -> SnapshotView {
+        ok(self.staking.burn_snapshot(day, env::block_timestamp_ms())).into()
+    }
+
+    pub fn burn_schedule(&self) -> BurnScheduleView {
+        let now = env::block_timestamp_ms();
+        let d = now / day::DAY_MS;
+        BurnScheduleView {
+            day: d,
+            phase: if day::running(now) { "running" } else { "staking" }.into(),
+            run_at_ms: day::run_at(d),
+            end_at_ms: day::end_at(d),
+            drawn_day: day::drawn_day(now),
         }
     }
 
@@ -371,30 +414,36 @@ impl Contract {
 
     // ---- burn ----
 
-    /// The colony picks `index` in the burn menu; the amount comes from the menu.
-    /// Needs staking to have closed, and pays the round's rewards to the Burn
-    /// colony stakers on `index`.
-    pub fn execute_burn(&mut self, round: u64, index: u8) -> U128 {
+    /// The colony picks `index` in the burn menu for burn day `day`; the
+    /// amount comes from the menu. Allowed from the day's 24:00 UTC, once per
+    /// day and in day order. Pays the day's rewards to the Burn colony stakers
+    /// on `index` in the day's snapshot.
+    pub fn execute_burn(&mut self, day: u64, index: u8) -> U128 {
         require!(!self.paused, "paused");
         require!(
             env::predecessor_account_id() == self.colony,
             "only the colony account may execute a burn"
         );
-        let snap = ok(self.staking.snapshot(env::block_timestamp_ms()));
+        let now = env::block_timestamp_ms();
+        if now < day::end_at(day) {
+            ok::<()>(Err(Error::BurnDayNotOver(day)));
+        }
         let burned = ok(self.burn.execute(
             &mut self.ledger,
             self.treasury.as_str(),
-            round,
+            day,
             index as usize,
         ));
+        let snap = ok(self.staking.take_burn_snapshot(day, now));
         env::log_str(&format!(
-            "EVENT burn round={round} index={index} amount={burned}"
+            "EVENT burn day={day} index={index} amount={burned} stakes={}",
+            hash_hex(&snap.hash)
         ));
         let paid = ok(self
             .rewards
-            .distribute(&mut self.ledger, round, index, &snap.entries));
+            .distribute(&mut self.ledger, day, index, &snap.entries));
         for (who, amount) in paid {
-            env::log_str(&format!("EVENT reward round={round} {who} amount={amount}"));
+            env::log_str(&format!("EVENT reward day={day} {who} amount={amount}"));
         }
         U128(burned)
     }
@@ -449,6 +498,9 @@ mod tests {
     use near_sdk::testing_env;
 
     const ONE: u128 = antotoken::ledger::ONE;
+    /// Day 0 (1970-01-01): stakes freeze at NOON, the burn may run from END.
+    const NOON: u64 = day::STAKING_MS;
+    const END: u64 = day::DAY_MS;
 
     fn acct(s: &str) -> AccountId {
         s.parse().unwrap()
@@ -495,14 +547,14 @@ mod tests {
     fn stake_snapshot_after_close() {
         let mut c = fresh();
         testing_env!(ctx("alice.test", 10).build());
-        c.stake(0, 2, U128(25 * ONE));
+        c.stake(1, 2, U128(25 * ONE));
         assert_eq!(c.staked_by(acct("alice.test")).0, 25 * ONE);
         assert_eq!(c.ft_balance_of(acct("alice.test")).0, 475 * ONE);
-        assert_eq!(c.stake_weights(0, 3)[2].0, antotoken::isqrt(25 * ONE));
-        assert_eq!(c.stake_totals(0, 3)[2].0, 25 * ONE);
+        assert_eq!(c.stake_weights(1, 3)[2].0, antotoken::isqrt(25 * ONE));
+        assert_eq!(c.stake_totals(1, 3)[2].0, 25 * ONE);
         let mine = c.stakes_of(acct("alice.test"));
         assert_eq!(mine.len(), 1);
-        assert_eq!((mine[0].0, mine[0].1, mine[0].2 .0), (0, 2, 25 * ONE));
+        assert_eq!((mine[0].0, mine[0].1, mine[0].2 .0), (1, 2, 25 * ONE));
         let cfg = c.stake_config();
         assert_eq!((cfg.cap_per_wallet.0, cfg.close_at_ms), (100 * ONE, 1_000));
 
@@ -517,7 +569,7 @@ mod tests {
     fn stake_after_close_panics() {
         let mut c = fresh();
         testing_env!(ctx("alice.test", 1_000).build());
-        c.stake(0, 0, U128(ONE));
+        c.stake(1, 0, U128(ONE));
     }
 
     #[test]
@@ -525,15 +577,15 @@ mod tests {
     fn burn_only_by_colony() {
         let mut c = fresh();
         testing_env!(ctx("alice.test", 0).build());
-        c.execute_burn(1, 4);
+        c.execute_burn(0, 4);
     }
 
     #[test]
     fn colony_burn_lowers_supply_by_menu_amount() {
         let mut c = fresh();
         let treasury_before = c.ft_balance_of(acct("treasury.test")).0;
-        testing_env!(ctx("colony.test", 1_000).build());
-        let burned = c.execute_burn(1, 4).0;
+        testing_env!(ctx("colony.test", END).build());
+        let burned = c.execute_burn(0, 4).0;
         assert_eq!(burned, treasury_before / 50);
         assert_eq!(c.ft_total_supply().0, 1_000_000 * ONE - burned);
     }
@@ -542,8 +594,8 @@ mod tests {
     #[should_panic(expected = "BadBurnIndex")]
     fn burn_index_outside_menu_panics() {
         let mut c = fresh();
-        testing_env!(ctx("colony.test", 1_000).build());
-        c.execute_burn(1, 5);
+        testing_env!(ctx("colony.test", END).build());
+        c.execute_burn(0, 5);
     }
 
     #[test]
@@ -562,9 +614,9 @@ mod tests {
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.stake(0, 0, U128(ONE))))
                 .is_err()
         );
-        testing_env!(ctx("colony.test", 1_000).build());
+        testing_env!(ctx("colony.test", END).build());
         assert!(
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.execute_burn(1, 0)))
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.execute_burn(0, 0)))
                 .is_err()
         );
     }
@@ -581,25 +633,25 @@ mod tests {
     fn settle_then_unstake_after_close() {
         let mut c = fresh();
         testing_env!(ctx("alice.test", 10).build());
-        c.stake(0, 0, U128(10 * ONE));
+        c.stake(1, 0, U128(10 * ONE));
         testing_env!(ctx("alice.test", 1_500).build());
         assert!(
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.unstake(0, 0, U128(ONE))))
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.unstake(1, 0, U128(ONE))))
                 .is_err()
         );
         testing_env!(ctx("anyone.test", 2_000).build());
         c.settle();
         testing_env!(ctx("alice.test", 2_001).build());
-        c.unstake(0, 0, U128(10 * ONE));
+        c.unstake(1, 0, U128(10 * ONE));
         assert_eq!(c.ft_balance_of(acct("alice.test")).0, 500 * ONE);
     }
 
     #[test]
-    #[should_panic(expected = "StakingStillOpen")]
-    fn burn_waits_for_staking_to_close() {
+    #[should_panic(expected = "BurnDayNotOver(0)")]
+    fn burn_waits_for_the_day_to_end() {
         let mut c = fresh();
-        testing_env!(ctx("colony.test", 999).build());
-        c.execute_burn(1, 0);
+        testing_env!(ctx("colony.test", END - 1).build());
+        c.execute_burn(0, 0);
     }
 
     fn give(c: &mut Contract, to: &str, amount: u128) {
@@ -626,8 +678,8 @@ mod tests {
         testing_env!(ctx("bot-contrarian.test", 10).build());
         c.stake(0, 4, U128(10 * ONE));
 
-        testing_env!(ctx("colony.test", 1_000).build());
-        c.execute_burn(1, 2);
+        testing_env!(ctx("colony.test", END).build());
+        c.execute_burn(0, 2);
         // Pot is 100: alice 30/40, follower 10/40.
         assert_eq!(c.rewards_earned(acct("alice.test")).0, 75 * ONE);
         assert_eq!(c.rewards_earned(acct("bot-follower.test")).0, 25 * ONE);
@@ -718,5 +770,44 @@ mod tests {
         let mut c = fresh();
         testing_env!(ctx("k1.test", 1_000).build());
         c.post_trending(vec![market(vec![6000, 4000])]);
+    }
+
+    fn panics(f: impl FnOnce()) -> bool {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).is_err()
+    }
+
+    #[test]
+    fn burn_day_freezes_at_noon_locks_the_run_and_burns_once() {
+        let mut c = fresh();
+        give(&mut c, "bob.test", 100 * ONE);
+        testing_env!(ctx("treasury.test", 0).build());
+        c.fund_rewards(U128(1_000 * ONE));
+        testing_env!(ctx("alice.test", 10).build());
+        c.stake(0, 2, U128(10 * ONE));
+        let s = c.burn_schedule();
+        assert_eq!(
+            (s.day, s.phase.as_str(), s.run_at_ms, s.end_at_ms, s.drawn_day),
+            (0, "staking", NOON, END, None)
+        );
+
+        // Bob stakes after 12:00: that counts from day 1, not day 0.
+        testing_env!(ctx("bob.test", NOON + 1).build());
+        c.stake(0, 2, U128(10 * ONE));
+        assert_eq!(c.burn_schedule().phase, "running");
+        assert_eq!(c.burn_snapshot(0).entries.len(), 1);
+        // Nobody can withdraw a Burn stake while the colony runs.
+        testing_env!(ctx("alice.test", END - 1).build());
+        assert!(panics(|| c.unstake(0, 2, U128(ONE))));
+
+        testing_env!(ctx("colony.test", END).build());
+        c.execute_burn(0, 2);
+        assert_eq!(c.rewards_earned(acct("alice.test")).0, 100 * ONE);
+        assert_eq!(c.rewards_earned(acct("bob.test")).0, 0);
+        assert!(panics(|| {
+            c.execute_burn(0, 2);
+        }));
+        // Withdrawing is open again after 24:00.
+        testing_env!(ctx("alice.test", END).build());
+        c.unstake(0, 2, U128(10 * ONE));
     }
 }

@@ -48,6 +48,7 @@ export function stakerAnts(wallets, nAnts) {
   const rows = wallets.map((w, i) => ({
     id: w.id,
     hue: walletHue(w.id),
+    stakes: w.stakes,
     tokens: w.stakes.reduce((a, b) => a + b, 0),
     weight: w.stakes.reduce((a, t) => a + stakeWeight(t), 0),
     ants: 0,

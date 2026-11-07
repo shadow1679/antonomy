@@ -14,6 +14,10 @@
 //! scores into trail shares, the swarm belief and one market hash. A contract
 //! that steps the four `Colony`s itself calls `market_result` at the end.
 //!
+//! Scoring: a source's score is the pheromone within 6 cells of it,
+//! summed at a checkpoint every `SCORE_EVERY` ticks and at the final tick
+//! (`Colony::totals`), so a steady lead adds up over a long run.
+//!
 //! Not yet implemented (same gaps as the reference): map templates, per-colony
 //! personality parameters.
 
@@ -31,6 +35,8 @@ pub const NEST_X: i32 = 36;
 pub const NEST_Y: i32 = 24;
 pub const N_ANTS: usize = 150;
 pub const TICKS: u32 = 800;
+/// Burn colony: 12:00 to 24:00 UTC at one tick per second. The longest run.
+pub const BURN_TICKS: u32 = 43_200;
 pub const CAP: u32 = 20 * 256; // pheromone cap per cell, Q8
 const DECAY_Q16: u64 = 65536 - 524; // per-tick retention, ~0.8% evaporation
 const SENSE_DIST: i32 = 3;
@@ -39,17 +45,22 @@ const DEPOSIT_BASE: i32 = 512;
 const FOOD_RADIUS_SQ: i32 = 4;
 const NEST_RADIUS_SQ: i32 = 4;
 const SCORE_RADIUS_SQ: i32 = 36;
-const RICH_MIN: u32 = 179;
-const RICH_SPAN: u32 = 155;
+const RICH_MIN: u32 = 90; // richness Q8: 0.35 .. 1.3
+const RICH_SPAN: u32 = 244;
+/// Largest richness `scale_richness` gives. Supplied richness above it is rejected,
+/// which also keeps an ant's deposit strength within u16.
+pub const RICH_MAX: u16 = (RICH_MIN + RICH_SPAN) as u16;
 const DIST_MIN: u32 = 9;
 const DIST_SPAN: u32 = 13;
 const MARGIN: i32 = 4;
+/// Ticks between score checkpoints.
+pub const SCORE_EVERY: u32 = 100;
 pub const VERSION: &[u8] = b"ANTO-SIM-v1";
 
 // --- Snapshot inputs ----------------------------------------------------------
 const BPS: u64 = 10_000;
 const MOMENTUM_FLOOR: i64 = 200; // 2% floor on the Momentum food weight
-const COMMUNITY_BASE: u64 = 10_000; // flat food weight per outcome, milli sqrt-tokens
+const COMMUNITY_BASE: u64 = 2_500; // flat food weight per outcome, milli sqrt-tokens
 const ODDS_TAG: &[u8] = b"ANTO-ODDS-v0";
 
 /// How a forecaster reads the odds snapshot. `Community` reads stakes instead.
@@ -89,20 +100,37 @@ const fn heading_table(src: &[i32; 64]) -> [i32; 16] {
 pub const DX: [i32; 16] = heading_table(&COS64);
 pub const DY: [i32; 16] = heading_table(&SIN64);
 
-/// Lazy evaporation: `DECAY_T[n]` = retention factor (Q16) after n ticks.
-const DECAY_T: [u32; TICKS as usize + 2] = {
-    let mut t = [65536u32; TICKS as usize + 2];
+const fn decay_step(r: u32) -> u32 {
+    ((r as u64 * DECAY_Q16) >> 16) as u32
+}
+
+/// Ticks until the retention factor reaches 0 (852): a cell untouched for this
+/// long holds no pheromone, whatever it held.
+pub const FADE_TICKS: usize = {
+    let (mut r, mut n) = (65536u32, 0);
+    while r > 0 {
+        r = decay_step(r);
+        n += 1;
+    }
+    n
+};
+
+/// Lazy evaporation: `DECAY_T[n]` = retention factor (Q16) after n ticks, for
+/// n up to `FADE_TICKS`; it is 0 from there on.
+const DECAY_T: [u32; FADE_TICKS + 1] = {
+    let mut t = [65536u32; FADE_TICKS + 1];
     let mut n = 1;
     while n < t.len() {
-        t[n] = ((t[n - 1] as u64 * DECAY_Q16) >> 16) as u32;
+        t[n] = decay_step(t[n - 1]);
         n += 1;
     }
     t
 };
 
 /// Pheromone in a cell at tick `t`, decayed since it was last touched.
-fn decayed(val: u32, last: u16, t: u32) -> u32 {
-    ((val as u64 * DECAY_T[(t - last as u32) as usize] as u64) >> 16) as u32
+fn decayed(val: u16, last: u32, t: u32) -> u32 {
+    let age = ((t - last) as usize).min(FADE_TICKS);
+    ((val as u64 * DECAY_T[age] as u64) >> 16) as u32
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,8 +139,12 @@ pub enum Error {
     BadOutcomeCount(usize),
     /// `richness` must have one entry per outcome.
     BadRichnessLen { expected: usize, got: usize },
-    /// Ticks must not exceed `TICKS` (the decay table length).
+    /// Ticks must not exceed `BURN_TICKS`.
     TooManyTicks(u32),
+    /// Supplied richness must not exceed `RICH_MAX`.
+    BadRichness(u16),
+    /// `Colony::from_bytes` got bytes that aren't a stored colony.
+    BadState,
     /// `result()` called before the final tick.
     NotFinished,
     /// Odds must be 2 to 5 basis-point values (at most 10000) with a matching
@@ -132,7 +164,7 @@ pub struct Commit {
     pub odds_hash: [u8; 32],
 }
 
-/// Food weights -> Q8 richness in the 0.7..1.3 band, the richest source on top.
+/// Food weights -> Q8 richness in the 0.35..1.3 band, the richest source on top.
 /// Scaling by the largest weight makes the result independent of the total.
 fn scale_richness(weights: &[u64]) -> Option<Vec<u16>> {
     let top = *weights.iter().max()?;
@@ -252,8 +284,108 @@ impl SimResult {
     }
 }
 
+/// Layout tag of `Colony::to_bytes`, and the size of its fixed header.
+const STATE_FORMAT: u8 = 2;
+const STATE_HEAD: usize = 1 + 16 + 32 + 1 + 2 + 4 + 4 + 64;
+
+/// Big-endian cursor for `Colony::from_bytes`.
+struct Reader<'a> {
+    b: &'a [u8],
+    at: usize,
+}
+
+impl Reader<'_> {
+    fn take<const N: usize>(&mut self) -> Result<[u8; N], Error> {
+        let end = self.at + N;
+        let s = self.b.get(self.at..end).ok_or(Error::BadState)?;
+        self.at = end;
+        Ok(s.try_into().unwrap())
+    }
+    fn u8(&mut self) -> Result<u8, Error> {
+        Ok(self.take::<1>()?[0])
+    }
+    fn u16(&mut self) -> Result<u16, Error> {
+        Ok(u16::from_be_bytes(self.take()?))
+    }
+    fn u32(&mut self) -> Result<u32, Error> {
+        Ok(u32::from_be_bytes(self.take()?))
+    }
+    fn arr32(&mut self) -> Result<[u8; 32], Error> {
+        self.take()
+    }
+}
+
+/// Marks a cell outside every food radius in `Colony::food`.
+pub const NO_FOOD: u8 = u8::MAX;
+
+/// Food source per cell: the lowest source index whose food radius covers the
+/// cell, or `NO_FOOD`. Same answer as testing each source in order, in one lookup.
+fn food_grid(sx: &[i32], sy: &[i32]) -> Vec<u8> {
+    let mut food = vec![NO_FOOD; (W * H) as usize];
+    // Highest index first, so the lowest index is written last and wins.
+    for s in (0..sx.len()).rev() {
+        for cy in sy[s] - 2..=sy[s] + 2 {
+            for cx in sx[s] - 2..=sx[s] + 2 {
+                let (ddx, ddy) = (cx - sx[s], cy - sy[s]);
+                if ddx * ddx + ddy * ddy <= FOOD_RADIUS_SQ
+                    && (0..W).contains(&cx)
+                    && (0..H).contains(&cy)
+                {
+                    food[(cy * W + cx) as usize] = s as u8;
+                }
+            }
+        }
+    }
+    food
+}
+
+/// Heading home: the heading with the largest dot product with (dx, dy),
+/// lowest index on ties. The angle of (dx, dy) lies in one octant, so the
+/// answer is one of the three headings bounding or bisecting it; the
+/// rounding in the tables is far too small to make any other heading win.
+/// `home_heading_matches_full_scan` checks every reachable (dx, dy).
+fn home_heading(dx: i32, dy: i32) -> i32 {
+    if dx == 0 && dy == 0 {
+        return 0; // every dot product is 0
+    }
+    let (ax, ay) = (dx.abs(), dy.abs());
+    let o = if dy >= 0 {
+        if dx > 0 {
+            if ay <= ax { 0 } else { 1 }
+        } else if ax <= ay {
+            2
+        } else {
+            3
+        }
+    } else if dx < 0 {
+        if ay <= ax { 4 } else { 5 }
+    } else if ax <= ay {
+        6
+    } else {
+        7
+    };
+    // Ascending index order, so a strict comparison keeps the lowest on ties.
+    let ks = if o == 7 { [0, 14, 15] } else { [2 * o, 2 * o + 1, 2 * o + 2] };
+    let dot = |k: usize| DX[k] * dx + DY[k] * dy;
+    let mut bk = ks[0];
+    let mut best = dot(bk);
+    for &k in &ks[1..] {
+        let d = dot(k);
+        if d > best {
+            best = d;
+            bk = k;
+        }
+    }
+    bk as i32
+}
+
 /// One colony, advanced one tick at a time. Fields are public for reading
 /// (the replay and a contract's state dump); callers must not mutate them.
+/// Per-ant and per-cell state uses the narrowest type that holds it, since a
+/// contract stores and reloads it on every call: positions are Q8 within the
+/// grid (below 72 * 256), pheromone is at most `CAP`, deposit strength at most
+/// 2 * `RICH_MAX`. `last` (the tick a cell was last touched) needs 32 bits for
+/// a day-long run; `to_bytes` stores it as an age capped at `FADE_TICKS`.
 #[derive(Debug, Clone)]
 pub struct Colony {
     pub rng: Rng,
@@ -267,14 +399,23 @@ pub struct Colony {
     pub sy: Vec<i32>,
     pub rich: Vec<u16>,
     pub perm: Vec<u8>,
-    pub val: Vec<u32>,
-    pub last: Vec<u16>,
-    pub ax: Vec<i32>,
-    pub ay: Vec<i32>,
-    pub ah: Vec<i32>,
+    /// Derived from the sources (`food_grid`); not part of the stored state.
+    pub food: Vec<u8>,
+    pub val: Vec<u16>,
+    pub last: Vec<u32>,
+    pub ax: Vec<u16>,
+    pub ay: Vec<u16>,
+    pub ah: Vec<u8>,
     pub returning: Vec<bool>,
-    pub strength: Vec<i32>,
+    pub strength: Vec<u16>,
+    /// Score per source so far: `scores()` summed at every checkpoint.
+    pub totals: Vec<u32>,
 }
+
+/// A checkpoint adds at most 113 cells (the score disc) at `CAP` per source,
+/// and a run has at most `BURN_TICKS / SCORE_EVERY + 1` checkpoints, so
+/// `totals` fits in u32.
+const _: () = assert!(113 * CAP as u64 * (BURN_TICKS / SCORE_EVERY + 1) as u64 <= u32::MAX as u64);
 
 impl Colony {
     /// A colony that reads no snapshots: no commitments in its hash.
@@ -309,8 +450,11 @@ impl Colony {
                     got: r.len(),
                 });
             }
+            if let Some(&x) = r.iter().find(|&&x| x > RICH_MAX) {
+                return Err(Error::BadRichness(x));
+            }
         }
-        if ticks > TICKS {
+        if ticks > BURN_TICKS {
             return Err(Error::TooManyTicks(ticks));
         }
         let mut rng = Rng::new(seed);
@@ -342,7 +486,8 @@ impl Colony {
             }
         }
 
-        let ah = (0..ants).map(|_| (rng.next() & 15) as i32).collect();
+        let ah = (0..ants).map(|_| (rng.next() & 15) as u8).collect();
+        let food = food_grid(&sx, &sy);
         Ok(Colony {
             rng,
             seed: *seed,
@@ -355,13 +500,15 @@ impl Colony {
             sy,
             rich,
             perm,
+            food,
             val: vec![0; (W * H) as usize],
             last: vec![0; (W * H) as usize],
-            ax: vec![NEST_X * 256 + 128; ants],
-            ay: vec![NEST_Y * 256 + 128; ants],
+            ax: vec![(NEST_X * 256 + 128) as u16; ants],
+            ay: vec![(NEST_Y * 256 + 128) as u16; ants],
             ah,
             returning: vec![false; ants],
             strength: vec![0; ants],
+            totals: vec![0; n],
         })
     }
 
@@ -379,9 +526,9 @@ impl Colony {
             let r = self.rng.next();
             let wander = (r & 255) < WANDER;
             let turn = (((r >> 8) & 255) % 3) as i32 - 1;
-            let mut h = self.ah[a];
-            let mut x = self.ax[a];
-            let mut y = self.ay[a];
+            let mut h = self.ah[a] as i32;
+            let mut x = self.ax[a] as i32;
+            let mut y = self.ay[a] as i32;
 
             if !self.returning[a] {
                 // Sample straight ahead, then left, then right; strictly
@@ -405,20 +552,7 @@ impl Colony {
                 }
                 h = bh;
             } else {
-                // Head home: the heading with the largest dot product, lowest
-                // index on ties.
-                let dx = nest_tx - x;
-                let dy = nest_ty - y;
-                let mut best = i32::MIN;
-                let mut bk = 0;
-                for k in 0..16 {
-                    let dot = DX[k] * dx + DY[k] * dy;
-                    if k == 0 || dot > best {
-                        best = dot;
-                        bk = k;
-                    }
-                }
-                h = bk as i32;
+                h = home_heading(nest_tx - x, nest_ty - y);
             }
 
             if wander {
@@ -434,22 +568,19 @@ impl Colony {
             } else {
                 x = nx;
                 y = ny;
+                let i = (cy * W + cx) as usize;
                 if !self.returning[a] {
-                    for s in 0..self.n {
-                        let ddx = cx - self.sx[s];
-                        let ddy = cy - self.sy[s];
-                        if ddx * ddx + ddy * ddy <= FOOD_RADIUS_SQ {
-                            self.returning[a] = true;
-                            self.strength[a] = (DEPOSIT_BASE * self.rich[s] as i32) >> 8;
-                            h = (h + 8) & 15;
-                            break;
-                        }
+                    let s = self.food[i];
+                    if s != NO_FOOD {
+                        self.returning[a] = true;
+                        self.strength[a] =
+                            ((DEPOSIT_BASE * self.rich[s as usize] as i32) >> 8) as u16;
+                        h = (h + 8) & 15;
                     }
                 } else {
-                    let i = (cy * W + cx) as usize;
-                    let v = decayed(self.val[i], self.last[i], t) as i64 + self.strength[a] as i64;
-                    self.val[i] = v.min(CAP as i64) as u32;
-                    self.last[i] = t as u16;
+                    let v = decayed(self.val[i], self.last[i], t) + self.strength[a] as u32;
+                    self.val[i] = v.min(CAP) as u16;
+                    self.last[i] = t;
                     self.strength[a] -= self.strength[a] >> 5;
                     let ddx = cx - NEST_X;
                     let ddy = cy - NEST_Y;
@@ -461,11 +592,138 @@ impl Colony {
                 }
             }
 
-            self.ah[a] = h;
-            self.ax[a] = x;
-            self.ay[a] = y;
+            self.ah[a] = h as u8;
+            self.ax[a] = x as u16;
+            self.ay[a] = y as u16;
+        }
+        if t % SCORE_EVERY == 0 || t == self.ticks {
+            let now = self.scores();
+            for (acc, v) in self.totals.iter_mut().zip(now) {
+                *acc += v;
+            }
         }
         true
+    }
+
+    /// Compact encoding for contract storage (about 15 KB for 150 ants):
+    /// big-endian, every field in its narrowest width. `food` is not stored;
+    /// `from_bytes` rebuilds it from the sources. Each cell's `last` is stored
+    /// as its age, `t - last`, capped at `FADE_TICKS`: past that the cell has
+    /// decayed to 0 either way, so the cap doesn't change any later tick.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let cells = (W * H) as usize;
+        let mut b = Vec::with_capacity(STATE_HEAD + 9 * self.n + 4 * cells + 7 * self.ants);
+        b.push(STATE_FORMAT);
+        for w in self.rng.s {
+            b.extend_from_slice(&w.to_be_bytes());
+        }
+        b.extend_from_slice(&self.seed);
+        b.push(self.n as u8);
+        b.extend_from_slice(&(self.ants as u16).to_be_bytes());
+        b.extend_from_slice(&self.ticks.to_be_bytes());
+        b.extend_from_slice(&self.t.to_be_bytes());
+        b.extend_from_slice(&self.commit.stake_hash);
+        b.extend_from_slice(&self.commit.odds_hash);
+        for s in 0..self.n {
+            b.extend_from_slice(&[self.sx[s] as u8, self.sy[s] as u8, self.perm[s]]);
+            b.extend_from_slice(&self.rich[s].to_be_bytes());
+            b.extend_from_slice(&self.totals[s].to_be_bytes());
+        }
+        for v in &self.val {
+            b.extend_from_slice(&v.to_be_bytes());
+        }
+        for &l in &self.last {
+            let age = ((self.t - l) as usize).min(FADE_TICKS) as u16;
+            b.extend_from_slice(&age.to_be_bytes());
+        }
+        for a in 0..self.ants {
+            b.extend_from_slice(&self.ax[a].to_be_bytes());
+            b.extend_from_slice(&self.ay[a].to_be_bytes());
+            b.extend_from_slice(&self.strength[a].to_be_bytes());
+            b.push(self.ah[a] | (self.returning[a] as u8) << 7);
+        }
+        b
+    }
+
+    /// Inverse of `to_bytes`. Checks the layout, not that the state is reachable.
+    pub fn from_bytes(b: &[u8]) -> Result<Colony, Error> {
+        let mut r = Reader { b, at: 0 };
+        if r.u8()? != STATE_FORMAT {
+            return Err(Error::BadState);
+        }
+        let mut s = [0u32; 4];
+        for w in s.iter_mut() {
+            *w = r.u32()?;
+        }
+        let seed = r.arr32()?;
+        let n = r.u8()? as usize;
+        let ants = r.u16()? as usize;
+        let ticks = r.u32()?;
+        let t = r.u32()?;
+        if !(2..=5).contains(&n) || ticks > BURN_TICKS || t > ticks {
+            return Err(Error::BadState);
+        }
+        let commit = Commit {
+            stake_hash: r.arr32()?,
+            odds_hash: r.arr32()?,
+        };
+        let (mut sx, mut sy, mut perm, mut rich, mut totals) =
+            (vec![], vec![], vec![], vec![], vec![]);
+        for _ in 0..n {
+            sx.push(r.u8()? as i32);
+            sy.push(r.u8()? as i32);
+            perm.push(r.u8()?);
+            rich.push(r.u16()?);
+            totals.push(r.u32()?);
+        }
+        if sx.iter().any(|&x| x >= W) || sy.iter().any(|&y| y >= H) {
+            return Err(Error::BadState);
+        }
+        let cells = (W * H) as usize;
+        let val = (0..cells).map(|_| r.u16()).collect::<Result<Vec<_>, _>>()?;
+        let mut last = Vec::with_capacity(cells);
+        for _ in 0..cells {
+            let age = r.u16()? as u32;
+            if age as usize > FADE_TICKS || age > t {
+                return Err(Error::BadState);
+            }
+            last.push(t - age);
+        }
+        let (mut ax, mut ay, mut strength, mut ah, mut returning) =
+            (vec![], vec![], vec![], vec![], vec![]);
+        for _ in 0..ants {
+            ax.push(r.u16()?);
+            ay.push(r.u16()?);
+            strength.push(r.u16()?);
+            let f = r.u8()?;
+            ah.push(f & 15);
+            returning.push(f >> 7 == 1);
+        }
+        if r.at != b.len() {
+            return Err(Error::BadState);
+        }
+        Ok(Colony {
+            rng: Rng { s },
+            seed,
+            n,
+            ants,
+            ticks,
+            t,
+            commit,
+            food: food_grid(&sx, &sy),
+            sx,
+            sy,
+            rich,
+            perm,
+            totals,
+            val,
+            last,
+            ax,
+            ay,
+            ah,
+            returning,
+            strength,
+        })
     }
 
     /// Pheromone in cell `i` at the current tick (lazy evaporation).
@@ -474,6 +732,7 @@ impl Colony {
     }
 
     /// Pheromone within the score radius of each source, at the current tick.
+    /// The result scores `totals`, this summed at every checkpoint.
     pub fn scores(&self) -> Vec<u32> {
         (0..self.n)
             .map(|s| {
@@ -501,7 +760,7 @@ impl Colony {
         if self.t != self.ticks {
             return Err(Error::NotFinished);
         }
-        let scores = self.scores();
+        let scores = self.totals.clone();
         let mut win_src = 0;
         for s in 1..self.n {
             if scores[s] > scores[win_src] {
@@ -741,9 +1000,9 @@ mod tests {
         let r = run(&seed_from_int(0), 5, None, N_ANTS, TICKS).unwrap();
         assert_eq!(
             r.hash_hex(),
-            "30a823b730efe55fadd1ac7e726544e01ea40ae26332b281f87384ed892d8248"
+            "8cee35da6b2f5b81f5d85e7a030991ab3760c3b21357899957716a10009c6b9e"
         );
-        assert_eq!(r.winner_option, 2);
+        assert_eq!(r.winner_option, 1);
     }
 
     #[test]
@@ -783,8 +1042,8 @@ mod tests {
             }
         );
         assert_eq!(
-            Colony::new(&seed, 3, None, 10, TICKS + 1).unwrap_err(),
-            Error::TooManyTicks(TICKS + 1)
+            Colony::new(&seed, 3, None, 10, BURN_TICKS + 1).unwrap_err(),
+            Error::TooManyTicks(BURN_TICKS + 1)
         );
     }
 
@@ -794,18 +1053,18 @@ mod tests {
         let (o, p) = ([9000, 1000], [8000, 2000]);
         assert_eq!(
             odds_richness(Kind::Follower, &o, &p).unwrap(),
-            vec![334, 196]
+            vec![334, 117]
         );
         assert_eq!(
             odds_richness(Kind::Contrarian, &o, &p).unwrap(),
-            vec![196, 334]
+            vec![117, 334]
         );
         assert_eq!(
             odds_richness(Kind::Momentum, &o, &p).unwrap(),
-            vec![334, 181]
+            vec![334, 94]
         );
         assert_eq!(stake_richness(&[0, 0, 0]).unwrap(), vec![334, 334, 334]);
-        assert_eq!(stake_richness(&[20000, 0]).unwrap(), vec![334, 230]);
+        assert_eq!(stake_richness(&[20000, 0]).unwrap(), vec![334, 117]);
     }
 
     #[test]
@@ -877,16 +1136,16 @@ mod tests {
         assert_eq!(
             r.shares,
             vec![
-                vec![3453, 4000, 2547],
-                vec![4093, 2094, 3813],
-                vec![3632, 3870, 2498],
-                vec![2117, 4081, 3802]
+                vec![3957, 4016, 2027],
+                vec![3865, 2229, 3906],
+                vec![4966, 2068, 2966],
+                vec![1586, 4171, 4243]
             ]
         );
-        assert_eq!(r.swarm, vec![3323, 3512, 3165]);
+        assert_eq!(r.swarm, vec![3594, 3121, 3285]);
         assert_eq!(
             r.hash_hex(),
-            "07a49f22d7f4d8c28208e085c1763ad28d9984b96200be231ba3314b4f97c1e4"
+            "63ecbf08918f956a6d5474cb6180af1828bdfd1889e563bac379b0b1aaa4e279"
         );
     }
 
@@ -934,10 +1193,120 @@ mod tests {
         );
     }
 
+    /// The spec's rule: scan all 16 headings, lowest index on ties.
+    fn home_heading_scan(dx: i32, dy: i32) -> i32 {
+        let mut best = i32::MIN;
+        let mut bk = 0;
+        for k in 0..16 {
+            let dot = DX[k] * dx + DY[k] * dy;
+            if k == 0 || dot > best {
+                best = dot;
+                bk = k;
+            }
+        }
+        bk as i32
+    }
+
+    #[test]
+    fn home_heading_matches_full_scan() {
+        // Every (dx, dy) a returning ant can have: positions are Q8 inside the grid.
+        let (tx, ty) = (NEST_X * 256 + 128, NEST_Y * 256 + 128);
+        for x in 0..W * 256 {
+            let dx = tx - x;
+            for y in 0..H * 256 {
+                let dy = ty - y;
+                assert_eq!(home_heading(dx, dy), home_heading_scan(dx, dy), "{dx} {dy}");
+            }
+        }
+    }
+
+    #[test]
+    fn food_grid_matches_per_source_scan() {
+        for i in 0..200 {
+            let c = Colony::new(&seed_from_int(i), 2 + (i % 4) as usize, None, 1, 1).unwrap();
+            for cy in 0..H {
+                for cx in 0..W {
+                    let want = (0..c.n)
+                        .find(|&s| {
+                            let (ddx, ddy) = (cx - c.sx[s], cy - c.sy[s]);
+                            ddx * ddx + ddy * ddy <= FOOD_RADIUS_SQ
+                        })
+                        .map_or(NO_FOOD, |s| s as u8);
+                    assert_eq!(c.food[(cy * W + cx) as usize], want);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn stored_colony_resumes_identically() {
+        let seed = seed_from_int(11);
+        let whole = run(&seed, 5, None, N_ANTS, TICKS).unwrap();
+        let mut c = Colony::new(&seed, 5, None, N_ANTS, TICKS).unwrap();
+        let mut sizes = vec![];
+        while c.t < c.ticks {
+            for _ in 0..100 {
+                c.step();
+            }
+            let b = c.to_bytes();
+            sizes.push(b.len());
+            c = Colony::from_bytes(&b).unwrap();
+        }
+        assert_eq!(c.result().unwrap(), whole);
+        assert!(sizes.iter().all(|&s| s == 15_043), "{sizes:?}");
+        let b = c.to_bytes();
+        assert_eq!(Colony::from_bytes(&b[..b.len() - 1]).unwrap_err(), Error::BadState);
+        let mut extra = b.clone();
+        extra.push(0);
+        assert_eq!(Colony::from_bytes(&extra).unwrap_err(), Error::BadState);
+    }
+
+    #[test]
+    fn richness_above_the_band_is_rejected() {
+        let seed = seed_from_int(0);
+        assert!(Colony::new(&seed, 2, Some(&[RICH_MAX, 0]), 10, 10).is_ok());
+        assert_eq!(
+            Colony::new(&seed, 2, Some(&[RICH_MAX + 1, 0]), 10, 10).unwrap_err(),
+            Error::BadRichness(RICH_MAX + 1)
+        );
+    }
+
     #[test]
     fn decay_table_matches_reference_endpoints() {
         assert_eq!(DECAY_T[0], 65536);
         assert_eq!(DECAY_T[1], 65012);
-        assert_eq!(DECAY_T.len(), 802);
+        assert_eq!(FADE_TICKS, 852);
+        assert!(DECAY_T[FADE_TICKS - 1] > 0);
+        assert_eq!(DECAY_T[FADE_TICKS], 0);
+    }
+
+    #[test]
+    fn long_run_resumes_identically_past_the_fade() {
+        // Saves every 997 ticks, so stored ages hit the FADE_TICKS cap and
+        // cells untouched since before the last save decay correctly.
+        let seed = seed_from_int(12);
+        let ticks = 6 * FADE_TICKS as u32;
+        let whole = run(&seed, 5, None, 40, ticks).unwrap();
+        let mut c = Colony::new(&seed, 5, None, 40, ticks).unwrap();
+        while c.t < c.ticks {
+            for _ in 0..997 {
+                c.step();
+            }
+            let b = c.to_bytes();
+            c = Colony::from_bytes(&b).unwrap();
+            assert_eq!(c.to_bytes(), b);
+        }
+        assert_eq!(c.result().unwrap(), whole);
+    }
+
+    #[test]
+    fn stored_ages_are_checked() {
+        let mut c = Colony::new(&seed_from_int(3), 2, None, 1, 10).unwrap();
+        c.step();
+        let mut b = c.to_bytes();
+        let at = STATE_HEAD + 9 * 2 + 2 * (W * H) as usize; // first cell's age
+        assert_eq!(&b[at..at + 2], &[0, 1]);
+        b[at + 1] = 2; // older than the run
+        assert_eq!(Colony::from_bytes(&b).unwrap_err(), Error::BadState);
     }
 }

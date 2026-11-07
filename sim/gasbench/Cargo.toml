@@ -1,0 +1,24 @@
+[package]
+name = "antosim-gasbench"
+version = "0.0.0"
+edition = "2021"
+description = "Measures the gas the antosim colony costs on NEAR, in a local sandbox. A bench, not the product contract."
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+antosim = { path = "../rust" }
+near-sdk = "5"
+
+# The sandbox test lives in runner/, so near-workspaces and near-sdk's
+# unit-testing feature don't have to agree on one near-crypto version.
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = true
+debug = false
+panic = "abort"
+overflow-checks = true

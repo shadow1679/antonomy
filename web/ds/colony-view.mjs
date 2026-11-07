@@ -26,7 +26,13 @@ const MOUND_R = 4.4;               // anthill radius in cells
 const ANT_SCALE = 0.62;
 const HIP = [0.14, 0.04, -0.06], KNEE = [0.36, 0.06, -0.26], FOOT = [0.62, 0.02, -0.62];
 
-const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+// Tokens are read once per page: getComputedStyle right after new markup
+// goes in forces a style recalc, and every view would pay it again.
+const TOKENS = new Map();
+const tok = (n) => {
+  if (!TOKENS.has(n)) TOKENS.set(n, getComputedStyle(document.documentElement).getPropertyValue(n).trim());
+  return TOKENS.get(n);
+};
 const rgb = (hex) => { const v = parseInt(hex.slice(1), 16); return [v >> 16, (v >> 8) & 255, v & 255]; };
 const css = ([r, g, b], a = 1) => `rgba(${r | 0},${g | 0},${b | 0},${a})`;
 const mix = (p, q, k) => p.map((v, i) => v + (q[i] - v) * k);
@@ -63,6 +69,36 @@ function blur3(a, tmp, w, h) {
   }
 }
 
+// Fades that depend only on the grid, built once per page and shared.
+// nestFade: roads stop at the foot of the anthill so the mound stays
+// readable. moundFade: pheromone is drawn thinner on the mound top so the
+// anthill stays visible (only cells under 3 from the nest, which no ring
+// ever scores).
+let FADES = null;
+function fades() {
+  if (FADES) return FADES;
+  const nestFade = new Float32Array(RW * RH), moundFade = new Float32Array(W * H);
+  for (let y = 0; y < RH; y++) for (let x = 0; x < RW; x++) {
+    const d = Math.hypot((x + 0.5) / RS - NEST_X - 0.5, (y + 0.5) / RS - NEST_Y - 0.5);
+    nestFade[y * RW + x] = smooth(MOUND_R - 0.6, MOUND_R + 1, d);
+  }
+  for (let i = 0; i < W * H; i++) {
+    moundFade[i] = 0.3 + 0.7 * smooth(1.4, 2.9, Math.hypot((i % W) - NEST_X, Math.floor(i / W) - NEST_Y));
+  }
+  return (FADES = { nestFade, moundFade });
+}
+
+// Scenery (ground, road texture, tall grass) takes ~20 ms to paint and is
+// fixed for a map, so views share it: a page that shows the same map twice,
+// or goes back to a market it just showed, paints it once. Oldest maps are
+// dropped past SCENE_PIXELS (eight 720×480 maps, about 22 MB).
+const SCENES = new Map(); // key -> { ground, roadTex, tufts, px }, oldest first
+const SCENE_PIXELS = 8 * 2 * 720 * 480;
+let scenePixels = 0;
+// Uncached scenery is painted at most once per frame `now`, so opening four
+// maps at once spreads the work over four frames instead of one long stall.
+let paintedAt = null;
+
 // Same rule as the sim: highest score, ties to the lowest index, -1 if no trail.
 export function leadingSource(scores) {
   let w = 0;
@@ -92,8 +128,14 @@ export class ColonyView {
     this.mode = "nest";      // "nest" = scenery, "cells" = plain grid, one pixel per cell
     this.selected = 37;
     this.hover = -1;
-    this.ground = layer(canvas.width, canvas.height);  // under the pheromone
+    this.ground = null;      // under the pheromone; shared scenery, see scene()
+    this.roadTex = null;
     this.props = layer(canvas.width, canvas.height);   // over it: nest mound, food piles
+    // Everything under the scoring rings (ground, roads, pheromone, bloom)
+    // changes once a tick, so it is composed here then and blitted per frame.
+    this.base = layer(canvas.width, canvas.height);
+    this.baseCtx = this.base.getContext("2d");
+    this.baseKey = "";
     this.ph = layer(W, H);
     this.phCtx = this.ph.getContext("2d");
     this.phImg = this.phCtx.createImageData(W, H);
@@ -111,31 +153,24 @@ export class ColonyView {
     this.roadMask = layer(RW, RH);
     this.roadMaskCtx = this.roadMask.getContext("2d");
     this.roadImg = this.roadMaskCtx.createImageData(RW, RH);
-    this.roadTex = layer(canvas.width, canvas.height);
     this.road = layer(canvas.width, canvas.height);
     this.roadCtx = this.road.getContext("2d");
     this.roadT = -1;
-    // Roads stop at the foot of the anthill so the mound stays readable.
-    this.nestFade = new Float32Array(RW * RH);
-    for (let y = 0; y < RH; y++) for (let x = 0; x < RW; x++) {
-      const d = Math.hypot((x + 0.5) / RS - NEST_X - 0.5, (y + 0.5) / RS - NEST_Y - 0.5);
-      this.nestFade[y * RW + x] = smooth(MOUND_R - 0.6, MOUND_R + 1, d);
-    }
-    // Pheromone is drawn thinner on the mound top so the anthill stays
-    // visible. Only cells under 3 from the nest, which no ring ever scores.
-    this.moundFade = new Float32Array(W * H);
-    for (let i = 0; i < W * H; i++) {
-      this.moundFade[i] = 0.3 + 0.7 * smooth(1.4, 2.9, Math.hypot((i % W) - NEST_X, Math.floor(i / W) - NEST_Y));
-    }
+    ({ nestFade: this.nestFade, moundFade: this.moundFade } = fades());
     this.tufts = [];         // grass drawn over the ants, swaying while playing
     this.owner = null;       // staker ants: wallet index per ant, -1 for a plain ant
     this.tints = [];
+    this.halos = [];
+    this.spotlight = -1;     // wallet whose ants get a halo, -1 for none
+    this.dimOthers = true;   // with a spotlight, fade every other ant
   }
 
   // Tint ants by wallet (see staker-ants.mjs). null clears it. Cosmetic only.
   setStakers(stakers) {
     this.owner = stakers ? stakers.owner : null;
     this.tints = stakers ? stakers.rows.map((r) => walletColor(r.hue)) : [];
+    this.halos = stakers ? stakers.rows.map((r) => walletColor(r.hue, 0.38)) : [];
+    this.spotlight = -1;
   }
 
   get still() { return this.motion.matches; }
@@ -156,13 +191,43 @@ export class ColonyView {
     this.party = null;
     this.wear.fill(0);
     this.roadT = -1;
-    const key = col.seed.join(",");
+    this.baseKey = "";
+    // Scenery is painted on the first draw (see scene()), not here.
+    const key = `${this.cv.width}|${col.seed}|${col.sx}|${col.sy}`;
     if (key !== this.key) {
       this.key = key;
-      this.paintGround();
-      this.paintRoadTexture();
+      this.ground = this.roadTex = null;
+      this.tufts = [];
       this.paintProps();
     }
+  }
+
+  // Point ground, roadTex and tufts at this map's shared scenery, painting it
+  // if no view has yet. Returns false, painting nothing, if another map's
+  // scenery was already painted in this frame `now`.
+  scene(now) {
+    if (this.ground) return true;
+    let sc = SCENES.get(this.key);
+    if (sc) SCENES.delete(this.key); // re-inserted below as the newest
+    else {
+      if (paintedAt === now) return false;
+      paintedAt = now;
+      const { width: w, height: h } = this.cv;
+      this.ground = layer(w, h);
+      this.roadTex = layer(w, h);
+      this.paintGround();
+      this.paintRoadTexture();
+      sc = { ground: this.ground, roadTex: this.roadTex, tufts: this.tufts, px: 2 * w * h };
+      scenePixels += sc.px;
+      for (const [k, old] of SCENES) {
+        if (scenePixels <= SCENE_PIXELS) break;
+        SCENES.delete(k);
+        scenePixels -= old.px;
+      }
+    }
+    SCENES.set(this.key, sc);
+    ({ ground: this.ground, roadTex: this.roadTex, tufts: this.tufts } = sc);
+    return true;
   }
 
   // Call after every col.step(). fx = spawn pickup, delivery and win effects.
@@ -598,8 +663,8 @@ export class ColonyView {
   }
 
   // A worn path sits a little below the soil: its top-left wall is in shade.
-  drawRoads() {
-    const { ctx, S, cv } = this;
+  drawRoads(ctx) {
+    const { S, cv } = this;
     if (this.roadT !== this.col.t) this.updateRoads();
     ctx.globalAlpha = 0.5;
     ctx.drawImage(this.roadMask, -0.15 * S, -0.2 * S, cv.width, cv.height);
@@ -660,16 +725,20 @@ export class ColonyView {
   // ---------------------------------------------------------------- frame
   // Draw one frame. frac (0..1) places ants between the last two ticks.
   // Returns true while effects are still running and want more frames.
+  // Pass the same `now` to every view drawn in one animation frame (the
+  // requestAnimationFrame time): uncached scenery is then painted for at most
+  // one of them per frame, and the others show bare soil until their turn.
   draw(frac = 1, now = performance.now()) {
     const { ctx, col } = this;
     if (this.still) frac = 1;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = "source-over";
-    const cells = this.mode === "cells";
-    if (cells) this.drawGrid(); else { ctx.drawImage(this.ground, 0, 0); this.drawRoads(); }
-    this.drawPheromone(cells);
-    const lead = leadingSource(col.scores()), done = col.t === col.ticks;
+    const cells = this.mode === "cells", ready = cells || this.scene(now);
+    const baseKey = `${col.t}|${this.mode}|${ready}`;
+    if (baseKey !== this.baseKey) { this.paintBase(cells, ready); this.baseKey = baseKey; }
+    ctx.drawImage(this.base, 0, 0);
+    const lead = leadingSource(col.standing()), done = col.t === col.ticks;
     this.drawRings(now, lead);
     ctx.drawImage(this.props, 0, 0);
     this.drawTrail();
@@ -679,20 +748,30 @@ export class ColonyView {
     this.drawSelection(frac, now);
     const partying = this.drawParty(now);
     this.drawBadges(lead, done);
-    return busy || partying;
+    return busy || partying || !ready;
   }
 
-  drawGrid() {
-    const { ctx, S, cv } = this;
-    ctx.fillStyle = css(this.c.soil[950]);
-    ctx.fillRect(0, 0, cv.width, cv.height);
-    ctx.fillStyle = css(this.c.bone, 0.05);
-    for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) ctx.fillRect((x + 0.5) * S - 1, (y + 0.5) * S - 1, 2, 2);
+  // The layer under the rings, for the current tick. Before the scenery is
+  // painted (ready false) the ground is bare soil, without roads.
+  paintBase(cells, ready) {
+    const g = this.baseCtx, { cv } = this;
+    if (cells) this.drawGrid(g);
+    else if (!ready) { g.fillStyle = css(mix(this.c.soil[950], this.c.soil[900], 0.7)); g.fillRect(0, 0, cv.width, cv.height); }
+    else { g.drawImage(this.ground, 0, 0); this.drawRoads(g); }
+    this.drawPheromone(g, cells);
+  }
+
+  drawGrid(g) {
+    const { S, cv } = this;
+    g.fillStyle = css(this.c.soil[950]);
+    g.fillRect(0, 0, cv.width, cv.height);
+    g.fillStyle = css(this.c.bone, 0.05);
+    for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) g.fillRect((x + 0.5) * S - 1, (y + 0.5) * S - 1, 2, 2);
   }
 
   // Strong cells run hot (amber-300), weak ones cool (amber-600).
-  drawPheromone(cells) {
-    const { ctx, cv, col, c } = this, d = this.phImg.data;
+  drawPheromone(ctx, cells) {
+    const { cv, col, c } = this, d = this.phImg.data;
     for (let i = 0, j = 0; i < W * H; i++, j += 4) {
       const v = col.cell(i);
       if (!v) { d[j + 3] = 0; continue; }
@@ -750,8 +829,12 @@ export class ColonyView {
     ctx.globalAlpha = 1;
   }
 
+  // With a spotlight on a wallet, its ants get a halo in its tint and, if
+  // dimOthers, every other ant fades back. Wallet tints stay at their fixed
+  // lightness (design rule 7); the halo only shows while someone asks for it.
   drawAnts(frac) {
-    const { col } = this, turn = Math.min(1, frac * 2.5);
+    const { col, ctx, S } = this, turn = Math.min(1, frac * 2.5);
+    const spot = this.owner && this.spotlight >= 0 ? this.spotlight : -1;
     // Foragers first, so ants carrying food draw on top.
     for (const pass of [0, 1]) {
       for (let a = 0; a < col.ants; a++) {
@@ -763,10 +846,17 @@ export class ColonyView {
         const moved = this.curX[a] !== this.prevX[a] || this.curY[a] !== this.prevY[a];
         const phase = (this.gait[a] - (moved ? 1 - frac : 0)) * Math.PI;
         const w = this.owner ? this.owner[a] : -1;
+        if (spot >= 0 && w === spot) {
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.fillStyle = this.halos[w];
+          ctx.beginPath(); ctx.arc(x, y, S * 0.95, 0, TAU); ctx.fill();
+        }
+        ctx.globalAlpha = spot >= 0 && w !== spot && this.dimOthers ? 0.28 : 1;
         this.ant(x, y, a0 + d * turn, phase, pass ? this.c.opt[this.optOf(this.carry[a])] : null, w >= 0 ? this.tints[w] : null);
       }
     }
-    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
   // Tall grass at the map edges stands over the ants and sways while playing.
@@ -847,6 +937,18 @@ export class ColonyView {
     ctx.strokeStyle = css(this.c.bone, 0.95);
     ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(x, y, 1.35 * S + pulse, 0, TAU); ctx.stroke();
+    // Name tag: the ant's number, above the ring (below it near the top edge).
+    const text = `#${this.selected}`;
+    ctx.font = `600 ${Math.round(S * 1.1)}px ${this.font}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const w = ctx.measureText(text).width + S * 0.9, h = S * 1.6;
+    const ty = y - 1.35 * S - h * 0.9 < h ? y + 1.35 * S + h * 0.9 : y - 1.35 * S - h * 0.9;
+    const tx = Math.min(Math.max(x, w / 2 + 4), this.cv.width - w / 2 - 4);
+    ctx.fillStyle = "rgba(13,10,7,0.86)";
+    ctx.beginPath(); ctx.roundRect(tx - w / 2, ty - h / 2, w, h, h / 2); ctx.fill();
+    ctx.fillStyle = css(this.c.bone);
+    ctx.fillText(text, tx, ty + 1);
   }
 
   // Labels over each pile: glyph and menu value, so the map reads without
@@ -894,7 +996,7 @@ export class ColonyView {
   }
 
   celebrate() {
-    const s = leadingSource(this.col.scores());
+    const s = leadingSource(this.col.standing());
     if (s < 0) return;
     const S = this.S, x = (this.col.sx[s] + 0.5) * S, y = (this.col.sy[s] + 0.5) * S, o = this.optOf(s);
     this.party = { s, t0: performance.now() };

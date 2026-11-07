@@ -1,15 +1,26 @@
 //! Pheromone staking. A wallet locks tokens on a (colony, option) pair. Influence
 //! is `isqrt(stake)` per wallet, summed per option. One wallet budget covers all
 //! colonies: total locked per wallet is capped, so spreading it over several
-//! options lowers the weight on each. Staking closes at `close_at`, which must
-//! come before the drand round is published at `publish_at`.
+//! options lowers the weight on each.
+//!
+//! Two schedules. Forecast colonies follow the round: staking closes at
+//! `close_at`, which must come before the drand round is published at
+//! `publish_at`, and `snapshot` is their frozen stake set. The Burn colony
+//! follows burn days (`day`): its stakes stay in until withdrawn and count for
+//! every day; at 12:00 UTC they freeze into that day's snapshot
+//! (`burn_snapshot`), so a stake made after 12:00 counts from the next day.
+//! Burn stakes can't be withdrawn from 12:00 to 24:00 UTC, while the run uses
+//! them. Freezing is lazy: every call that changes stakes first freezes the
+//! newest drawn day if it isn't yet, which gives the stakes as of its 12:00,
+//! since nothing changed them in between. A day with no calls between its
+//! 12:00 and the next day's 12:00 gets no snapshot and can't be burned.
 //!
 //! Sybil caveat: weights are per wallet, and isqrt is concave, so splitting one
 //! stake over k wallets multiplies influence by about sqrt(k). Nothing here
 //! prevents that.
 
-use crate::{isqrt, ledger::AccountId, ledger::Ledger, Error};
-use antosim::sha256;
+use crate::{day, isqrt, ledger::AccountId, ledger::Ledger, Error};
+use antosim::{sha256, BURN_COLONY};
 use std::collections::BTreeMap;
 
 /// Account that holds locked stake.
@@ -51,6 +62,10 @@ pub struct Staking {
     stakes: BTreeMap<(AccountId, u16, u8), u128>,
     wallet_total: BTreeMap<AccountId, u128>,
     settled: bool,
+    /// Burn colony stakes frozen at each drawn day's 12:00, until burned.
+    burn_days: BTreeMap<u64, Vec<Entry>>,
+    /// Newest day frozen so far.
+    burn_frozen_to: Option<u64>,
 }
 
 impl Staking {
@@ -63,6 +78,8 @@ impl Staking {
             stakes: BTreeMap::new(),
             wallet_total: BTreeMap::new(),
             settled: false,
+            burn_days: BTreeMap::new(),
+            burn_frozen_to: None,
         })
     }
 
@@ -83,7 +100,8 @@ impl Staking {
         option: u8,
         amount: u128,
     ) -> Result<(), Error> {
-        if now >= self.cfg.close_at || self.settled {
+        self.roll(now);
+        if colony != BURN_COLONY && (now >= self.cfg.close_at || self.settled) {
             return Err(Error::StakingClosed);
         }
         if amount == 0 {
@@ -108,6 +126,7 @@ impl Staking {
     }
 
     /// Withdraw before the window closes, or after the round has settled.
+    /// Burn colony stakes: any time except 12:00 to 24:00 UTC.
     pub fn unstake(
         &mut self,
         ledger: &mut Ledger,
@@ -117,7 +136,13 @@ impl Staking {
         option: u8,
         amount: u128,
     ) -> Result<(), Error> {
-        if now >= self.cfg.close_at && !self.settled {
+        self.roll(now);
+        let locked = if colony == BURN_COLONY {
+            day::running(now)
+        } else {
+            now >= self.cfg.close_at && !self.settled
+        };
+        if locked {
             return Err(Error::Locked);
         }
         if amount == 0 {
@@ -152,19 +177,61 @@ impl Staking {
         Ok(())
     }
 
-    /// Final stake snapshot and its hash. Only available once staking has closed,
-    /// so the hash that goes into the seed cannot change afterwards.
+    /// The round's final stake snapshot and its hash: every colony but the
+    /// Burn colony, which has its own per-day snapshot. Only available once
+    /// staking has closed, so the hash that goes into the seed cannot change
+    /// afterwards.
     pub fn snapshot(&self, now: u64) -> Result<Snapshot, Error> {
         if now < self.cfg.close_at {
             return Err(Error::StakingStillOpen);
         }
-        let entries: Vec<Entry> = self
-            .stakes
+        Ok(Snapshot::of(self.entries(|c| c != BURN_COLONY)))
+    }
+
+    fn entries(&self, keep: impl Fn(u16) -> bool) -> Vec<Entry> {
+        self.stakes
             .iter()
+            .filter(|((_, c, _), _)| keep(*c))
             .map(|((a, c, o), v)| (a.clone(), *c, *o, *v))
-            .collect();
-        let hash = hash_entries(&entries);
-        Ok(Snapshot { entries, hash })
+            .collect()
+    }
+
+    /// Freeze the newest drawn day's Burn colony stakes if not done yet.
+    /// Called before anything that changes stakes.
+    fn roll(&mut self, now: u64) {
+        if let Some(d) = day::drawn_day(now) {
+            if self.burn_frozen_to.is_none_or(|f| f < d) {
+                let e = self.entries(|c| c == BURN_COLONY);
+                self.burn_days.insert(d, e);
+                self.burn_frozen_to = Some(d);
+            }
+        }
+    }
+
+    /// Burn colony stakes as of `day`'s 12:00 UTC, and their hash: the stake
+    /// input of that day's colony. Errors before then, and for a day that was
+    /// skipped or has already been burned.
+    pub fn burn_snapshot(&self, burn_day: u64, now: u64) -> Result<Snapshot, Error> {
+        if day::drawn_day(now).is_none_or(|d| d < burn_day) {
+            return Err(Error::StakingStillOpen);
+        }
+        if let Some(e) = self.burn_days.get(&burn_day) {
+            return Ok(Snapshot::of(e.clone()));
+        }
+        // Drawn but not frozen yet: nothing has changed stakes since its 12:00.
+        if day::drawn_day(now) == Some(burn_day) && self.burn_frozen_to.is_none_or(|f| f < burn_day) {
+            return Ok(Snapshot::of(self.entries(|c| c == BURN_COLONY)));
+        }
+        Err(Error::NoBurnSnapshot(burn_day))
+    }
+
+    /// `burn_snapshot`, then forget that day and every earlier one: a burn
+    /// day is used once, and days are burned in order.
+    pub fn take_burn_snapshot(&mut self, burn_day: u64, now: u64) -> Result<Snapshot, Error> {
+        self.roll(now);
+        let s = self.burn_snapshot(burn_day, now)?;
+        self.burn_days = self.burn_days.split_off(&(burn_day + 1));
+        Ok(s)
     }
 
     /// Square-root weight per option for one colony: sum over wallets of
@@ -209,6 +276,13 @@ impl Staking {
             .into_iter()
             .map(|w| u32::try_from(w / SIM_WEIGHT_DIV).unwrap_or(u32::MAX))
             .collect()
+    }
+}
+
+impl Snapshot {
+    fn of(entries: Vec<Entry>) -> Snapshot {
+        let hash = hash_entries(&entries);
+        Snapshot { entries, hash }
     }
 }
 
@@ -348,9 +422,9 @@ mod tests {
     #[test]
     fn staking_closes_at_close_at() {
         let (mut l, mut s) = setup();
-        s.stake(&mut l, 99, "alice", 0, 0, ONE).unwrap();
+        s.stake(&mut l, 99, "alice", 1, 0, ONE).unwrap();
         assert_eq!(
-            s.stake(&mut l, 100, "alice", 0, 0, ONE),
+            s.stake(&mut l, 100, "alice", 1, 0, ONE),
             Err(Error::StakingClosed)
         );
     }
@@ -358,21 +432,21 @@ mod tests {
     #[test]
     fn unstake_only_before_close_or_after_settle() {
         let (mut l, mut s) = setup();
-        s.stake(&mut l, 1, "alice", 0, 0, 10 * ONE).unwrap();
-        s.unstake(&mut l, 50, "alice", 0, 0, 4 * ONE).unwrap();
+        s.stake(&mut l, 1, "alice", 1, 0, 10 * ONE).unwrap();
+        s.unstake(&mut l, 50, "alice", 1, 0, 4 * ONE).unwrap();
         assert_eq!(s.staked_by("alice"), 6 * ONE);
         assert_eq!(
-            s.unstake(&mut l, 100, "alice", 0, 0, ONE),
+            s.unstake(&mut l, 100, "alice", 1, 0, ONE),
             Err(Error::Locked)
         );
         assert_eq!(s.settle(119), Err(Error::NotPublished));
         s.settle(120).unwrap();
-        s.unstake(&mut l, 121, "alice", 0, 0, 6 * ONE).unwrap();
+        s.unstake(&mut l, 121, "alice", 1, 0, 6 * ONE).unwrap();
         assert_eq!(l.ft_balance_of("alice"), 1000 * ONE);
         assert_eq!(l.ft_balance_of(VAULT), 0);
         assert_eq!(s.staked_by("alice"), 0);
         assert_eq!(
-            s.stake(&mut l, 121, "alice", 0, 0, ONE),
+            s.stake(&mut l, 121, "alice", 1, 0, ONE),
             Err(Error::StakingClosed)
         );
     }
@@ -398,14 +472,14 @@ mod tests {
     fn snapshot_waits_for_close_and_ignores_call_order() {
         let (mut l1, mut s1) = setup();
         let (mut l2, mut s2) = setup();
-        s1.stake(&mut l1, 1, "alice", 0, 1, 5 * ONE).unwrap();
-        s1.stake(&mut l1, 2, "bob", 0, 2, 7 * ONE).unwrap();
-        s1.stake(&mut l1, 3, "alice", 1, 0, 2 * ONE).unwrap();
+        s1.stake(&mut l1, 1, "alice", 1, 1, 5 * ONE).unwrap();
+        s1.stake(&mut l1, 2, "bob", 1, 2, 7 * ONE).unwrap();
+        s1.stake(&mut l1, 3, "alice", 2, 0, 2 * ONE).unwrap();
         // Same final stakes, different order, plus an unstaked-and-restaked amount.
-        s2.stake(&mut l2, 1, "alice", 1, 0, 2 * ONE).unwrap();
-        s2.stake(&mut l2, 2, "bob", 0, 2, 9 * ONE).unwrap();
-        s2.unstake(&mut l2, 3, "bob", 0, 2, 2 * ONE).unwrap();
-        s2.stake(&mut l2, 4, "alice", 0, 1, 5 * ONE).unwrap();
+        s2.stake(&mut l2, 1, "alice", 2, 0, 2 * ONE).unwrap();
+        s2.stake(&mut l2, 2, "bob", 1, 2, 9 * ONE).unwrap();
+        s2.unstake(&mut l2, 3, "bob", 1, 2, 2 * ONE).unwrap();
+        s2.stake(&mut l2, 4, "alice", 1, 1, 5 * ONE).unwrap();
         assert_eq!(s1.snapshot(99), Err(Error::StakingStillOpen));
         let a = s1.snapshot(100).unwrap();
         let b = s2.snapshot(100).unwrap();
@@ -417,7 +491,7 @@ mod tests {
     fn snapshot_hash_changes_with_any_stake() {
         let hash_for = |acct: &str, opt: u8, amt: u128| {
             let (mut l, mut s) = setup();
-            s.stake(&mut l, 1, acct, 0, opt, amt).unwrap();
+            s.stake(&mut l, 1, acct, 1, opt, amt).unwrap();
             s.snapshot(100).unwrap().hash
         };
         let base = hash_for("alice", 1, 5 * ONE);
@@ -428,5 +502,83 @@ mod tests {
         // Empty snapshot still hashes (tag + zero count).
         let (_, s) = setup();
         assert_eq!(s.snapshot(100).unwrap().hash, hash_entries(&[]));
+    }
+
+    // Burn days: day 20745 is 2026-10-19.
+    const D: u64 = 20_745;
+    fn at(d: u64, h: u64) -> u64 {
+        d * day::DAY_MS + h * 3_600_000
+    }
+
+    #[test]
+    fn burn_stakes_ignore_the_round_close() {
+        let (mut l, mut s) = setup();
+        let late = at(D, 3);
+        assert!(late > CFG.publish_at);
+        s.settle(late).unwrap();
+        s.stake(&mut l, late, "alice", BURN_COLONY, 2, 5 * ONE).unwrap();
+        assert_eq!(
+            s.stake(&mut l, late, "alice", 1, 2, ONE),
+            Err(Error::StakingClosed)
+        );
+        // The round snapshot leaves the Burn colony out.
+        assert!(s.snapshot(late).unwrap().entries.is_empty());
+    }
+
+    #[test]
+    fn burn_snapshot_freezes_at_noon() {
+        let (mut l, mut s) = setup();
+        s.stake(&mut l, at(D, 9), "alice", BURN_COLONY, 2, 5 * ONE).unwrap();
+        assert_eq!(s.burn_snapshot(D, at(D, 11)), Err(Error::StakingStillOpen));
+        // At 12:00 the day's stakes are the ones in so far, even before any call.
+        let noon = s.burn_snapshot(D, at(D, 12)).unwrap();
+        assert_eq!(noon.entries, vec![("alice".to_string(), BURN_COLONY, 2, 5 * ONE)]);
+        // A stake after 12:00 counts from the next day, not this one.
+        s.stake(&mut l, at(D, 13), "bob", BURN_COLONY, 4, 3 * ONE).unwrap();
+        assert_eq!(s.burn_snapshot(D, at(D, 14)).unwrap(), noon);
+        assert_eq!(s.burn_snapshot(D + 1, at(D + 1, 12)).unwrap().entries.len(), 2);
+        // Other colonies never enter the Burn snapshot.
+        s.stake(&mut l, at(D, 15), "carol", 1, 0, ONE).unwrap_err(); // round closed
+        assert_ne!(noon.hash, s.burn_snapshot(D + 1, at(D + 1, 12)).unwrap().hash);
+    }
+
+    #[test]
+    fn burn_stakes_locked_while_the_colony_runs() {
+        let (mut l, mut s) = setup();
+        s.stake(&mut l, at(D, 1), "alice", BURN_COLONY, 2, 5 * ONE).unwrap();
+        s.unstake(&mut l, at(D, 2), "alice", BURN_COLONY, 2, ONE).unwrap();
+        for h in [12, 18, 23] {
+            assert_eq!(
+                s.unstake(&mut l, at(D, h), "alice", BURN_COLONY, 2, ONE),
+                Err(Error::Locked)
+            );
+        }
+        s.unstake(&mut l, at(D + 1, 0), "alice", BURN_COLONY, 2, 4 * ONE).unwrap();
+        // The withdrawal after 24:00 doesn't reach back into the frozen day.
+        assert_eq!(s.burn_snapshot(D, at(D + 1, 0)).unwrap().entries[0].3, 4 * ONE);
+        assert_eq!(l.ft_balance_of("alice"), 1000 * ONE);
+    }
+
+    #[test]
+    fn burn_snapshot_is_taken_once_and_in_order() {
+        let (mut l, mut s) = setup();
+        s.stake(&mut l, at(D, 1), "alice", BURN_COLONY, 2, 5 * ONE).unwrap();
+        s.stake(&mut l, at(D, 13), "alice", BURN_COLONY, 3, ONE).unwrap(); // freezes D
+        s.stake(&mut l, at(D + 1, 13), "alice", BURN_COLONY, 3, ONE).unwrap(); // freezes D + 1
+        let late = at(D + 2, 1);
+        assert_eq!(s.take_burn_snapshot(D + 1, late).unwrap().entries.len(), 2);
+        // Taking D + 1 dropped it and every day before it.
+        assert_eq!(s.take_burn_snapshot(D + 1, late), Err(Error::NoBurnSnapshot(D + 1)));
+        assert_eq!(s.burn_snapshot(D, late), Err(Error::NoBurnSnapshot(D)));
+    }
+
+    #[test]
+    fn a_day_with_no_calls_is_skipped() {
+        let (mut l, mut s) = setup();
+        s.stake(&mut l, at(D, 1), "alice", BURN_COLONY, 2, 5 * ONE).unwrap();
+        // Next call two days later: only the newest drawn day gets frozen.
+        s.stake(&mut l, at(D + 2, 13), "bob", BURN_COLONY, 1, ONE).unwrap();
+        assert_eq!(s.burn_snapshot(D, at(D + 2, 14)), Err(Error::NoBurnSnapshot(D)));
+        assert_eq!(s.burn_snapshot(D + 2, at(D + 2, 14)).unwrap().entries.len(), 1);
     }
 }

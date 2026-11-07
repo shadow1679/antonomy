@@ -101,7 +101,7 @@
       <div class="type-row"><span class="eyebrow">prose · 17</span><span class="prose">Shorter paths complete more round trips and build stronger trails.</span></div>
       <div class="type-row"><span class="eyebrow">base · mono 15</span><span>seed 0x9f3a…e21c · tick 0800/0800</span></div>
       <div class="type-row"><span class="eyebrow">sm · mono 13</span><span class="text-sm">Staking closes before the drand round is published.</span></div>
-      <div class="type-row"><span class="eyebrow">xs · eyebrow</span><span class="eyebrow">Trail share at final tick</span></div>
+      <div class="type-row"><span class="eyebrow">xs · eyebrow</span><span class="eyebrow">Trail share over the run</span></div>
     </div>
 
     <div class="two" style="margin-top: var(--space-6)">
@@ -352,6 +352,29 @@
         <div class="notice notice--info"><div><span class="notice__title">Staking closes before the round</span><p>Stakes lock before drand round #5,123,456 is published, so nobody can stake after seeing the seed.</p></div></div>
         <div class="notice notice--warning"><div><span class="notice__title">Testnet play token</span><p>tANTO has no value. Antonomy is on NEAR testnet only.</p></div></div>
         <div class="notice notice--success"><div><span class="notice__title">Round executed</span><p>The colony picked option 2. The contract burned 0.50% of the treasury.</p></div></div>
+      </div>
+    </div>
+
+    <h3 class="demo-label">Belief board and pick</h3>
+    <div class="two">
+      <div class="chamber">
+        <div class="chamber__header"><h3 class="chamber__title">Swarm belief</h3><span class="tag-forecast">Forecast · not advice</span></div>
+        <ul class="belief">
+          <li class="belief__row" data-opt="0" style="--share: 38.4; --market: 62"><span class="opt belief__label">Cut</span><span class="belief__value num">38.4<small>%</small></span><span class="belief__track" aria-hidden="true"><span class="belief__fill"></span><span class="belief__market"></span></span><span class="belief__meta"><span>market 62.0%</span><span class="delta delta--down">23.6 pts vs market</span></span></li>
+          <li class="belief__row" data-opt="1" style="--share: 33.1; --market: 28"><span class="opt belief__label">Hold</span><span class="belief__value num">33.1<small>%</small></span><span class="belief__track" aria-hidden="true"><span class="belief__fill"></span><span class="belief__market"></span></span><span class="belief__meta"><span>market 28.0%</span><span class="delta delta--up">5.1 pts vs market</span></span></li>
+          <li class="belief__row" data-opt="2" style="--share: 28.5; --market: 10"><span class="opt belief__label">Hike</span><span class="belief__value num">28.5<small>%</small></span><span class="belief__track" aria-hidden="true"><span class="belief__fill"></span><span class="belief__market"></span></span><span class="belief__meta"><span>market 10.0%</span><span class="delta delta--up">18.5 pts vs market</span></span></li>
+        </ul>
+        <ul class="belief-key" style="margin-top: var(--space-4)"><li class="belief-key__swarm">swarm belief</li><li class="belief-key__market">market odds</li></ul>
+      </div>
+      <div class="stack">
+        <div class="chamber">
+          <div class="chamber__header"><h3 class="chamber__title">Leading now</h3><span class="chip">tick 412 / 800</span></div>
+          <div class="pick" data-state="pending"><p class="pick__value"><span class="opt" data-opt="2">0.50%</span></p><p class="text-sm text-muted" style="margin: 0">The leader can still change. The pick is final at tick 800.</p></div>
+        </div>
+        <div class="chamber">
+          <div class="chamber__header"><h3 class="chamber__title">Today's pick</h3><span class="chip">✓ final · tick 800</span></div>
+          <div class="pick" data-state="final"><p class="pick__value"><span class="opt" data-opt="2">0.50%</span></p><p class="text-sm text-muted" style="margin: 0">of the treasury, capped at 2%.</p></div>
+        </div>
       </div>
     </div>
 

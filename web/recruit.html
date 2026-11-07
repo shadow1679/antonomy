@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Antonomy · recruit an ant</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="topbar"></div>
+
+<main>
+  <div class="page-head container">
+    <p class="eyebrow">Recruit an ant · for agents</p>
+    <div class="page-head__split">
+      <h1>Bring your own ant.</h1>
+      <p class="lede">Any agent can join the Burn colony with its own strategy: a <code>decide(r)</code> function that reads the stakes and says what to stake. Its ants hatch in its colour and forage on the same map as everyone's. <a class="what" href="docs.html#recruit">How recruiting works</a></p>
+    </div>
+  </div>
+
+  <section class="page-section" id="try" aria-labelledby="try-title">
+    <div class="container">
+      <div class="section-head">
+        <h2 id="try-title">Try a strategy</h2>
+        <span class="chip" id="day-chip">…</span>
+        <a class="what spacer" href="docs.html#recruit">What decide(r) sees</a>
+      </div>
+      <p class="section-sub" id="try-sub"></p>
+      <div class="workbench workbench--controls-first">
+        <div class="workbench__col workbench__col--sticky">
+          <form class="chamber stack" id="form" novalidate>
+            <div class="chamber__header" style="margin: 0"><h3 class="chamber__title">Your recruit</h3><span class="eyebrow">runs in your browser</span></div>
+            <div class="field">
+              <label class="field__label" for="account">Agent account</label>
+              <input class="input" id="account" value="my-ant.testnet" maxlength="64" spellcheck="false" autocomplete="off" aria-describedby="account-hint">
+              <span class="field__hint" id="account-hint">Its ants take their colour from this name: <span class="wallet" id="account-tint">my-ant.testnet</span></span>
+            </div>
+            <fieldset class="option-cards option-cards--list" id="strategies" style="border: 0; padding: 0; margin-inline: 0; min-width: 0">
+              <legend class="field__label" style="margin-bottom: var(--space-2)">Strategy</legend>
+            </fieldset>
+            <dl class="stake__readout">
+              <div><dt>Balance</dt><dd class="num" id="r-balance">…</dd></div>
+              <div><dt>Wallet cap</dt><dd class="num" id="r-cap">…</dd></div>
+              <div><dt>Day's pot</dt><dd class="num" id="r-pot">…</dd></div>
+            </dl>
+            <div class="cluster">
+              <button class="btn btn--primary" type="submit">Hatch my ant</button>
+            </div>
+            <p class="text-xs text-faint" style="margin: 0">Nothing is signed here. Balance, cap and pool are sample values. <a class="what" href="docs.html#demo">Demo</a></p>
+          </form>
+        </div>
+
+        <div class="workbench__col">
+          <div class="chamber" role="status" aria-live="polite" id="plan"></div>
+          <div id="player"></div>
+          <div class="tiles">
+            <div class="chamber">
+              <div class="chamber__header">
+                <h3 class="chamber__title">Your ants</h3>
+                <div class="cluster" style="--cluster-gap: var(--space-2)">
+                  <button class="btn btn--icon btn--sm btn--ghost" type="button" id="ant-prev" aria-label="Previous ant of yours">‹</button>
+                  <button class="btn btn--icon btn--sm btn--ghost" type="button" id="ant-next" aria-label="Next ant of yours">›</button>
+                </div>
+              </div>
+              <div id="follow" aria-live="polite"></div>
+              <label class="cluster text-xs text-muted" style="--cluster-gap: var(--space-2); margin-top: var(--space-4)">
+                <input type="checkbox" id="dim" checked> Fade everyone else's ants
+              </label>
+            </div>
+            <div class="chamber">
+              <div class="chamber__header">
+                <h3 class="chamber__title">Trail share</h3>
+                <span class="eyebrow" id="share-tick">tick 0</span>
+              </div>
+              <ul class="share-bars share-bars--compact" id="bars"></ul>
+              <p class="text-xs text-faint" style="margin: var(--space-4) 0 0">A short 800-tick run, not the day's 43,200. One seed is one draw. <a class="what" href="docs.html#sugar">Why</a></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="page-section" id="run" aria-labelledby="run-title">
+    <div class="container">
+      <div class="section-head">
+        <h2 id="run-title">Run it for real</h2>
+        <span class="chip">testnet play token</span>
+        <a class="what spacer" href="docs.html#recruit-rules">Rules the kit enforces</a>
+      </div>
+      <p class="section-sub">The kit is <code>bots/recruit.py</code>: Python standard library only, no paid LLM calls. These lines follow the account and strategy above. There is no contract on testnet yet, so put its account in place of <code>&lt;contract&gt;</code> once it is deployed.</p>
+      <div class="workbench">
+        <ol class="recruit-steps" id="steps"></ol>
+        <div class="stack">
+          <div class="notice notice--warning">
+            <p style="margin: 0"><strong>Play token, testnet only.</strong> Burn stakers share a reward pool, which resembles betting. Forecast colonies never pay, so the kit only stakes on the Burn colony.</p>
+          </div>
+          <div class="chamber">
+            <div class="chamber__header"><h3 class="chamber__title">What the kit signs</h3></div>
+            <p class="text-xs text-faint" style="margin: 0 0 var(--space-3)">With <code>--send</code>, one NEAR CLI call per stake, from your local keychain:</p>
+            <div id="signs"></div>
+            <p class="text-xs text-faint" style="margin: var(--space-3) 0 0">Give the agent a key that can only call the staking methods; <code>bots/swarm.py</code> has the <code>near account add-key</code> line.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="footer"></div>
+
+<script type="module">
+import { trailShares } from "../sim/js/antosim.mjs";
+import { BURN_MENU } from "./round.mjs";
+import { SUGAR_CAP } from "./sugar.mjs";
+import { walletHue } from "./ds/staker-ants.mjs";
+import { antLives } from "./autopsy.mjs";
+import { STRATEGIES, recruit, recruitDay, stakeCall, kitCommands, BALANCE, POOL, ROUND_SHARE_BPS } from "./recruit.mjs";
+import { $, esc, installCopy, liveShares, shareBars, Player, topbar, footer, followHTML } from "./ui.mjs";
+
+$("topbar").outerHTML = topbar("recruit");
+$("footer").outerHTML = footer();
+installCopy();
+
+const CONTRACT = "<contract>";
+const num = (x) => x.toLocaleString("en", { maximumFractionDigits: 1 });
+const optHTML = (o) => `<span class="opt" data-opt="${o}">${esc(BURN_MENU[o])}</span>`;
+const longDate = (ms) => new Date(ms).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+const cmdHTML = (text, label) =>
+  `<pre class="cmd"><code>${esc(text)}</code><button class="hash__copy" type="button" aria-label="Copy ${esc(label)}" data-copy="${esc(text)}"></button></pre>`;
+
+const state = { key: "value", account: "my-ant.testnet" };
+let rec = null, lives = [], mine = [], k = 0;
+
+$("strategies").insertAdjacentHTML("beforeend", Object.entries(STRATEGIES).map(([key, s]) =>
+  `<label class="option-card strategy-card"><input type="radio" name="strategy" value="${key}"${key === state.key ? " checked" : ""}>` +
+  `<span class="option-card__value">${esc(s.name)}</span>` +
+  `<span class="option-card__meta">${esc(s.blurb)} <code>--strategy ${esc(s.arg)}</code></span></label>`).join(""));
+$("r-balance").textContent = `${BALANCE} tANTO`;
+$("r-cap").textContent = `${SUGAR_CAP} tANTO`;
+$("r-pot").textContent = `${num((POOL * ROUND_SHARE_BPS) / 10_000)} tANTO`;
+
+const bars = shareBars($("bars"), BURN_MENU);
+const player = new Player($("player"), {
+  onTick(col) {
+    const { pct, lead } = liveShares(col);
+    const done = col.t === col.ticks;
+    bars(done ? trailShares(col.result()).map((x) => x / 100) : pct, done ? lead : -1);
+    $("share-tick").textContent = `tick ${col.t}`;
+    followPanel();
+  },
+  onSelect(a) {
+    const j = mine.indexOf(a);
+    if (j >= 0) k = j;
+    followPanel();
+  },
+});
+
+// The followed ant: one of yours unless you click someone else's on the map.
+function followPanel() {
+  if (!rec) return;
+  const a = player.view.selected;
+  $("follow").innerHTML = rec.ants
+    ? followHTML({ a, col: player.col, trips: lives[a] ?? [], labels: BURN_MENU, stakers: rec.side.stakers, close: false }) +
+      `<p class="text-xs text-faint" style="margin: var(--space-3) 0 0">${mine.includes(a) ? `Ant ${k + 1} of your ${rec.ants}.` : "Not one of yours: ‹ › go back to your ants."}</p>`
+    : `<p class="text-sm text-muted" style="margin: 0">This strategy sits the day out, so no ants hatch. Pick another strategy.</p>`;
+}
+
+function planHTML(day) {
+  const { lines, notes, ants } = rec;
+  if (!lines.length) return `<p style="margin: 0">${esc(STRATEGIES[state.key].name)} stakes nothing today.</p>` +
+    notes.map((n) => `<p class="text-xs text-faint" style="margin: var(--space-2) 0 0">${esc(n)}</p>`).join("");
+  const total = lines.reduce((a, x) => a + x.amount, 0);
+  return `<div class="pick" data-state="final" style="margin: 0">
+      <p class="eyebrow" style="margin: 0">${esc(state.account)} · ${esc(STRATEGIES[state.key].name)}</p>
+      <p class="pick__value">${lines.map((x) => `${num(x.amount)} tANTO on ${optHTML(x.option)}`).join(" · ")}</p>
+      <p class="text-sm text-muted" style="margin: 0">Hatches <b class="num">${ants}</b> ant${ants === 1 ? "" : "s"} of 150 in your colour, counting for the ${esc(longDate(day.countsFor.startMs))} burn.</p>
+    </div>
+    <dl class="stake__readout" style="margin-top: var(--space-4)">
+      <div><dt>Weight after</dt><dd class="num is-accent">${(lines.at(-1).weightAfter / 1000).toFixed(1)} √</dd></div>
+      <div><dt>Food share</dt><dd class="num">${(lines.at(-1).foodShare * 100).toFixed(1)}%</dd></div>
+      <div><dt>Reward if it wins</dt><dd class="num">≈ ${num(lines.at(-1).payoutIfWins)}</dd></div>
+    </dl>
+    <p class="text-xs text-faint" style="margin: var(--space-3) 0 0">The kit's own estimates at the stakes so far (${total} tANTO from you); others may still add before 12:00 UTC. Food share is only a proxy for the chance to win. <a class="what" href="docs.html#recruit">How it's computed</a></p>` +
+    notes.map((n) => `<p class="text-xs text-faint" style="margin: var(--space-2) 0 0">Kit note: ${esc(n)}</p>`).join("");
+}
+
+function stepsHTML() {
+  const c = kitCommands(CONTRACT, state.account, state.key);
+  const step = (title, text, cmd, label) => `<li><h3>${title}</h3><p>${text}</p>${cmd ? cmdHTML(cmd, label) : ""}</li>`;
+  return [
+    c.copy ? step("Copy the example", "Edit <code>decide(r)</code> in your copy: it gets the stakes and returns <code>[(option, amount), …]</code>.", c.copy, "copy command")
+      : step("Pick a built-in", `<code>--strategy ${esc(STRATEGIES[state.key].arg)}</code> is one of the kit's built-ins, so there is no file to write.`),
+    step("Dry run", "Reads the contract views, prints the plan as one JSON line and the NEAR CLI calls it would make. Nothing is signed.", c.dry, "dry run command"),
+    step("Send", "Signs the stakes with the NEAR CLI and your local keychain. Stakes stay in and count every day until withdrawn.", c.send, "send command"),
+    step("Withdraw", "Unstakes every entry the account holds. Not from 12:00 to 24:00 UTC, while the colony runs.", c.withdraw, "withdraw command"),
+  ].join("");
+}
+
+function hatch() {
+  const day = recruitDay();
+  rec = recruit(state.account, state.key, day.wallets, day.seed);
+  $("day-chip").textContent = day.staking ? "counts today · closes 12:00 UTC" : "counts tomorrow";
+  $("try-sub").textContent = `Runs the kit's strategy in your browser against the stakes so far (${day.wallets.length} fixture wallet${day.wallets.length === 1 ? "" : "s"}), then plays a short run on ${day.map} with your ants in it. Nothing is signed.`;
+  $("plan").innerHTML = planHTML(day);
+  lives = antLives(rec.side.make);
+  mine = rec.wallet < 0 ? [] : [...rec.side.stakers.owner].flatMap((o, a) => (o === rec.wallet ? [a] : []));
+  k = 0;
+  player.load(rec.side.make, BURN_MENU, rec.side.stakers);
+  player.view.dimOthers = $("dim").checked;
+  player.spot(rec.wallet);
+  player.select(mine[0] ?? 0);
+  if (rec.ants) player.play();
+  $("steps").innerHTML = stepsHTML();
+  $("signs").innerHTML = rec.lines.length
+    ? rec.lines.map((x) => cmdHTML(stakeCall(CONTRACT, state.account, x.option, x.amount), "NEAR CLI call")).join("")
+    : `<p class="text-sm text-muted" style="margin: 0">Nothing today: this plan has no stakes.</p>`;
+}
+
+function setAccount(v) {
+  const id = v.trim().toLowerCase() || "my-ant.testnet";
+  state.account = id;
+  $("account-tint").textContent = id;
+  $("account-tint").style.setProperty("--wallet-hue", walletHue(id));
+}
+
+$("account").addEventListener("input", (e) => setAccount(e.target.value));
+$("strategies").addEventListener("change", (e) => { state.key = e.target.value; hatch(); });
+$("form").addEventListener("submit", (e) => { e.preventDefault(); setAccount($("account").value); hatch(); });
+$("dim").addEventListener("change", (e) => { player.view.dimOthers = e.target.checked; if (!player.raf) player.view.draw(1); });
+const cycle = (d) => { if (!mine.length) return; k = (k + d + mine.length) % mine.length; player.select(mine[k]); };
+$("ant-prev").addEventListener("click", () => cycle(-1));
+$("ant-next").addEventListener("click", () => cycle(1));
+
+setAccount($("account").value);
+hatch();
+</script>
+</body>
+</html>

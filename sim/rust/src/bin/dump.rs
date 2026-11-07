@@ -1,4 +1,5 @@
-// Usage: dump <first_seed> <count>
+// Usage: dump <first_seed> <count> [day]
+// With "day", prints only hd: the Burn colony's daily run (150 ants, BURN_TICKS).
 // Prints one JSON line per seed, in the same format as sim/tests/dump.mjs:
 // the result hashes for n=5, n=2, a run with fixed richness, a Burn colony with
 // stakes and the four forecasters on one market (60 ants, 300 ticks), plus two
@@ -6,7 +7,7 @@
 // crosscheck.py compares these with the Python reference.
 use antosim::{
     burn_run, forecast_market, forecast_run, market_colony, run, seed_from_int, sha256, Kind,
-    FORECAST_ANTS, FORECAST_TICKS, N_ANTS, TICKS,
+    BURN_TICKS, FORECAST_ANTS, FORECAST_TICKS, N_ANTS, TICKS,
 };
 
 // Fixtures shared with crosscheck.py and sim/tests/dump.mjs.
@@ -23,9 +24,15 @@ fn main() {
         .and_then(|s| s.parse().ok())
         .expect("first_seed");
     let count: u64 = args.get(2).and_then(|s| s.parse().ok()).expect("count");
+    let day = args.get(3).is_some_and(|a| a == "day");
     let stake_hash = sha256(b"stakes");
     for i in first..first + count {
         let seed = seed_from_int(i);
+        if day {
+            let d = burn_run(&seed, &BURN_WEIGHTS, stake_hash, N_ANTS, BURN_TICKS).unwrap();
+            println!("{{\"i\":{},\"hd\":\"{}\"}}", i, d.hash_hex());
+            continue;
+        }
         let a = run(&seed, 5, None, N_ANTS, TICKS).unwrap();
         let b = run(&seed, 2, None, N_ANTS, TICKS).unwrap();
         let c = run(&seed, 3, Some(&[300, 250, 200]), N_ANTS, TICKS).unwrap();

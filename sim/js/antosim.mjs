@@ -8,6 +8,7 @@ export const W = 72, H = 48;
 export const NEST_X = 36, NEST_Y = 24;
 export const N_ANTS = 150;
 export const TICKS = 800;
+export const BURN_TICKS = 43200; // Burn colony: 12:00 to 24:00 UTC at one tick per second; the longest run
 export const CAP = 20 * 256;
 const DECAY_Q16 = 65536 - 524;
 const SENSE_DIST = 3;
@@ -16,17 +17,19 @@ const DEPOSIT_BASE = 512;
 export const FOOD_RADIUS_SQ = 4;
 const NEST_RADIUS_SQ = 4;
 export const SCORE_RADIUS_SQ = 36;
-const RICH_MIN = 179, RICH_SPAN = 155;
+const RICH_MIN = 90, RICH_SPAN = 244; // richness Q8: 0.35 .. 1.3
+export const SCORE_EVERY = 100; // ticks between score checkpoints
 const DIST_MIN = 9, DIST_SPAN = 13;
 const MARGIN = 4;
 
 const enc = new TextEncoder();
-const VERSION = enc.encode("ANTO-SIM-v1");
+export const SIM_VERSION = "ANTO-SIM-v1";
+const VERSION = enc.encode(SIM_VERSION);
 
 // Snapshot inputs (see sim/python/antosim.py for the rationale).
 const BPS = 10000;
 const MOMENTUM_FLOOR = 200;
-const COMMUNITY_BASE = 10000; // milli sqrt-tokens
+const COMMUNITY_BASE = 2500; // milli sqrt-tokens
 const ODDS_TAG = enc.encode("ANTO-ODDS-v0");
 const ZERO32 = new Uint8Array(32);
 export const FOLLOWER = 0, CONTRARIAN = 1, MOMENTUM = 2, COMMUNITY = 3;
@@ -43,8 +46,12 @@ const COS64 = T.cos64, SIN64 = T.sin64;
 export const DX = Array.from({ length: 16 }, (_, k) => COS64[k * 4]);
 export const DY = Array.from({ length: 16 }, (_, k) => SIN64[k * 4]);
 
+// Lazy evaporation: DECAY_T[n] = retention factor (Q16) after n ticks. It
+// reaches 0 at n = FADE_TICKS (852); retention for every n >= FADE_TICKS is 0.
 const DECAY_T = [65536];
-for (let n = 0; n <= TICKS; n++) DECAY_T.push(Math.floor((DECAY_T[n] * DECAY_Q16) / 65536));
+while (DECAY_T[DECAY_T.length - 1]) DECAY_T.push(Math.floor((DECAY_T[DECAY_T.length - 1] * DECAY_Q16) / 65536));
+export const FADE_TICKS = DECAY_T.length - 1;
+const decay = (age) => DECAY_T[age < FADE_TICKS ? age : FADE_TICKS];
 
 // ---- Bytes and SHA-256 (FIPS 180-4) ----
 
@@ -183,6 +190,11 @@ export class Colony {
   constructor(seed, n = 5, richness = null, ants = N_ANTS, ticks = TICKS, stakeHash = ZERO32, oddsHash = ZERO32) {
     if (seed.length !== 32 || n < 2 || n > 5 || stakeHash.length !== 32 || oddsHash.length !== 32) throw new Error("bad args");
     if (richness !== null && richness.length !== n) throw new Error("bad args");
+    if (!Number.isInteger(ticks) || ticks < 0 || ticks > BURN_TICKS) throw new RangeError("ticks out of range");
+    // The richness band's top; the Rust port stores deposit strength (2x) in a u16.
+    if (richness !== null && !richness.every((r) => Number.isInteger(r) && r >= 0 && r <= RICH_MIN + RICH_SPAN)) {
+      throw new RangeError("richness out of band");
+    }
     this.stakeHash = stakeHash;
     this.oddsHash = oddsHash;
     const rng = new Rng(seed);
@@ -216,13 +228,15 @@ export class Colony {
     this.sx = sx; this.sy = sy; this.rich = rich; this.perm = perm;
 
     this.val = new Uint32Array(W * H);
-    this.last = new Uint16Array(W * H);
+    this.last = new Uint32Array(W * H);
     this.ax = new Int32Array(ants).fill(NEST_X * 256 + 128);
     this.ay = new Int32Array(ants).fill(NEST_Y * 256 + 128);
     this.ah = new Int32Array(ants);
     for (let a = 0; a < ants; a++) this.ah[a] = rng.next() & 15;
     this.returning = new Uint8Array(ants);
     this.strength = new Int32Array(ants);
+    // Score per source so far: scores() summed at every checkpoint.
+    this.totals = new Array(n).fill(0);
   }
 
   // Advance one tick. Returns false once the final tick has run.
@@ -247,7 +261,7 @@ export class Colony {
           let v = 0;
           if (cx >= 0 && cx < W && cy >= 0 && cy < H) {
             const i = cy * W + cx;
-            v = Math.floor((val[i] * DECAY_T[t - last[i]]) / 65536);
+            v = Math.floor((val[i] * decay(t - last[i])) / 65536);
           }
           if (v > best) { best = v; bh = hh; }
         }
@@ -282,7 +296,7 @@ export class Colony {
           }
         } else {
           const i = cy * W + cx;
-          const v = Math.floor((val[i] * DECAY_T[t - last[i]]) / 65536) + strength[a];
+          const v = Math.floor((val[i] * decay(t - last[i])) / 65536) + strength[a];
           val[i] = v > CAP ? CAP : v;
           last[i] = t;
           strength[a] -= strength[a] >> 5;
@@ -296,15 +310,29 @@ export class Colony {
       }
       ah[a] = h; ax[a] = x; ay[a] = y;
     }
+    if (t % SCORE_EVERY === 0 || t === this.ticks) {
+      const now = this.scores();
+      for (let s = 0; s < n; s++) this.totals[s] += now[s];
+    }
     return true;
+  }
+
+  // An independent copy at the same tick, for seek points in a long replay.
+  // Stepping the copy gives the same ticks and result as stepping this one.
+  clone() {
+    const c = Object.create(Colony.prototype);
+    for (const [k, v] of Object.entries(this)) c[k] = ArrayBuffer.isView(v) || Array.isArray(v) ? v.slice() : v;
+    c.rng = Object.assign(Object.create(Rng.prototype), this.rng);
+    return c;
   }
 
   // Pheromone in cell i at the current tick (lazy evaporation).
   cell(i) {
-    return Math.floor((this.val[i] * DECAY_T[this.t - this.last[i]]) / 65536);
+    return Math.floor((this.val[i] * decay(this.t - this.last[i])) / 65536);
   }
 
   // Pheromone within the score radius of each source, at the current tick.
+  // The result scores `totals`, this summed at every checkpoint.
   scores() {
     const { n, sx, sy } = this;
     const out = [];
@@ -323,11 +351,20 @@ export class Colony {
     return out;
   }
 
+  // Each source's score if the run ended now: `totals`, plus the current
+  // trail unless this tick was a checkpoint (the final tick always is). Equals
+  // result().scores at the last tick. For display; reads state only.
+  standing() {
+    const t = this.t;
+    if (t === 0 || t % SCORE_EVERY === 0 || t === this.ticks) return this.totals.slice();
+    return this.scores().map((v, s) => this.totals[s] + v);
+  }
+
   // Final result and hash. Only valid after the last tick.
   result() {
     if (this.t !== this.ticks) throw new Error("colony not finished");
     const { n, sx, sy, rich, perm } = this;
-    const scores = this.scores();
+    const scores = this.totals.slice();
 
     let winSrc = 0;
     for (let s = 1; s < n; s++) if (scores[s] > scores[winSrc]) winSrc = s;

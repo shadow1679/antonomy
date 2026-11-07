@@ -570,6 +570,102 @@
 }
 .trip-log button:hover { color: var(--text); }
 
+/* Ant timeline: the followed ant's whole run as one strip. Each trip is a
+   bar in its pile's colour from pickup to home (a button that seeks there);
+   the playhead marks the replay's tick. Set --ticks on the strip, and
+   --from / --to (ticks) on each trip and --t on the playhead. */
+.ant-timeline {
+  --ticks: 800;
+  position: relative;
+  height: 22px;
+  margin: var(--space-3) 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--bg-canvas);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.ant-timeline__trip {
+  position: absolute;
+  top: 4px; bottom: 4px;
+  left: calc(var(--from) / var(--ticks) * 100%);
+  width: max(2px, calc((var(--to) - var(--from)) / var(--ticks) * 100%));
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: var(--opt-color);
+  cursor: pointer;
+  opacity: 0.85;
+}
+.ant-timeline__trip:hover, .ant-timeline__trip:focus-visible { opacity: 1; top: 1px; bottom: 1px; }
+.ant-timeline__trip.is-future { opacity: 0.3; }
+.ant-timeline__head {
+  position: absolute;
+  top: -3px; bottom: -3px;
+  left: calc(var(--t, 0) / var(--ticks) * 100%);
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--text);
+  pointer-events: none;
+}
+.ant-timeline__legend { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--text-faint); }
+
+/* Notable ants: one-click picks for the autopsy (busiest, first home...). */
+.ant-picks { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-4); padding: 0; list-style: none; }
+.ant-pick {
+  display: inline-flex; align-items: baseline; gap: var(--space-2);
+  padding: 4px var(--space-3);
+  font: inherit; font-size: var(--text-xs);
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: color var(--dur-fast), border-color var(--dur-fast), background var(--dur-fast);
+}
+.ant-pick b { color: var(--text); font-weight: 500; }
+.ant-pick:hover { color: var(--text); border-color: var(--border-strong); }
+.ant-pick[aria-pressed="true"] { color: var(--text); background: var(--surface-raised); border-color: var(--text-muted); }
+
+/* Follow card: one ant on a live map (followHTML in web/ui.mjs). */
+.follow { display: grid; gap: var(--space-3); }
+.follow__head { display: flex; align-items: center; gap: var(--space-3); }
+.follow__id { font-size: var(--text-lg); color: var(--text); }
+.follow__close { margin-left: auto; }
+.follow__now { margin: 0; font-size: var(--text-sm); }
+.follow__stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); margin: 0; }
+.follow__stats dt { font-size: var(--text-xs); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-faint); }
+.follow__stats dd { margin: 0; color: var(--text); }
+.follow__crumbs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; min-height: 12px; }
+.follow__crumb { width: 10px; height: 10px; border-radius: 50%; background: var(--opt-color); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.5); }
+.follow__go { justify-self: start; }
+
+/* Staker roster: a row per wallet (stakerLegendHTML in web/ui.mjs). Rows are
+   buttons: hover or focus lights the wallet's ants on the map, a click pins
+   the light (aria-pressed). The bar is the wallet's ants against the
+   biggest wallet's (--ants, 0 to 1). */
+.roster { display: grid; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
+.roster__row {
+  --wallet-color: oklch(var(--wallet-l) var(--wallet-c) var(--wallet-hue, 0));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font: inherit; font-size: var(--text-xs); text-align: left;
+  color: var(--text-muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--dur-fast), border-color var(--dur-fast);
+}
+.roster__row:hover, .roster__row:focus-visible { background: var(--surface-raised); }
+.roster__row[aria-pressed="true"] { background: var(--surface-raised); border-color: var(--wallet-color); }
+.roster__id { color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.roster__ants { color: var(--text); }
+.roster__meta { grid-column: 1 / -1; color: var(--text-faint); }
+.roster__bar { grid-column: 1 / -1; height: 3px; border-radius: 2px; background: linear-gradient(to right, var(--wallet-color) calc(var(--ants) * 100%), var(--border) 0); }
+
 /* ======================================================================
    Form fields
    ====================================================================== */
@@ -653,6 +749,12 @@
   color: var(--accent);
 }
 .option-card:has(input:focus-visible) { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+/* List: one row per option (value left, meta right), for a narrow panel. */
+.option-cards--list { grid-template-columns: 1fr; gap: var(--space-2); }
+.option-cards--list .option-card { grid-template-columns: 1fr auto; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-7) var(--space-3) var(--space-4); border-radius: var(--radius-md); }
+.option-cards--list .option-card__value { font-size: var(--text-lg); }
+.option-cards--list .option-card__value.opt::before { font-family: var(--font-mono); font-size: 0.8em; }
+.option-cards--list .option-card:has(input:checked)::after { top: 50%; translate: 0 -50%; }
 .option-card:has(input:disabled) { opacity: 0.5; cursor: not-allowed; }
 
 /* ======================================================================
@@ -695,6 +797,84 @@
 .delta--flat::before { content: "= "; }
 
 /* ======================================================================
+   Belief board: swarm belief per outcome, with the market odds as a tick
+   on the same track. Always inside a block that carries .tag-forecast.
+   JS sets --share (swarm, 0..100) and --market (0..100) on each row.
+   ====================================================================== */
+.belief { display: grid; gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
+.belief__row {
+  --share: 0;
+  --market: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+}
+.belief__label { font-size: var(--text-base); }
+.belief__value {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  font-variation-settings: "opsz" 72;
+  line-height: 1;
+  color: var(--text);
+}
+.belief__value small { font-size: 0.5em; color: var(--text-muted); margin-left: 2px; }
+.belief__track {
+  grid-column: 1 / -1;
+  position: relative;
+  height: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-canvas);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.belief__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--share) * 1%);
+  border-radius: inherit;
+  background: var(--opt-color);
+  transition: width var(--dur-slow) var(--ease-out);
+}
+/* Market odds: a bone tick across the track. */
+.belief__market {
+  position: absolute;
+  top: -4px; bottom: -4px;
+  left: calc(var(--market) * 1%);
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--text);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.belief__meta { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: var(--space-3); font-size: var(--text-xs); color: var(--text-faint); }
+/* Compact: one line per outcome (label, track, value, delta) for overview
+   cards. The market odds stay as the tick on the track. */
+.belief--compact { gap: var(--space-2); }
+.belief--compact .belief__row { grid-template-columns: minmax(0, 7.5rem) minmax(0, 1fr) 6ch 6ch; align-items: center; gap: var(--space-3); }
+.belief--compact .belief__label { min-width: 0; font-size: var(--text-xs); white-space: nowrap; overflow: hidden; }
+.belief--compact .belief__track { grid-column: auto; order: 1; height: 8px; }
+.belief--compact .belief__market { top: -3px; bottom: -3px; }
+.belief--compact .belief__value { order: 2; font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 600; text-align: right; }
+.belief--compact .belief__value small { font-size: 0.8em; margin-left: 1px; }
+.belief--compact .belief__meta { grid-column: auto; order: 3; justify-content: flex-end; }
+.belief--compact .belief__meta > :first-child { display: none; }
+.belief-key { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin: 0; padding: 0; list-style: none; font-size: var(--text-xs); color: var(--text-faint); }
+.belief-key li { display: inline-flex; align-items: center; gap: var(--space-2); }
+.belief-key__swarm::before { content: ""; width: 14px; height: 8px; border-radius: var(--radius-pill); background: linear-gradient(to right, var(--opt-0), var(--opt-1), var(--opt-2)); }
+.belief-key__market::before { content: ""; width: 2px; height: 12px; border-radius: 1px; background: var(--text); }
+
+/* ======================================================================
+   Pick: one colony's decision, large. data-state="pending" while it runs
+   (shows the current leader), "final" once the last tick has run.
+   ====================================================================== */
+.pick { display: grid; gap: var(--space-2); }
+.pick__value { margin: 0; font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 600; font-variation-settings: "opsz" 72; line-height: 1.1; }
+.pick__value .opt { gap: var(--space-3); }
+.pick[data-state="pending"] .pick__value .opt { color: var(--text-muted); }
+.pick[data-state="final"] { animation: anto-reveal var(--dur-slow) var(--ease-out); }
+
+/* ======================================================================
    Motion
    ====================================================================== */
 @keyframes anto-spin { to { transform: rotate(360deg); } }
@@ -711,5 +891,5 @@
   .chip--live::before,
   .verify-badge[data-state="pending"]::before,
   .btn.is-loading::before { animation: none; }
-  .verify-badge { animation: none !important; }
+  .verify-badge, .pick { animation: none !important; }
 }

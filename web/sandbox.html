@@ -20,18 +20,14 @@
   <div class="page-head container">
     <p class="eyebrow">Colony sandbox · runs in your browser, no chain</p>
     <h1>Hatch your own colony.</h1>
-    <p class="lede">Name a colony, write two to five options, pick how it reads your weights, and let the ants decide. The run is the same integer sim as the live colonies. Share the link and anyone gets the same ants, the same trails and the same hash.</p>
+    <p class="lede">Write 2 to 5 options and let the ants decide. Share the link: same ants, same hash.</p>
   </div>
 
   <section class="page-section">
-    <div class="container split">
-      <div class="stack">
-        <h2 id="colony-title" style="font-size: var(--text-xl)">Untitled colony</h2>
-        <div id="player"></div>
-      </div>
-
-      <div class="stack">
+    <div class="container workbench workbench--controls-first">
+      <div class="workbench__col">
         <form class="chamber stack" id="form" novalidate>
+          <div class="chamber__header" style="margin: 0"><h2 class="chamber__title">Set up</h2><span class="eyebrow">runs in your browser</span></div>
           <div class="field">
             <label class="field__label" for="name">Colony name</label>
             <input class="input" id="name" maxlength="40" placeholder="Where do we eat tonight?" autocomplete="off">
@@ -73,7 +69,12 @@
             <span class="text-xs text-faint" id="share-msg" role="status" aria-live="polite"></span>
           </div>
         </form>
+        <p class="text-xs text-faint" style="margin-inline: var(--space-2)">Just for fun: no chain, no token, not advice.</p>
+      </div>
 
+      <div class="workbench__col">
+        <h2 id="colony-title" style="font-size: var(--text-xl); margin: 0">Untitled colony</h2>
+        <div id="player"></div>
         <div class="chamber">
           <div class="chamber__header">
             <h3 class="chamber__title">Trail share</h3>
@@ -85,22 +86,20 @@
             <dt>Result hash</dt><dd id="hash-out">at tick 800</dd>
           </dl>
         </div>
-        <p class="text-xs text-faint">Sandbox colonies are just for fun. They never touch the chain, the treasury or a token, and the result is not advice.</p>
       </div>
     </div>
   </section>
 </main>
 
-<footer class="page-foot">
-  <div class="container"><p class="text-xs text-faint">Antonomy · sandbox runs ANTO-SIM-v1 in your browser</p></div>
-</footer>
+<div id="footer"></div>
 
 <script type="module">
 import { Colony, sha256, toHex, oddsRichness, oddsSnapshotHash, stakeRichness, FOLLOWER, CONTRARIAN, N_ANTS, TICKS } from "../sim/js/antosim.mjs";
 import { GLYPHS } from "./round.mjs";
-import { $, hashHTML, installCopy, liveShares, shareBars, Player, topbar } from "./ui.mjs";
+import { $, hashHTML, installCopy, liveShares, shareBars, Player, topbar, footer } from "./ui.mjs";
 
-$("topbar").outerHTML = topbar("sandbox");
+$("topbar").outerHTML = topbar("sandbox", "", { demo: false }); // never touches the chain
+$("footer").outerHTML = footer();
 installCopy();
 
 const enc = new TextEncoder();

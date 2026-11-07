@@ -1,7 +1,7 @@
 // Offline tests for staker ants: node web/test_staker_ants.mjs
 import assert from "node:assert/strict";
 import { stakeWeight, walletHue, walletWeights, stakerAnts, ANTS_PER_SQRT_TOKEN } from "./ds/staker-ants.mjs";
-import { roundColonies } from "./round.mjs";
+import { roundColonies, burnColony } from "./round.mjs";
 import { seedFromInt, N_ANTS, FORECAST_ANTS } from "../sim/js/antosim.mjs";
 
 // Weight is the floor of 1000 * sqrt(tokens), as the contract's sim_weights.
@@ -22,7 +22,7 @@ const round = roundColonies(seedFromInt(1));
 assert.deepEqual(walletWeights([{ id: "a", stakes: [0, 4, 9] }, { id: "b", stakes: [0, 4, 0] }], 3), [0, 4000, 3000]);
 
 // Burn: 15 sqrt-tokens -> 45 staker ants out of 150, and every ant is owned at most once.
-const burn = round.burn.stakers;
+const burn = burnColony(seedFromInt(1)).stakers;
 assert.equal(burn.total, 15000);
 assert.equal(burn.owner.length, N_ANTS);
 assert.equal(burn.rows.reduce((a, r) => a + r.ants, 0), 15 * ANTS_PER_SQRT_TOKEN);
@@ -49,7 +49,7 @@ for (const f of round.markets[0].forecasters) {
 }
 
 // Same stakes, same assignment.
-assert.deepEqual(stakerAnts(round.burn.stakers.rows.map((r) => ({ id: r.id, stakes: [r.tokens] })), 150).owner,
-  stakerAnts(round.burn.stakers.rows.map((r) => ({ id: r.id, stakes: [r.tokens] })), 150).owner);
+assert.deepEqual(stakerAnts(burn.rows.map((r) => ({ id: r.id, stakes: [r.tokens] })), 150).owner,
+  stakerAnts(burn.rows.map((r) => ({ id: r.id, stakes: [r.tokens] })), 150).owner);
 
 console.log("staker ants: ok");

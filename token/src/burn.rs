@@ -26,14 +26,15 @@ pub fn burn_amount(treasury_balance: u128, index: usize) -> Result<u128, Error> 
         / BPS_DENOM)
 }
 
-/// Burns at most once per round. `last_round` is the contract state.
+/// Burns at most once per burn day, in day order: a day at or before the
+/// last burned one is rejected. `last_day` is the contract state.
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(
     feature = "borsh",
     derive(borsh::BorshSerialize, borsh::BorshDeserialize, borsh::BorshSchema)
 )]
 pub struct BurnExecutor {
-    last_round: Option<u64>,
+    last_day: Option<u64>,
 }
 
 impl BurnExecutor {
@@ -42,17 +43,17 @@ impl BurnExecutor {
         &mut self,
         ledger: &mut Ledger,
         treasury: &str,
-        round: u64,
+        day: u64,
         index: usize,
     ) -> Result<u128, Error> {
-        if self.last_round == Some(round) {
-            return Err(Error::AlreadyBurned(round));
+        if self.last_day.is_some_and(|l| day <= l) {
+            return Err(Error::AlreadyBurned(day));
         }
         let amount = burn_amount(ledger.ft_balance_of(treasury), index)?;
         if amount > 0 {
             ledger.burn(treasury, amount)?;
         }
-        self.last_round = Some(round);
+        self.last_day = Some(day);
         Ok(amount)
     }
 }
@@ -105,7 +106,7 @@ mod tests {
     }
 
     #[test]
-    fn once_per_round_and_supply_falls() {
+    fn once_per_day_and_supply_falls() {
         let mut l = Ledger::new("treasury", 10_000);
         let mut b = BurnExecutor::default();
         assert_eq!(b.execute(&mut l, "treasury", 1, 4).unwrap(), 200);
@@ -115,10 +116,15 @@ mod tests {
             Err(Error::AlreadyBurned(1))
         );
         assert_eq!(b.execute(&mut l, "treasury", 2, 0).unwrap(), 9);
+        // An earlier day can't be burned once a later one has been.
+        assert_eq!(
+            b.execute(&mut l, "treasury", 1, 0),
+            Err(Error::AlreadyBurned(1))
+        );
     }
 
     #[test]
-    fn rounding_to_zero_burns_nothing_but_consumes_the_round() {
+    fn rounding_to_zero_burns_nothing_but_consumes_the_day() {
         let mut l = Ledger::new("treasury", 50);
         let mut b = BurnExecutor::default();
         assert_eq!(b.execute(&mut l, "treasury", 1, 0).unwrap(), 0);

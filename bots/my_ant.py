@@ -2,7 +2,7 @@
   python3 -I bots/recruit.py --contract <contract> --account <you.testnet> --strategy <your file>
 
 decide(r) gets a recruit.Round and returns [(option, amount), ...] with amounts
-in yocto (r.tokens(n) converts whole tokens). Return [] to sit the round out.
+in yocto (r.tokens(n) converts whole tokens). Return [] to sit the day out.
 The kit drops bad options and clips amounts to the balance and the wallet cap,
 so a greedy answer is safe. Options index the burn menu r.menu_bps
 ([10, 25, 50, 100, 200] basis points of the treasury).
@@ -16,7 +16,7 @@ share is only a proxy: how it maps to win rates hasn't been measured. Treat
 this as a starting point.
 """
 
-STAKE_TOKENS = 20  # per round; the wallet cap covers every colony together
+STAKE_TOKENS = 20  # the wallet cap covers every colony together
 
 
 def decide(r):

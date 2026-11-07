@@ -37,8 +37,8 @@ class FakeChain:
         return s.Wallet(list(self.w), self.balances.get(account, 1000 * ONE), self.staked.get(account, 0), cap)
 
     def view(self, method, args=None):
-        assert method == "stake_snapshot"
-        return {"hash": "00" * 32, "entries": self.entries}
+        assert method == "stakes_of"
+        return [[c, o, amt] for who, c, o, amt in self.entries if who == args["account_id"]]
 
 
 def run_quiet(fn, *args):
@@ -90,12 +90,20 @@ class Round(unittest.TestCase):
         self.assertEqual(json.loads(cmds[0][7]), {"colony": 0, "option": 4, "amount": str(100 * ONE)})
         self.assertEqual(cmds[0][cmds[0].index("sign-as") + 1], "h.testnet")
 
-    def test_closed_round_stakes_nothing(self):
+    def test_stake_during_the_run_counts_from_the_next_day(self):
         cmds = []
+        day = 20_745  # 2026-10-19
         code, plans, err = run_quiet(s.stake_round, FakeChain([0] * 5, close_at_ms=0),
-                                     [("heavy", "h.testnet")], self.args(), cmds.append)
-        self.assertEqual((code, plans, cmds), (1, [], []))
-        self.assertIn("closed", err)
+                                     [("heavy", "h.testnet")], self.args(), cmds.append,
+                                     day * s.DAY_MS + 13 * 3_600_000)
+        self.assertEqual((code, len(cmds)), (0, 1))
+        self.assertIn("burn day %d (they freeze at 2026-10-20 12:00 UTC)" % (day + 1), err)
+
+    def test_burn_day(self):
+        d = 20_745 * s.DAY_MS
+        self.assertEqual(s.burn_day(d), (20_745, d + s.STAKING_MS, False))
+        self.assertEqual(s.burn_day(d + s.STAKING_MS - 1), (20_745, d + s.STAKING_MS, False))
+        self.assertEqual(s.burn_day(d + s.STAKING_MS), (20_746, d + s.DAY_MS + s.STAKING_MS, True))
 
     def test_bot_with_nothing_to_add_sends_no_call(self):
         chain = FakeChain([0] * 5, staked={"h.testnet": CAP})
@@ -108,10 +116,17 @@ class Round(unittest.TestCase):
         entries = [["alice.testnet", 0, 2, "5"], ["f.testnet", 0, 4, "7"], ["f.testnet", 1, 0, "3"]]
         cmds = []
         run_quiet(s.withdraw, FakeChain([0] * 5, entries=entries), [("follower", "f.testnet")],
-                  self.args(), cmds.append)
+                  self.args(), cmds.append, 0)
         self.assertEqual([json.loads(c[7]) for c in cmds],
                          [{"colony": 0, "option": 4, "amount": "7"}, {"colony": 1, "option": 0, "amount": "3"}])
         self.assertTrue(all(c[5] == "unstake" for c in cmds))
+
+    def test_withdraw_waits_while_the_colony_runs(self):
+        cmds = []
+        code, _, err = run_quiet(s.withdraw, FakeChain([0] * 5, entries=[["f.testnet", 0, 4, "7"]]),
+                                 [("follower", "f.testnet")], self.args(), cmds.append, s.STAKING_MS)
+        self.assertEqual((code, cmds), (1, []))
+        self.assertIn("locked", err)
 
 
 class Cli(unittest.TestCase):

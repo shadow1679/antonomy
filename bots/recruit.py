@@ -8,21 +8,24 @@ with its own strategy and earn from the play-token reward pool.
            --strategy bots/my_ant.py
      The plan goes to stdout as one JSON line, the NEAR CLI commands to stderr.
   3. Add --send to sign with the NEAR CLI and your local keychain.
-  4. After the drand round is published, anyone calls `settle`; then
+  4. Stakes stay in and count for every burn day until withdrawn. They freeze
+     at 12:00 UTC each day (a stake made later counts from the next day), and
        python3 -I bots/recruit.py --contract <contract> --account <you.testnet> --withdraw [--send]
-     unstakes every entry the account holds.
+     unstakes every entry the account holds, except from 12:00 to 24:00 UTC
+     while the colony runs.
 `--strategy` also takes a built-in from bots/swarm.py: follower, contrarian, heavy.
 
 What decide() sees (class Round): the burn menu, the square-root weight and
 the raw stake on each option, this account's own stake per option, its
 balance, the per-wallet cap and the headroom left under it, the reward pool
-and this round's pot. Helpers:
+and one day's pot, and the burn day a stake made now counts for first
+(r.day, freezing at r.freeze_at_ms). Helpers:
   r.tokens(n)                n whole tokens in yocto
   r.weight_after(o, extra)   option o's weight if this account adds `extra`
   r.food_share(o, extra)     o's share of food weight in the sim after that,
                              a rough proxy for its chance to win
-  r.payout_if_wins(o, extra) this account's reward if o wins, at today's
-                             stakes (others may still add before close)
+  r.payout_if_wins(o, extra) this account's reward if o wins, at current
+                             stakes (others may still add before the freeze)
 
 Rules the contract enforces, so the kit enforces them too: the colony picks
 an index and never an amount; one wallet cap covers every colony; influence is
@@ -52,23 +55,24 @@ import swarm  # noqa: E402
 
 BURN_COLONY = swarm.BURN_COLONY
 BURN_MENU_BPS = [10, 25, 50, 100, 200]   # token/src/burn.rs
-ROUND_SHARE_BPS = 1_000                  # token/src/reward.rs: 10% of the pool per round
+ROUND_SHARE_BPS = 1_000                  # token/src/reward.rs: 10% of the pool per burn day
 ONE = swarm.ONE
 SIM_WEIGHT_DIV = 10**9                   # sqrt-yocto per milli sqrt-token (token/src/stake.rs)
-COMMUNITY_BASE = 10_000                  # milli sqrt-tokens of food every option starts with
+COMMUNITY_BASE = 2_500                   # milli sqrt-tokens of food every option starts with (sim)
 
 
 class Round:
     """Everything decide() may read. Amounts in yocto, weights in sqrt-yocto."""
 
-    def __init__(self, *, weights, totals, mine, balance, staked, cap, pool, close_at_ms, now_ms):
+    def __init__(self, *, weights, totals, mine, balance, staked, cap, pool, now_ms):
         self.menu_bps = list(BURN_MENU_BPS)
         self.n = len(self.menu_bps)
         self.weights, self.totals, self.mine = list(weights), list(totals), list(mine)
         self.balance, self.staked, self.cap, self.pool = balance, staked, cap, pool
         self.headroom = max(0, cap - staked)
         self.pot = pool * ROUND_SHARE_BPS // 10_000
-        self.close_at_ms, self.now_ms = close_at_ms, now_ms
+        self.now_ms = now_ms
+        self.day, self.freeze_at_ms, self.running = swarm.burn_day(now_ms)
 
     @staticmethod
     def tokens(n):
@@ -103,7 +107,6 @@ def read_round(chain, account, now_ms):
         staked=int(v("staked_by", {"account_id": account})),
         cap=int(cfg["cap_per_wallet"]),
         pool=int(v("reward_pool")),
-        close_at_ms=cfg["close_at_ms"],
         now_ms=now_ms,
     )
 
@@ -159,9 +162,6 @@ def load_strategy(spec):
 
 def join(chain, decide, a, run, now_ms):
     r = read_round(chain, a.account, now_ms)
-    if now_ms >= r.close_at_ms:
-        print("staking is closed for this round", file=sys.stderr)
-        return 1
     stakes, notes = clip(r, decide(r))
     for note in notes:
         print("%s: %s" % (a.account, note), file=sys.stderr)
@@ -172,7 +172,8 @@ def join(chain, decide, a, run, now_ms):
         plan.append({"option": o, "burn_bps": r.menu_bps[o], "amount": str(amt),
                      "weight_after": str(r.weight_after(o, extra[o])),
                      "payout_if_wins": str(r.payout_if_wins(o, extra[o]))})
-    print(json.dumps({"account": a.account, "pot": str(r.pot), "headroom": str(r.headroom),
+    print(json.dumps({"account": a.account, "counts_from_day": r.day, "freeze_at_ms": r.freeze_at_ms,
+                      "pot": str(r.pot), "headroom": str(r.headroom),
                       "stakes": plan, "notes": notes}))
     if not stakes:
         print("%s: nothing to stake" % a.account, file=sys.stderr)
@@ -182,7 +183,10 @@ def join(chain, decide, a, run, now_ms):
     return 0
 
 
-def withdraw(chain, a, run):
+def withdraw(chain, a, run, now_ms):
+    if swarm.burn_day(now_ms)[2]:
+        print("Burn stakes are locked from 12:00 to 24:00 UTC while the colony runs", file=sys.stderr)
+        return 1
     entries = chain.view("stakes_of", {"account_id": a.account})
     if not entries:
         print("%s: nothing staked" % a.account, file=sys.stderr)
@@ -200,7 +204,7 @@ def main(argv=None):
     p.add_argument("--strategy", help="path to a .py file with decide(r), or follower/contrarian/heavy")
     p.add_argument("--rpc", default=swarm.RPC)
     p.add_argument("--network", default="testnet")
-    p.add_argument("--withdraw", action="store_true", help="unstake everything after the round has settled")
+    p.add_argument("--withdraw", action="store_true", help="unstake everything (not from 12:00 to 24:00 UTC)")
     p.add_argument("--send", action="store_true", help="sign and send with the NEAR CLI")
     a = p.parse_args(argv)
     if not a.withdraw and not a.strategy:
@@ -213,7 +217,7 @@ def main(argv=None):
             subprocess.run(cmd, check=True)
 
     if a.withdraw:
-        code = withdraw(chain, a, run)
+        code = withdraw(chain, a, run, int(time.time() * 1000))
     else:
         code = join(chain, load_strategy(a.strategy), a, run, int(time.time() * 1000))
     print("earned so far: %s" % chain.view("rewards_earned", {"account_id": a.account}), file=sys.stderr)

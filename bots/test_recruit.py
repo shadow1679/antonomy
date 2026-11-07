@@ -94,8 +94,8 @@ class ReadRound(unittest.TestCase):
     def test_food_share_matches_the_sim_unit(self):
         rd = round_of(FakeChain())
         self.assertAlmostEqual(rd.food_share(0), 0.2)
-        # 100 tokens is 10 sqrt-tokens = 10000 milli, so the option's food doubles.
-        self.assertAlmostEqual(rd.food_share(0, 100 * ONE), 2 / 6)
+        # 100 tokens is 10 sqrt-tokens = 10000 milli on a 2500 base: 5x the food.
+        self.assertAlmostEqual(rd.food_share(0, 100 * ONE), 5 / 9)
 
 
 class Clip(unittest.TestCase):
@@ -128,19 +128,25 @@ class Join(unittest.TestCase):
                           {"colony": 0, "option": 0, "amount": str(5 * ONE)}])
         self.assertEqual(cmds[0][cmds[0].index("sign-as") + 1], ME)
 
-    def test_closed_round_stakes_nothing(self):
+    def test_stake_during_the_run_counts_from_the_next_day(self):
         cmds = []
-        code, out, err = run_quiet(r.join, FakeChain(close_at_ms=5), lambda rd: [(0, ONE)], args(), cmds.append, 5)
-        self.assertEqual((code, out, cmds), (1, [], []))
-        self.assertIn("closed", err)
+        noon = 20_745 * r.swarm.DAY_MS + r.swarm.STAKING_MS
+        code, out, _ = run_quiet(r.join, FakeChain(close_at_ms=5), lambda rd: [(0, ONE)], args(), cmds.append, noon)
+        self.assertEqual((code, len(cmds)), (0, 1))
+        self.assertEqual((out[0]["counts_from_day"], out[0]["freeze_at_ms"]), (20_746, noon + r.swarm.DAY_MS))
 
     def test_withdraw_unstakes_every_entry_of_the_account(self):
         chain = FakeChain([("bob.testnet", 0, 2, 5), (ME, 0, 4, 7), (ME, 2, 1, 3)])
         cmds = []
-        run_quiet(r.withdraw, chain, args(), cmds.append)
+        run_quiet(r.withdraw, chain, args(), cmds.append, 0)
         self.assertEqual([(c[5], json.loads(c[7])) for c in cmds],
                          [("unstake", {"colony": 0, "option": 4, "amount": "7"}),
                           ("unstake", {"colony": 2, "option": 1, "amount": "3"})])
+        # Not while the colony runs.
+        cmds = []
+        code, _, err = run_quiet(r.withdraw, chain, args(), cmds.append, r.swarm.STAKING_MS)
+        self.assertEqual((code, cmds), (1, []))
+        self.assertIn("locked", err)
 
 
 class Strategies(unittest.TestCase):

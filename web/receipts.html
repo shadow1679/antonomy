@@ -13,13 +13,13 @@
   <div class="page-head container">
     <p class="eyebrow">Check the receipts</p>
     <h1>Re-run the whole day. Compare every hash.</h1>
-    <p class="lede">A receipt lists the round seed and the result hash of every colony and market. One click re-runs all of them in your browser, with the same integer code as the contract, and marks each hash as a match or a mismatch. Change one character of a hash and see it fail.</p>
+    <p class="lede">One click re-runs every colony and market of a round. Change one character of a hash and watch it fail.</p>
   </div>
 
   <section class="page-section">
     <div class="container">
-      <div class="split">
-        <div class="stack">
+      <div class="workbench workbench--controls-first">
+        <div class="workbench__col">
           <div class="chamber verify-panel">
             <div class="chamber__header" style="margin: 0">
               <h3 class="chamber__title">Receipt</h3>
@@ -33,7 +33,7 @@
             <div class="field">
               <label class="field__label" for="receipt">Receipt (JSON)</label>
               <textarea class="input" id="receipt" rows="12" spellcheck="false" autocomplete="off" aria-describedby="receipt-hint" style="font-family: var(--font-mono, monospace); font-size: var(--text-xs)"></textarea>
-              <span class="field__hint" id="receipt-hint">There is no contract yet, so a receipt comes from <code>node web/receipts.mjs issue &lt;round&gt;</code> or from the button above, which uses this same code. That makes the demo check circular on purpose: edit a hash before you check, or paste one from elsewhere. Once rounds run on testnet, the receipt is read from the contract's events.</span>
+              <span class="field__hint" id="receipt-hint">No contract yet, so the demo receipt comes from this same code: edit a hash before you check. <a class="what" href="docs.html#receipts">More</a></span>
             </div>
             <div class="cluster">
               <label class="btn btn--sm" for="file-in">Load a file</label>
@@ -51,9 +51,14 @@
             <h3 class="chamber__title">Results</h3>
             <span class="eyebrow" id="summary">nothing checked yet</span>
           </div>
+          <dl class="stats">
+            <div><dt>✓ Match</dt><dd class="num" id="n-match">–</dd></div>
+            <div><dt>✗ Mismatch</dt><dd class="num" id="n-bad">–</dd></div>
+            <div><dt>Time</dt><dd class="num" id="n-ms">–</dd></div>
+          </dl>
           <div class="table-wrap">
             <table class="table">
-              <caption class="text-xs text-faint">One row per hash in the round. Replayed hash is what your browser computed.</caption>
+              <caption class="text-xs text-faint">One row per hash, as replayed in your browser.</caption>
               <thead><tr><th scope="col">Hash</th><th scope="col">Status</th></tr></thead>
               <tbody id="rows"><tr><td colspan="2" class="text-faint">Press the button to re-run the round.</td></tr></tbody>
             </table>
@@ -64,16 +69,15 @@
   </section>
 </main>
 
-<footer class="page-foot">
-  <div class="container"><p class="text-xs text-faint">Antonomy · NEAR testnet only · sim ANTO-SIM-v1</p></div>
-</footer>
+<div id="footer"></div>
 
 <script type="module">
 import { demoRound, roundById } from "./round.mjs";
 import { issueReceipt, checkReceipt, parseReceipt } from "./receipts.mjs";
-import { $, esc, hashHTML, installCopy, topbar } from "./ui.mjs";
+import { $, esc, hashHTML, installCopy, topbar, footer } from "./ui.mjs";
 
 $("topbar").outerHTML = topbar("receipts");
+$("footer").outerHTML = footer();
 installCopy();
 
 const nextFrame = () => new Promise((r) => setTimeout(r, 0));
@@ -91,8 +95,15 @@ function setRound(id) {
   history.replaceState(null, "", `?round=${id}`);
 }
 
+function setStats(match, bad, ms) {
+  $("n-match").textContent = match;
+  $("n-bad").textContent = bad;
+  $("n-ms").textContent = ms;
+}
+
 function resetResults() {
   setBadge("idle", "Not checked");
+  setStats("–", "–", "–");
   $("summary").textContent = "nothing checked yet";
   $("rows").innerHTML = `<tr><td colspan="2" class="text-faint">Press the button to re-run the round.</td></tr>`;
 }
@@ -152,6 +163,7 @@ $("check").addEventListener("click", async () => {
     showRows(res);
     const bad = res.rows.filter((r) => r.state !== "match").length;
     $("summary").textContent = `${res.rows.length - bad} of ${res.rows.length} match`;
+    setStats(res.rows.length - bad, bad, `${ms} ms`);
     setBadge(res.ok ? "match" : "mismatch", res.ok ? `All ${res.rows.length} hashes match · ${ms} ms` : `${bad} of ${res.rows.length} do not match`);
   } finally { setBusy(false); }
 });

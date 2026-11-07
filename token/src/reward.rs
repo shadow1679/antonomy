@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 
 /// Account that holds the pool.
 pub const POOL: &str = "reward-pool.antonomy";
-/// Share of the pool paid out per round: 10%.
+/// Share of the pool paid out per burn day: 10%.
 pub const ROUND_SHARE_BPS: u128 = 1_000;
 const BPS_DENOM: u128 = 10_000;
 
@@ -27,7 +27,7 @@ const BPS_DENOM: u128 = 10_000;
     derive(borsh::BorshSerialize, borsh::BorshDeserialize, borsh::BorshSchema)
 )]
 pub struct Rewards {
-    last_round: Option<u64>,
+    last_day: Option<u64>,
     /// Lifetime rewards per account, for the leaderboard.
     earned: BTreeMap<AccountId, u128>,
 }
@@ -52,18 +52,19 @@ impl Rewards {
         v
     }
 
-    /// Pay this round's pot to the Burn colony stakers on `winner`. `entries`
-    /// is the final stake snapshot. Once per round. Returns the payouts in
+    /// Pay this burn day's pot to the Burn colony stakers on `winner`.
+    /// `entries` is the day's frozen stake snapshot. Once per day, in day
+    /// order. Returns the payouts in
     /// snapshot order (sorted by account).
     pub fn distribute(
         &mut self,
         ledger: &mut Ledger,
-        round: u64,
+        day: u64,
         winner: u8,
         entries: &[Entry],
     ) -> Result<Vec<(AccountId, u128)>, Error> {
-        if self.last_round == Some(round) {
-            return Err(Error::AlreadyRewarded(round));
+        if self.last_day.is_some_and(|l| day <= l) {
+            return Err(Error::AlreadyRewarded(day));
         }
         let winners: Vec<&Entry> = entries
             .iter()
@@ -86,7 +87,7 @@ impl Rewards {
                 paid.push((who.clone(), share));
             }
         }
-        self.last_round = Some(round);
+        self.last_day = Some(day);
         Ok(paid)
     }
 }
@@ -147,7 +148,7 @@ mod tests {
     }
 
     #[test]
-    fn no_winner_stake_pays_nothing_but_uses_the_round() {
+    fn no_winner_stake_pays_nothing_but_uses_the_day() {
         let (mut l, mut r) = funded(1000 * ONE);
         let snap = [e("alice", 0, 1, 30 * ONE)];
         assert_eq!(r.distribute(&mut l, 1, 4, &snap).unwrap(), vec![]);
@@ -187,7 +188,7 @@ mod tests {
     }
 
     #[test]
-    fn leaderboard_accumulates_over_rounds() {
+    fn leaderboard_accumulates_over_days() {
         let (mut l, mut r) = funded(1000 * ONE);
         r.distribute(&mut l, 1, 0, &[e("bob", 0, 0, ONE)]).unwrap();
         r.distribute(&mut l, 2, 0, &[e("alice", 0, 0, ONE), e("bob", 0, 0, ONE)])

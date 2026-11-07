@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Antonomy · docs</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="topbar"></div>
+
+<main>
+  <div class="page-head container">
+    <p class="eyebrow">Docs</p>
+    <h1>How it works</h1>
+    <p class="lede">Where to go, and how to read what you see.</p>
+  </div>
+
+  <section class="page-section" id="pages" aria-labelledby="pages-title">
+    <div class="container">
+      <div class="section-head"><h2 id="pages-title">Pages</h2></div>
+      <div class="grid-auto page-cards">
+        <a class="chamber page-card" href="index.html">
+          <p class="eyebrow">Watch</p>
+          <h3>Live</h3>
+          <p>Every colony of the current round, running now. A card per market with its swarm belief; open one to watch its four colonies. Then today's burn.</p>
+          <span class="page-card__go">Open Live →</span>
+        </a>
+        <a class="chamber page-card" href="burn.html">
+          <p class="eyebrow">Watch · steer</p>
+          <h3>Burn</h3>
+          <p>Drop sugar on today's burn until 12:00 UTC, then watch today's colony run until 24:00. See every past burn.</p>
+          <span class="page-card__go">Open Burn →</span>
+        </a>
+        <a class="chamber page-card" href="recruit.html">
+          <p class="eyebrow">Build · steer</p>
+          <h3>Recruit</h3>
+          <p>Bring your own ant: try the recruit kit's strategies on today's stakes, watch your agent's ants on the map and copy the commands to run it for real.</p>
+          <span class="page-card__go">Open Recruit →</span>
+        </a>
+        <a class="chamber page-card" href="sandbox.html">
+          <p class="eyebrow">Play</p>
+          <h3>Sandbox</h3>
+          <p>Hatch your own colony with 2 to 5 options and share the link.</p>
+          <span class="page-card__go">Open Sandbox →</span>
+        </a>
+        <a class="chamber page-card" href="replay.html">
+          <p class="eyebrow">Check</p>
+          <h3>Replay</h3>
+          <p>Re-run one colony from its seed, scrub tick by tick, follow any ant through its whole run, compare the hash.</p>
+          <span class="page-card__go">Open Replay →</span>
+        </a>
+        <a class="chamber page-card" href="receipts.html">
+          <p class="eyebrow">Check</p>
+          <h3>Receipts</h3>
+          <p>Re-run a whole round and compare every colony and market hash at once.</p>
+          <span class="page-card__go">Open Receipts →</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="page-section" aria-label="Explanations">
+    <div class="container docs">
+      <nav class="toc" aria-labelledby="toc-title">
+        <p class="eyebrow" id="toc-title" style="margin: 0">On this page</p>
+        <ol>
+          <li><a href="#how">In three steps</a></li>
+          <li><a href="#forecasts">Forecasts</a></li>
+          <li><a href="#burn">Burn</a></li>
+          <li><a href="#stakes">Stakes</a></li>
+          <li><a href="#recruit">Recruit an ant</a></li>
+          <li><a href="#reading">Reading a colony</a></li>
+          <li><a href="#verify">Verifying</a></li>
+          <li><a href="#demo">Demo and limits</a></li>
+        </ol>
+      </nav>
+
+      <div>
+        <section class="doc-section" id="how" aria-labelledby="how-title">
+          <h2 id="how-title">In three steps</h2>
+          <ol class="steps">
+            <li><h3>One public seed</h3><p>Each round commits to a future drand round before anyone knows it. Its randomness becomes the seed, and every colony's map, food layout and ants come from it.</p></li>
+            <li><h3>Colonies forage</h3><p>Integer-only ants lay pheromone between the nest and the food. Food richness comes from market odds or from $ANTO stakes. The option with the most trail over the whole run wins.</p></li>
+            <li><h3>Anyone can check</h3><p>Your browser runs the same code as the contract. Replay one colony or check the receipts for a whole round, and compare the hashes.</p></li>
+          </ol>
+        </section>
+
+        <section class="doc-section" id="forecasts" aria-labelledby="forecasts-title">
+          <h2 id="forecasts-title">Forecasts <span class="tag-forecast" style="vertical-align: middle">Forecast · not advice</span></h2>
+          <dl class="terms">
+            <dt id="forecasters">Four forecasters</dt>
+            <dd>Each trending market gets four colonies, each on its own map from the same seed, with 60 ants and 300 ticks. <b>Follower</b> trusts the market: richer food where the odds are higher. <b>Contrarian</b> thinks the crowd is overconfident, so underdogs get the richer food. <b>Momentum</b> follows the six-hour move: food follows the odds plus twice their change, with a 2% floor so no outcome starves. <b>Community</b> ignores the odds and reads $ANTO stakes on the market.</dd>
+            <dt id="swarm-belief">Swarm belief</dt>
+            <dd>The average trail share of the four forecasters, per outcome. The tick on each bar marks the market odds, and the delta is the gap in percentage points. It isn't calibrated as a probability yet, and nobody is paid for being right.</dd>
+            <dt id="odds">Market odds</dt>
+            <dd>From Polymarket. Several keepers post snapshots independently and the contract takes the median per outcome. Each snapshot stores a hash of the raw API response. Markets about violence, deaths or private individuals are excluded.</dd>
+            <dt id="market-hash">Market hash</dt>
+            <dd>Appears once all four colonies finish. It commits the four colony result hashes and the swarm belief, so one hash pins the whole forecast.</dd>
+          </dl>
+        </section>
+
+        <section class="doc-section" id="burn" aria-labelledby="burn-title">
+          <h2 id="burn-title">Burn</h2>
+          <dl class="terms">
+            <dt id="burn-menu">Burn menu</dt>
+            <dd>The Burn colony picks one entry from a fixed menu: 0.10%, 0.25%, 0.50%, 1.00% or 2.00% of the treasury. It picks an index, never an amount, and the contract caps the burn at 2%. It runs 150 ants for 43,200 ticks, one a second from 12:00 to 24:00 UTC.</dd>
+            <dt id="burn-day">One burn a day</dt>
+            <dd>The Burn colony runs once per UTC day, apart from the forecast rounds, and the day has two halves. From 00:00 to 12:00 UTC staking is open: sugar piles up, and the Burn page shows the scent per option and the staker ants waiting at the nest. There is no map yet, because the map comes from the seed. At 12:00 stakes close and the day seed is drawn. From 12:00 to 24:00 the colony's 43,200 ticks run, one a second, with the morning's sugar in it; between ticks the ants keep walking toward their next cell, so the map never stands still. A trail fades to nothing about 14 minutes (852 ticks) after the last ant walks it, so the trail can shift many times during the run, but the score adds it up every 100 ticks over all twelve hours. At 24:00 the pick is final and the contract burns that share of the treasury. You stake in the morning and watch the same colony in the afternoon. Twelve hours of staking favours some time zones, but everyone gets the same twelve hours.</dd>
+            <dt id="burn-pick">Leading vs final</dt>
+            <dd>While the colony runs, the pick card shows the current leader, which can still change, and roughly what it would burn if the day ended now. The pick is final at tick 43,200. The result is already fixed by the seed and the stakes, so Replay can show today's ending early; nobody can act on it, since staking for today closed before the seed was drawn.</dd>
+            <dt id="sugar">Sugar</dt>
+            <dd>Sugar is a stake on a burn size. Sugar dropped before 12:00 UTC feeds today's colony; after 12:00 today's stakes have closed, so it feeds tomorrow's. It tilts the food, not the outcome: the map, the ants and the seed still decide, and one seed is one draw. The seed it will meet isn't drawn yet, so the preview on the Burn page plays a short 800-tick run twice, with and without your sugar, on the newest map there is: yesterday's in the morning (with today's sugar so far), today's in the afternoon. The two result hashes differ because the stakes differ. Nothing is sent, the other holders are fixtures and the wallet cap is a sample value.</dd>
+            <dt id="burn-history">Burn history</dt>
+            <dd>One row per finished day: the pick, the tokens burned, the treasury left and the result hash. Each day burns from what the day before left. Your browser re-runs every past day from its day seed to build the table, so each row is checked as it's drawn; Replay re-runs one day tick by tick. In the demo the history starts on 19 Oct 2026 with a fixture treasury of 100,000,000 tANTO, and nothing is really burned. On testnet the rows come from the contract's burn events.</dd>
+          </dl>
+        </section>
+
+        <section class="doc-section" id="stakes" aria-labelledby="stakes-title">
+          <h2 id="stakes-title">Stakes</h2>
+          <dl class="terms">
+            <dt id="sqrt">Square-root weight</dt>
+            <dd>A wallet's weight on an option is the square root of its stake, so four times the tokens only doubles the weight. A whale gains much less than a crowd. One budget covers every colony, and each wallet has a cap.</dd>
+            <dt id="scent">Scent</dt>
+            <dd>The food richness of each pile, 0.35 to 1.30, with the strongest option scaled to 1.30. For stakes, the weight per option is the sum of √tokens over holders, plus a base so unstaked options still have food.</dd>
+            <dt id="staker-ants">Staker ants</dt>
+            <dd>Each staking wallet spawns ants in proportion to its weight, 3 per √token, tinted by a hash of its account id, so square-root weighting is something you can see: 4× the stake hatches 2× the ants. Hover a wallet in a stakers list (Burn, Live's Community stakers, Replay) to light up its ants on the map, or click to keep the light on; the other ants fade back. Before 12:00 UTC the Burn page shows them waiting at the nest, and a new wallet's ants pop in as its sugar arrives. On Live, the Community thumbnails draw staker ants in their tints too. The tint is cosmetic: the sim reads only the summed weight per option, and which ant wears which tint is a presentation choice from the stakes alone.</dd>
+            <dt id="closing">When staking closes</dt>
+            <dd>Before the drand round is published, so nobody can stake after seeing the seed. For the Burn colony that is 12:00 UTC each day, when the seed is drawn and the run starts: Burn stakes stay in and count every day until withdrawn, freeze at 12:00, and can't be withdrawn until 24:00. The stake snapshot hash is an input to the sim and goes into the result hash.</dd>
+            <dt id="rewards">Rewards</dt>
+            <dd>Community stakers earn Brier-score reputation, never payouts. Burn stakers share a play-token reward pool, on testnet only.</dd>
+          </dl>
+        </section>
+
+        <section class="doc-section" id="recruit" aria-labelledby="recruit-title">
+          <h2 id="recruit-title">Recruit an ant</h2>
+          <dl class="terms">
+            <dt id="recruit-kit">The kit</dt>
+            <dd>Any agent can stake on the Burn colony with its own strategy. The kit is <code>bots/recruit.py</code>, Python standard library only. Copy <code>bots/my_ant.py</code>, write <code>decide(r)</code>, and run the kit with <code>--contract</code>, <code>--account</code> and <code>--strategy</code> (your file, or a built-in: <code>follower</code>, <code>contrarian</code>, <code>heavy</code>). It is a dry run unless <code>--send</code>, which signs one NEAR CLI call per stake from your local keychain. <code>--withdraw</code> unstakes everything, except from 12:00 to 24:00 UTC while the colony runs. Stakes stay in and count every day until withdrawn. The Recruit page runs the same strategies in your browser against the demo's stakes and shows the plan, your agent's ants on the map and the exact commands.</dd>
+            <dt id="decide">What decide(r) sees</dt>
+            <dd>The burn menu, the square-root weight and the raw stake on each option, the agent's own stake per option, its balance, the wallet cap and the headroom left under it, the reward pool and one day's pot (10% of the pool), and the burn day a stake made now counts for. Helpers: <code>r.tokens(n)</code>, <code>r.weight_after(o, extra)</code>, <code>r.food_share(o, extra)</code> (the option's share of food in the sim after the stake, a rough proxy for its chance to win; how it maps to win rates hasn't been measured) and <code>r.payout_if_wins(o, extra)</code> (the agent's share of the pot if o wins, at current stakes). It returns <code>[(option, amount), …]</code>, or <code>[]</code> to sit the day out.</dd>
+            <dt id="recruit-rules">Rules the kit enforces</dt>
+            <dd>The same rules as the contract. The colony picks an index, never an amount. One wallet cap covers every colony. Influence is √stake per wallet. The pot is split among the Burn stakers on the winning index by raw stake, not weight. The kit drops bad options and clips amounts to the balance and the cap headroom before anything is signed. Forecast colonies never pay, so the kit only stakes on the Burn colony. One agent, one testnet account, with a key that can only call the staking methods. The reward pool resembles betting: testnet play token only. The Recruit page's balance, cap and pool are sample values.</dd>
+          </dl>
+        </section>
+
+        <section class="doc-section" id="reading" aria-labelledby="reading-title">
+          <h2 id="reading-title">Reading a colony</h2>
+          <dl class="terms">
+            <dt id="trail-share">Trail share</dt>
+            <dd>Each option's share of the pheromone inside its scoring ring, the cells within 6 of its food pile. The score adds up the trail in each ring every 100 ticks and at the last tick, so a lead held all run beats a late spurt; the highest score wins, and a tie goes to the lowest pile index. Live shares are the score so far, as if the run ended now, in rounded percentages; final shares are exact basis points from the result.</dd>
+            <dt id="map">The map</dt>
+            <dd>Food piles show their option's colour and glyph. Amber is pheromone, brighter where it's stronger. A returning ant carries a crumb in its pile's colour. <b>Nest</b> draws soil and roots as decoration; <b>Cells</b> drops them and shows the raw grid, one pixel per cell.</dd>
+            <dt id="playback">Playback</dt>
+            <dd>Space plays or pauses, ← and → step one tick, Home and End jump to the ends. Going back replays from tick 0, since the sim only runs forward.</dd>
+            <dt id="autopsy">Ant autopsy</dt>
+            <dd>Click any ant on a live map (the Burn colony, or any of a market's four colonies on Live) to follow it: a ring and a number tag follow it on the map, and a card shows whether it is searching or carrying a crumb, the crumbs it has brought home in their piles' colours, and a link that opens Replay on that ant at that tick. On Replay the autopsy is complete. Pick an ant on the map, by number, or from the notable ants: the busiest forager, the first ant home, the most loyal one (every crumb from one pile), a lost one that never found food, and a staker ant. The timeline draws its whole run as one strip, a bar per trip in its pile's colour; click a bar to jump there. Each row of the trip log is one trip: the pile, the tick it took food (↑) and the tick it got home (⌂), each a link into the replay, and its deposit. Deposit is the pheromone it lays per step on the way home; it starts higher for richer piles and fades by 1/32 each step. Scent here is the pheromone on its cell now (cap 5120). Ants move in a fixed order from one seeded RNG, so this ant does the same thing on every replay. The trip log only reads the colony, so it can't change a hash.</dd>
+          </dl>
+        </section>
+
+        <section class="doc-section" id="verify" aria-labelledby="verify-title">
+          <h2 id="verify-title">Verifying</h2>
+          <dl class="terms">
+            <dt id="seeds">Seeds</dt>
+            <dd>The round seed comes from drand. Each colony's seed is derived from the round seed and the colony's index. It picks the map and shuffles which option sits on which pile.</dd>
+            <dt id="result-hash">Result hash</dt>
+            <dd>Commits the sim version, the colony seed, the stake and odds snapshot hashes, the food piles, the final scores and the winner. One changed bit in any input gives a different hash. The contract (Rust), these pages (JavaScript) and the reference (Python) agree on it.</dd>
+            <dt id="receipts">Receipts</dt>
+            <dd>A receipt lists the round seed and every colony and market hash. Checking it re-runs the whole round in your browser and marks each hash as a match or a mismatch. In the demo the receipt comes from the same code, so the check is circular on purpose: edit a hash to see it fail. On testnet it is read from the contract's events. From the command line: <code>node web/receipts.mjs issue &lt;round&gt;</code>.</dd>
+          </dl>
+        </section>
+
+        <section class="doc-section" id="demo" aria-labelledby="demo-title">
+          <h2 id="demo-title">Demo and limits</h2>
+          <dl class="terms">
+            <dt>Demo round</dt>
+            <dd>There is no contract yet. Forecast rounds come from the clock, one every 150 s with the colonies running for the first 120 s, and the seed is sha256("seed-&lt;round&gt;"). The burn day is the UTC day, and its seed is sha256("burn-day-&lt;day&gt;"), counting days from 1 Jan 1970. Stakes, odds and the treasury are fixtures. The sim, maps and hashes are real.</dd>
+            <dt>Known limits</dt>
+            <dd>Sybil resistance is unsolved. The demo trusts the posted drand round. The play-token reward pool resembles betting. The prototype predates the build window.</dd>
+            <dt>Not betting</dt>
+            <dd>Forecasts are not advice. Nobody is paid for being right, and nothing here links to a trading venue. Testnet only, no mainnet.</dd>
+          </dl>
+        </section>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="footer"></div>
+
+<script type="module">
+import { $, topbar, footer } from "./ui.mjs";
+
+$("topbar").outerHTML = topbar("docs", "", { demo: false }); // this page explains the demo itself
+$("footer").outerHTML = footer();
+</script>
+</body>
+</html>

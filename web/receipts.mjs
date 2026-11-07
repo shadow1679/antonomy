@@ -56,7 +56,7 @@ export function parseReceipt(text) {
 const hexOf = (v) => (typeof v === "string" ? v.trim().toLowerCase().replace(/^0x/, "") : "");
 
 // Compare a parsed receipt with a re-run of its round. Rows are in round
-// order (seed, Burn, each market's forecasters and market hash); anything the
+// order (seed, each market's forecasters and market hash); anything the
 // receipt lists that the round doesn't have comes last as "extra". state:
 // "match" | "mismatch" | "missing" (receipt has no usable hash) | "extra".
 // ok is true only when every row matches.

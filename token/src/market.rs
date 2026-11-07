@@ -422,6 +422,6 @@ mod tests {
         )
         .unwrap();
         // Same fixture as sim/rust forecast_market_matches_reference.
-        assert_eq!(out.swarm, vec![3323, 3512, 3165]);
+        assert_eq!(out.swarm, vec![3594, 3121, 3285]);
     }
 }

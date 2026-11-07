@@ -1,5 +1,5 @@
-"""Antonomy bot swarm: rule-based bots that stake on the Burn colony every round
-and earn from the play-token reward pool when their burn size wins.
+"""Antonomy bot swarm: rule-based bots that stake on the Burn colony and earn
+from the play-token reward pool when their burn size wins.
 
 Usage:
   python3 -I bots/swarm.py --contract <contract> \\
@@ -29,11 +29,14 @@ staking methods and pays gas from a small allowance:
     --contract-account-id <contract> --function-names 'stake, unstake, settle' \\
     autogenerate-new-keypair save-to-keychain network-config testnet \\
     sign-with-keychain send
-Fund it with play tokens from the treasury (`ft_transfer`) before the first round.
+Fund it with play tokens from the treasury (`ft_transfer`) before the first run.
 
-After the drand round is published, anyone calls `settle`; then --withdraw
-unstakes every entry the bots hold, read from the final stake snapshot.
-Rewards land in the bots' balances when the colony executes the burn.
+Burn days (token/src/day.rs): Burn stakes stay in and count for every day
+until withdrawn. Each day they freeze at 12:00 UTC, so a stake made after 12:00
+counts from the next day. --withdraw unstakes every entry the bots hold; the
+contract refuses that from 12:00 to 24:00 UTC while the colony runs, so the
+script does too. Rewards land in the bots' balances when the colony executes
+a day's burn at 24:00.
 
 Reads go to a public RPC (read-only, no keys); writes go through the NEAR CLI
 and the local keychain. No paid LLM calls.
@@ -55,6 +58,17 @@ ONE = 10**24
 FLOW_AMOUNT = 10 * ONE
 HEAVY_FAVOURITE = 4          # 2.00% of the treasury, the top of the burn menu
 RPC = "https://test.rpc.fastnear.com"
+DAY_MS = 86_400_000
+STAKING_MS = 43_200_000      # token/src/day.rs: stakes freeze at 12:00 UTC, the colony runs to 24:00
+
+
+def burn_day(now_ms):
+    """(first burn day a stake made now counts for, when that day's stakes
+    freeze in ms, whether a colony is running now so Burn stakes are locked)."""
+    d, into = divmod(now_ms, DAY_MS)
+    running = into >= STAKING_MS
+    counts = d + 1 if running else d
+    return counts, counts * DAY_MS + STAKING_MS, running
 GAS = "100.0 Tgas"
 
 # weights: per-option sqrt-yocto sums (contract `stake_weights`); balance,
@@ -150,11 +164,11 @@ def parse_bots(specs):
     return bots
 
 
-def stake_round(chain, bots, a, run):
+def stake_round(chain, bots, a, run, now_ms=None):
     cfg = chain.config()
-    if time.time() * 1000 >= cfg["close_at_ms"]:
-        print("staking is closed for this round", file=sys.stderr)
-        return 1
+    day, freeze_ms, _ = burn_day(int(time.time() * 1000) if now_ms is None else now_ms)
+    print("stakes count from burn day %d (they freeze at %s)"
+          % (day, time.strftime("%Y-%m-%d 12:00 UTC", time.gmtime(freeze_ms // 1000))), file=sys.stderr)
     cap = int(cfg["cap_per_wallet"])
     local = None  # dry run: weights carried between bots
     for strategy, account in bots:
@@ -175,11 +189,12 @@ def stake_round(chain, bots, a, run):
     return 0
 
 
-def withdraw(chain, bots, a, run):
-    entries = chain.view("stake_snapshot")["entries"]
-    mine = {account for _, account in bots}
-    for account, colony, option, amount in entries:
-        if account in mine:
+def withdraw(chain, bots, a, run, now_ms=None):
+    if burn_day(int(time.time() * 1000) if now_ms is None else now_ms)[2]:
+        print("Burn stakes are locked from 12:00 to 24:00 UTC while the colony runs", file=sys.stderr)
+        return 1
+    for _, account in bots:
+        for colony, option, amount in chain.view("stakes_of", {"account_id": account}):
             print(json.dumps({"bot": account, "unstake": [colony, option, amount]}))
             run(near_call(a.contract, "unstake",
                           {"colony": colony, "option": option, "amount": amount}, account, a.network))
@@ -199,7 +214,7 @@ def main(argv=None):
     p.add_argument("--bot", action="append", required=True, metavar="STRATEGY=ACCOUNT")
     p.add_argument("--rpc", default=RPC)
     p.add_argument("--network", default="testnet")
-    p.add_argument("--withdraw", action="store_true", help="unstake after the round has settled")
+    p.add_argument("--withdraw", action="store_true", help="unstake everything (not from 12:00 to 24:00 UTC)")
     p.add_argument("--send", action="store_true", help="sign and send with the NEAR CLI")
     a = p.parse_args(argv)
     bots = parse_bots(a.bot)
