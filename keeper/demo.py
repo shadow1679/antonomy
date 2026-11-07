@@ -31,7 +31,8 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "bots"))
-from swarm import BURN_COLONY, BURN_OPTIONS, ONE, Wallet, burn_day, plan as burn_plan  # noqa: E402
+from swarm import (BURN_COLONY, BURN_OPTIONS, ONE, Wallet, burn_day, commit_hash,  # noqa: E402,F401
+                   plan as burn_plan, salt_for, swarm_secret)
 
 LIGHT_GAS = "100.0 Tgas"
 BPS = 10_000                       # agent odds must sum to exactly this (token/src/agents.rs)
@@ -47,6 +48,7 @@ BURN_STRATEGY = {"follower": "follower", "contrarian": "contrarian", "mixed": "e
 RECRUIT_GAP_MS = 6 * 3_600_000
 OPEN_PHASES = ("odds", "forecasting", "running")
 READ_ERRORS = (RuntimeError, OSError, ValueError, KeyError)
+
 
 
 class Memo:
@@ -114,10 +116,14 @@ def pick_option(style, odds, key):
 
 
 def agent_steps(chain, agent, now_ms, rs, requests, style="baseline", picks=None):
-    """The forecaster agent's calls: join once, then post once on every open
-    market (the round's, until its publish time; only `picks` of them, chosen
-    by hash per round, if given: every post costs gas) and request (while its
-    agents' window is open), at the keepers' odds reshaped by `style`."""
+    """The forecaster agent's calls: join once, then forecast once on every
+    open market (the round's, until its publish time; only `picks` of them,
+    chosen by hash per round, if given: every post costs gas) and request
+    (while its agents' window is open), at the keepers' odds reshaped by
+    `style`. A forecast is two calls: `commit_forecast` while the window's
+    `agent_window` phase is "commit", `reveal_forecast` once it is "reveal"
+    (docs/FORECAST_QUALITY.md §3). A contract without `agent_window` takes
+    the old one-call `post_forecast`."""
     targets = []                   # (colony, odds, deadline)
     if rs["phase"] == "agents" and rs["markets"] is not None and now_ms < rs["publish_at_ms"]:
         mine = [(m["colony"], m["odds"], rs["publish_at_ms"]) for m in chain.view("forecast_markets") or []]
@@ -143,8 +149,21 @@ def agent_steps(chain, agent, now_ms, rs, requests, style="baseline", picks=None
         if have < need:
             return []              # can't join: nothing to do until it is funded
         steps.append(call(agent, "register_agent", by=join_by))
-    steps += [call(agent, "post_forecast", {"colony": c, "odds": shape(style, o, (agent, c, by))}, by=by)
-              for c, o, by in targets]
+    for c, o, by in targets:
+        odds = shape(style, o, (agent, c, by))
+        try:
+            w = chain.view("agent_window", {"colony": c})
+        except READ_ERRORS:
+            steps.append(call(agent, "post_forecast", {"colony": c, "odds": odds}, by=by))
+            continue
+        if w is None:
+            continue
+        salt = salt_for(agent, c, by)
+        if w["phase"] == "commit" and agent not in w["committed"]:
+            steps.append(call(agent, "commit_forecast", {"colony": c, "hash": commit_hash(c, odds, salt, agent)},
+                              by=w["reveal_from_ms"]))
+        elif w["phase"] == "reveal" and agent in w["committed"]:
+            steps.append(call(agent, "reveal_forecast", {"colony": c, "odds": odds, "salt": salt.hex()}, by=by))
     return steps
 
 

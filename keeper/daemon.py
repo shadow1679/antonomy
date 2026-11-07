@@ -10,18 +10,23 @@ due, nothing else:
                          differs from the others' (a volume reshuffle between
                          reads) reads again while posting is open
     post_request_odds    each requested market's odds, same reader
+    post_resolutions     every RESOLVE_EVERY_MS, each keeper reads how the
+                         markets waiting in the scorebook stand
+                         (keeper/resolve.py) and posts the reads that changed
   cranker account (anyone)
     finalize_markets, crank_round, start_round        the round
     crank_burn, execute_burn                          the Burn colony's day
     finalize_request_odds, crank_request              requested forecasts
     fulfill_randomness                                randomness service: proves each
                                                       waited-for drand round once
+    score_market                                      a market whose resolution is final
   agent account   (optional, --agent)
     claim_play_tokens, register_agent                 once, when it can afford the deposit
-    post_forecast        each open market and request, once, at the odds the
-                         keepers' median already put on chain (a baseline
+    commit_forecast,     each open market and request, once, at the odds the
+    reveal_forecast      keepers' median already put on chain (a baseline
                          forecaster: the Agents colony then mirrors the market
-                         until other agents post their own odds)
+                         until other agents post their own odds): a hash while
+                         the window hides posts, the odds in its last third
 
 Dry run unless --send: it prints the NEAR CLI commands it would sign. Each
 send goes through the first NEAR CLI network (--network, repeatable); if that
@@ -67,6 +72,9 @@ STAKING_MS = DAY_MS // 2           # token/src/day.rs: the colony runs 12:00 to 
 BURN_TICKS = 43_200
 TICKS_PER_CALL = 1_500             # token/src/burnrun.rs
 TRENDING = os.path.join(HERE, "trending.py")
+RESOLVE = os.path.join(HERE, "resolve.py")
+RESOLVE_EVERY_MS = 30 * 60_000     # how often the keepers re-read the open markets' resolutions
+FINAL = ("resolved", "fifty_fifty")
 HEAVY_GAS = "300.0 Tgas"
 LATE_FINALIZE_MS = 30 * 60_000     # how long after publish a late post is still finalized
 TRENDING_COUNT = 12                # markets per round (contract MAX_TRENDING)
@@ -137,10 +145,36 @@ def to_repost(posts, quorum):
     return [] if len(best) >= quorum else [k for k in posts if k not in best]
 
 
-def plan(chain, keepers, cranker, now_ms, refused=(), agent=None, beacon=lambda rnd: None):
+def resolution_steps(chain, keepers, cranker, resolve):
+    """Score each market whose resolution is final; with `resolve`, have each
+    keeper read the others again. A contract without the scorebook has no
+    `open_markets` view: nothing to do."""
+    try:
+        openm = chain.view("open_markets", {"from_index": 0, "limit": 50})
+    except (RuntimeError, OSError, ValueError, KeyError):
+        return []
+    steps = []
+    waiting = []
+    for m in openm:
+        if (m.get("resolution") or {}).get("state") in FINAL:
+            steps.append(call(cranker, "score_market", {"market_id": m["market_id"]}))
+        else:
+            waiting.append(m)
+    if resolve and waiting:
+        for k in keepers:
+            todo = []
+            for m in waiting:
+                mine = next(([st, end] for who, st, end in m["keepers_posted"] if who == k), None)
+                todo.append({"market_id": m["market_id"], "outcomes": m["outcomes"], "mine": mine})
+            steps.append(call(k, "post_resolutions", read=("resolutions", todo)))
+    return steps
+
+
+def plan(chain, keepers, cranker, now_ms, refused=(), agent=None, beacon=lambda rnd: None, resolve=False):
     """The calls due now, in order. Pure apart from the chain reads and
     `beacon(round)`, which returns a drand signature or None. `keepers` are
-    the allow-listed accounts this daemon signs for."""
+    the allow-listed accounts this daemon signs for. `resolve` asks the
+    keepers to read the open markets' resolutions again."""
     steps = []
 
     # ---- the round ----
@@ -227,6 +261,7 @@ def plan(chain, keepers, cranker, now_ms, refused=(), agent=None, beacon=lambda 
         sig = beacon(rnd)
         if sig is not None:
             steps.append(call(cranker, "fulfill_randomness", {"drand_round": rnd, "drand_signature": sig}))
+    steps += resolution_steps(chain, keepers, cranker, resolve)
     if agent:
         steps += agent_steps(chain, agent, now_ms, rs, recent)
     return steps
@@ -249,6 +284,21 @@ def read_request(rid, slug):
     reader refuses it (blocked, closed or decided)."""
     out = _read(["--request", str(rid), "--market", slug])
     return None if out is None else {"request_id": rid, "market": out["market"]}
+
+
+def read_resolutions(todo):
+    """`post_resolutions` arguments: the keeper's fresh reads of `todo`'s
+    markets that differ from its post on chain (`mine`, [state, end_ms]),
+    or None when nothing changed or the reader failed."""
+    ask = [{"market_id": t["market_id"], "outcomes": t["outcomes"]} for t in todo]
+    out = subprocess.run([sys.executable, "-I", RESOLVE, "--open", "-"], input=json.dumps(ask),
+                         capture_output=True, text=True, timeout=300)
+    if out.returncode != 0 or not out.stdout.strip():
+        return None
+    mine = {t["market_id"]: t["mine"] for t in todo}
+    changed = [p for p in json.loads(out.stdout)["resolutions"]
+               if p["market_id"] in mine and mine[p["market_id"]] != [p["state"], p["end_ms"]]]
+    return {"resolutions": changed} if changed else None
 
 
 def read_recruit(exclude):
@@ -276,7 +326,9 @@ class Operator:
         self.hold_recruit_until = 0
         self.run = run or self._run
         self.now_ms = now_ms or (lambda: int(time.time() * 1000))
-        self.readers = readers or {"trending": read_trending, "request": read_request, "recruit": read_recruit}
+        self.readers = readers or {"trending": read_trending, "request": read_request, "recruit": read_recruit,
+                                   "resolutions": read_resolutions}
+        self.resolve_at = 0
         self.log = log or (lambda m: print(m, file=sys.stderr))
         self.refused = set()
         self.fetch = fetch or fetch_beacon
@@ -330,7 +382,8 @@ class Operator:
                 return None
             args = self.readers[kind](*a)
             if args is None:
-                self.log("skip %s: the keeper reader refused" % step["method"])
+                if kind != "resolutions":   # no news is the usual answer there
+                    self.log("skip %s: the keeper reader refused" % step["method"])
                 if kind == "request":
                     self.refused.add(a[0])
                 elif kind == "recruit":
@@ -383,8 +436,11 @@ class Operator:
         """Make every call that is due. Returns [(method, sent_ok)]. With
         `split`, the agents' and the crew's calls are left to `fast_tick`."""
         made = set()
+        resolve = self.now_ms() >= self.resolve_at
+        if resolve:
+            self.resolve_at = self.now_ms() + RESOLVE_EVERY_MS
         steps = plan(self.chain, self.keepers, self.cranker, self.now_ms(), self.refused,
-                     None if self.split else self.agent, self.beacon)
+                     None if self.split else self.agent, self.beacon, resolve)
         if not self.split:
             steps += crew_steps(self.chain, self.crew, self.now_ms(), self.log)
         done = self.run_steps(steps, made=made)

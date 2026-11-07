@@ -60,7 +60,20 @@ class Filters(unittest.TestCase):
 class Posts(unittest.TestCase):
     def test_binary_market(self):
         p = t.build_post(event([market(5, ["0.62", "0.38"])]), NOW, flat_history("0.55"))
-        self.assertEqual(p, {"market_id": "77", "outcomes": ["Yes", "No"], "odds": [6200, 3800], "odds_6h": [5500, 5500]})
+        self.assertEqual(p, {"market_id": "77", "outcomes": ["Yes", "No"], "odds": [6200, 3800], "odds_6h": [5500, 5500],
+                             "odds_1h": [5500, 5500], "odds_24h": [5500, 5500]})
+
+    def test_three_windows_from_one_history(self):
+        ts = int(NOW.timestamp())
+        pts = [{"t": ts - 25 * 3600, "p": Decimal("0.40")}, {"t": ts - 7 * 3600, "p": Decimal("0.50")},
+               {"t": ts - 2 * 3600, "p": Decimal("0.66")}, {"t": ts - 600, "p": Decimal("0.61")}]
+        p = t.build_post(event([market(5, ["0.62", "0.38"])]), NOW, lambda tok, target: pts)
+        self.assertEqual((p["odds_24h"][0], p["odds_6h"][0], p["odds_1h"][0]), (4000, 5000, 6600))
+        # History that doesn't reach back a day: posted without the windows.
+        short = [x for x in pts if x["t"] > ts - 24 * 3600]
+        p = t.build_post(event([market(5, ["0.62", "0.38"])]), NOW, lambda tok, target: short)
+        self.assertNotIn("odds_24h", p)
+        self.assertNotIn("odds_1h", p)
 
     def test_props_use_highest_volume_market(self):
         main = market(5, ["0.3", "0.7"], ("Home", "Away"), vol=9000)
@@ -76,6 +89,7 @@ class Posts(unittest.TestCase):
         self.assertEqual(p["outcomes"], ["P1", "P2", "P3", "P4", "Other"])
         self.assertEqual(p["odds"], [4000, 2500, 1500, 1000, 1000])
         self.assertEqual(p["odds_6h"], [2000, 2000, 2000, 2000, 2000])
+        self.assertEqual(p["odds_24h"], [2000, 2000, 2000, 2000, 2000])
 
     def test_neg_risk_order_is_stable_under_small_moves(self):
         a = [market(20, ["0.30", "0.70"], title="A"), market(21, ["0.31", "0.69"], title="B")]

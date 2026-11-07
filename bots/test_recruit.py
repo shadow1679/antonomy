@@ -63,10 +63,11 @@ DONE = done_request()
 class FakeChain:
     """Answers the views recruit.py reads."""
 
-    def __init__(self, requests, agents=(), trending=None):
+    def __init__(self, requests, agents=(), trending=None, windows=None):
         self.requests = list(requests)
         self.agents = set(agents)
         self.trending = trending
+        self.windows = windows      # colony -> agent_window view; None: a contract without it
 
     def view(self, method, args=None):
         args = args or {}
@@ -82,6 +83,10 @@ class FakeChain:
             return args["account_id"] in self.agents
         if method == "forecast_markets":
             return self.trending
+        if method == "agent_window":
+            if self.windows is None:
+                raise KeyError("agent_window")
+            return self.windows.get(args["colony"])
         raise AssertionError("unexpected view %s" % method)
 
 
@@ -167,12 +172,32 @@ class Post(unittest.TestCase):
         return open_request(1, "ecb-decision-december", "forecasting", forecast_by_ms=5_000,
                             market=dict(MARKET, colony=0x8001))
 
-    def test_posts_on_the_request_colony(self):
+    def test_commits_then_reveals_on_the_request_colony(self):
+        r.swarm_secret()[:] = [b"test-secret"]
+        win = {"phase": "commit", "reveal_from_ms": 4_000, "by_ms": 5_000, "committed": []}
+        chain = FakeChain([DONE, self.forecasting()], agents={"me.testnet"}, windows={0x8001: win})
+        t, calls = tool(chain)
+        out = t.post_forecast([5000, 4000, 1000], request_id=1)
+        method, args = method_and_args(calls[0])
+        self.assertEqual((method, out["step"], out["reveal_from_ms"]), ("commit_forecast", "committed", 4_000))
+        self.assertEqual(out["outcomes"], ["Cut", "Hold", "Hike"])
+        win.update(phase="reveal", committed=["me.testnet"])
+        out = t.post_forecast([5000, 4000, 1000], request_id=1)
+        method, rev = method_and_args(calls[1])
+        self.assertEqual((method, out["step"], rev["odds"]), ("reveal_forecast", "revealed", [5000, 4000, 1000]))
+        # The reveal opens exactly the commit.
+        self.assertEqual(r.commit_hash(0x8001, rev["odds"], bytes.fromhex(rev["salt"]), "me.testnet"), args["hash"])
+        win.update(committed=[])
+        with self.assertRaises(ValueError) as e:
+            t.post_forecast([5000, 4000, 1000], request_id=1)
+        self.assertIn("too late", str(e.exception))
+
+    def test_an_old_contract_takes_the_odds_at_once(self):
         t, calls = tool(FakeChain([DONE, self.forecasting()], agents={"me.testnet"}))
         out = t.post_forecast([5000, 4000, 1000], request_id=1)
         self.assertEqual(method_and_args(calls[0]),
                          ("post_forecast", {"colony": 0x8001, "odds": [5000, 4000, 1000]}))
-        self.assertEqual(out["outcomes"], ["Cut", "Hold", "Hike"])
+        self.assertEqual(out["step"], "posted")
 
     def test_refuses_what_the_contract_would(self):
         t, calls = tool(FakeChain([DONE, self.forecasting()], agents={"me.testnet"}))
@@ -249,23 +274,28 @@ class Crank(unittest.TestCase):
         self.assertEqual(out["phase"], "done")
 
 
-    def test_wait_posts_your_odds_when_agents_may(self):
+    def test_wait_commits_then_reveals_your_odds_when_agents_may(self):
+        r.swarm_secret()[:] = [b"test-secret"]
         fc = open_request(1, "ecb-decision-december", "forecasting", forecast_by_ms=5_000,
                           market=dict(MARKET, colony=0x8001))
-        chain = FakeChain([DONE, fc], agents={"me.testnet"})
+        win = {"phase": "commit", "reveal_from_ms": 4_000, "by_ms": 5_000, "committed": []}
+        chain = FakeChain([DONE, fc], agents={"me.testnet"}, windows={0x8001: win})
         t, calls = tool(chain, now=0)
         sent = []
 
         def run(cmd):
             sent.append(method_and_args(cmd))
-            if cmd[5] == "post_forecast":
+            if cmd[5] == "commit_forecast":       # the window moves on to its reveal phase
+                win.update(phase="reveal", committed=["me.testnet"])
+            if cmd[5] == "reveal_forecast":
                 chain.requests[1] = dict(DONE, id=1)  # the window closes and the cranks run
             return True
 
         t.run = run
         out = r.wait(t, 1, crank=False, sleep=lambda s: self.fail("should not sleep"),
                      odds="Hike=1000,Cut=6000,Hold=3000")
-        self.assertEqual(sent, [("post_forecast", {"colony": 0x8001, "odds": [6000, 3000, 1000]})])
+        self.assertEqual([m for m, _ in sent], ["commit_forecast", "reveal_forecast"])
+        self.assertEqual(sent[1][1]["odds"], [6000, 3000, 1000])
         self.assertEqual(out["phase"], "done")
 
     def test_resolve_odds(self):

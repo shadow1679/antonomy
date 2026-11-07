@@ -21,8 +21,13 @@ now and six hours ago. Non-neg-risk events with many markets (game props) use
 only their highest-volume market.
 
 Odds six hours ago come from the CLOB price history: the last point at or
-before now - 6h. `raw_hash` is sha256 over every raw response the post was
-built from, in fetch order; `--save-raw` keeps the bytes so anyone can check it.
+before now - 6h. The same history (one fetch per outcome, the last 26 hours
+at 10-minute fidelity) gives the odds 1 hour and 24 hours ago, posted as
+`odds_1h` and `odds_24h` for Momentum's three windows
+(docs/FORECAST_QUALITY.md §5); a market whose history doesn't reach back a
+day is posted without them. `raw_hash` is sha256 over every raw response the
+post was built from, in fetch order; `--save-raw` keeps the bytes so anyone
+can check it.
 
 On request (Recruit the swarm): someone paid the fee for a forecast on the
 Polymarket event with slug SLUG, and the contract gave it request id ID. The
@@ -60,6 +65,10 @@ CLOB = "https://clob.polymarket.com"
 BPS = 10000
 MAX_OUTCOMES = 5
 SIX_HOURS = 6 * 3600
+ONE_HOUR = 3600
+ONE_DAY = 24 * 3600
+HISTORY_SPAN = 26 * 3600          # one fetch covers every window, with room before the day
+HISTORY_FIDELITY = 10             # minutes between points
 
 # Floors. Volume and liquidity are USD.
 MIN_VOLUME_24H = 100_000
@@ -161,13 +170,14 @@ def outcome_legs(event):
     return [(str(l).strip(), t, bps(p)) for l, t, p in zip(labels, tokens, prices)]
 
 
-def group_other(labels, odds, odds_6h):
-    """Keep the first four outcomes and fold the rest into "Other"."""
+def group_other(labels, *series):
+    """Keep the first four outcomes and fold the rest into "Other", in every
+    odds series given (now, six hours ago, ...)."""
     if len(labels) <= MAX_OUTCOMES:
-        return labels, odds, odds_6h
+        return (labels,) + series
     k = MAX_OUTCOMES - 1
     rest = lambda xs: max(0, BPS - sum(xs[:k]))
-    return labels[:k] + ["Other"], odds[:k] + [rest(odds)], odds_6h[:k] + [rest(odds_6h)]
+    return (labels[:k] + ["Other"],) + tuple(xs[:k] + [rest(xs)] for xs in series)
 
 
 def price_at(history, target):
@@ -187,25 +197,33 @@ def build_post(event, now, history):
     legs = outcome_legs(event)
     if isinstance(legs, str):
         return legs
-    target = int(now.timestamp()) - SIX_HOURS
+    ts = int(now.timestamp())
+    target = ts - SIX_HOURS
     k = len(legs) if len(legs) <= MAX_OUTCOMES else MAX_OUTCOMES - 1
     labels = [l for l, _, _ in legs]
     odds = [p for _, _, p in legs]
-    odds_6h = []
+    odds_6h, odds_1h, odds_24h = [], [], []
     for _, tok, _ in legs[:k]:
         p = price_at(history(tok, target), target)
         if p is None:
             return "no price history six hours back"
         odds_6h.append(bps(p))
-    odds_6h += [0] * (len(legs) - k)  # replaced by the Other fold below
-    labels, odds, odds_6h = group_other(labels, odds, odds_6h)
+        for back, out in ((ONE_HOUR, odds_1h), (ONE_DAY, odds_24h)):
+            pts = [x for x in history(tok, ts - back) if int(x["t"]) <= ts - back]
+            out.append(bps(price_at(pts, ts - back)) if pts else None)
+    pad = [0] * (len(legs) - k)  # replaced by the Other fold below
+    windows = None not in odds_1h + odds_24h
+    if windows:
+        labels, odds, odds_6h, odds_1h, odds_24h = group_other(labels, odds, odds_6h + pad, odds_1h + pad, odds_24h + pad)
+    else:
+        labels, odds, odds_6h = group_other(labels, odds, odds_6h + pad)
     if len(set(labels)) != len(labels):
         return "duplicate outcome labels"
     if max(odds) >= MAX_TOP_ODDS:
         return "effectively decided (top outcome %d bps)" % max(odds)
     if max(odds) == 0 or min(odds) == BPS:
         return "degenerate odds"
-    return {
+    post = {
         # The slug is readable on the pages and links to the event; the id is
         # the fallback for an event without one.
         "market_id": str(event.get("slug") or event["id"]),
@@ -213,6 +231,9 @@ def build_post(event, now, history):
         "odds": odds,
         "odds_6h": odds_6h,
     }
+    if windows:
+        post["odds_1h"], post["odds_24h"] = odds_1h, odds_24h
+    return post
 
 
 def request_post(event, now, slug, history):
@@ -257,6 +278,7 @@ class Fetcher:
 
     def __init__(self):
         self.raw = []
+        self.series = {}
 
     def get(self, url):
         req = urllib.request.Request(url, headers={"User-Agent": "antonomy-keeper/0", "Accept": "application/json"})
@@ -275,8 +297,14 @@ class Fetcher:
         return json.loads(body, parse_float=Decimal)
 
     def history(self, token, target):
-        q = urllib.parse.urlencode({"market": token, "startTs": target - 7200, "endTs": target, "fidelity": 5})
-        return self.get("%s/prices-history?%s" % (CLOB, q)).get("history") or []
+        """The token's price points over the last `HISTORY_SPAN`, fetched once
+        and shared by every window (`target` only has to fall inside it)."""
+        if token not in self.series:
+            end = int(time.time())
+            q = urllib.parse.urlencode({"market": token, "startTs": end - HISTORY_SPAN, "endTs": end,
+                                        "fidelity": HISTORY_FIDELITY})
+            self.series[token] = self.get("%s/prices-history?%s" % (CLOB, q)).get("history") or []
+        return self.series[token]
 
 
 def main(argv=None):

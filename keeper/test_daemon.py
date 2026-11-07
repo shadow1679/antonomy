@@ -81,6 +81,26 @@ class Agent(unittest.TestCase):
         done = {"odds": [7000, 3000], "hash": "0" * 64, "posts": [[A, [7000, 3000]]]}
         self.assertEqual(self.plan(self.fake(agent_snapshot=done)), [])
 
+    def test_commits_while_hidden_then_reveals_the_same_odds(self):
+        op.demo.swarm_secret()[:] = [b"test-secret"]
+        win = {"phase": "commit", "reveal_from_ms": 800, "by_ms": 1000, "committed": []}
+        s = self.plan(self.fake(agent_window=win))
+        self.assertEqual(methods(s), [(A, "commit_forecast")])
+        self.assertEqual(s[0]["by"], 800)
+        committed = s[0]["args"]["hash"]
+        # Committed already: nothing until the reveal phase.
+        win.update(committed=[A])
+        self.assertEqual(self.plan(self.fake(agent_window=win)), [])
+        win.update(phase="reveal")
+        s = self.plan(self.fake(agent_window=win), now=850)
+        self.assertEqual(methods(s), [(A, "reveal_forecast")])
+        a = s[0]["args"]
+        self.assertEqual(a["odds"], [7000, 3000])
+        self.assertEqual(op.demo.commit_hash(3, a["odds"], bytes.fromhex(a["salt"]), A), committed)
+        # A reveal without a commit would be refused: don't send one.
+        win.update(committed=[])
+        self.assertEqual(self.plan(self.fake(agent_window=win), now=850), [])
+
     def test_no_agent_account_means_no_agent_calls(self):
         self.assertEqual(op.plan(self.fake(), [K], C, 500), [])
 
@@ -143,6 +163,46 @@ def methods(steps):
 
 def burn_run(day=DAY, t=0, done=False):
     return {"day": day, "t": t, "ticks": op.BURN_TICKS, "done": done}
+
+
+class Scorebook(unittest.TestCase):
+    """Resolutions are read on a timer by every keeper; final ones are scored."""
+
+    OPEN = [
+        {"market_id": "cup", "outcomes": [["Yes", "No"]], "resolution": None,
+         "keepers_posted": [[K, "open", 9]]},
+        {"market_id": "fed", "outcomes": [["Cut", "Hold"]],
+         "resolution": {"state": "resolved", "winner": "Cut"}, "keepers_posted": []},
+    ]
+
+    def test_final_markets_are_scored_and_the_rest_read_when_due(self):
+        f = Fake(open_markets=self.OPEN)
+        s = op.plan(f, [K], C, 0, beacon=beacon)
+        self.assertEqual(methods(s), [(C, "score_market")])
+        self.assertEqual(s[0]["args"], {"market_id": "fed"})
+        s = op.plan(f, [K, "k2.t"], C, 0, beacon=beacon, resolve=True)
+        self.assertEqual(methods(s), [(C, "score_market"), (K, "post_resolutions"), ("k2.t", "post_resolutions")])
+        kind, todo = s[1]["read"]
+        self.assertEqual((kind, todo), ("resolutions", [{"market_id": "cup", "outcomes": [["Yes", "No"]],
+                                                         "mine": ["open", 9]}]))
+        self.assertIsNone(s[2]["read"][1][0]["mine"])
+
+    def test_a_contract_without_the_scorebook_is_left_alone(self):
+        self.assertEqual(op.plan(Fake(), [K], C, 0, beacon=beacon, resolve=True), [])
+
+    def test_only_changed_reads_are_posted(self):
+        class Done:
+            returncode, stdout = 0, '{"resolutions": [{"market_id": "cup", "state": "open", "end_ms": 9}, '\
+                                    '{"market_id": "new", "state": "proposed", "end_ms": 5}]}'
+        real = op.subprocess.run
+        op.subprocess.run = lambda *a, **k: Done()
+        try:
+            out = op.read_resolutions([{"market_id": "cup", "outcomes": [], "mine": ["open", 9]},
+                                       {"market_id": "new", "outcomes": [], "mine": None}])
+            self.assertEqual([p["market_id"] for p in out["resolutions"]], ["new"])
+            self.assertIsNone(op.read_resolutions([{"market_id": "cup", "outcomes": [], "mine": ["open", 9]}]))
+        finally:
+            op.subprocess.run = real
 
 
 class Round(unittest.TestCase):

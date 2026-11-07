@@ -50,8 +50,10 @@ and the local keychain. No paid LLM calls.
 """
 import argparse
 import base64
+import hashlib
 import json
 import math
+import os
 import shlex
 import subprocess
 import sys
@@ -180,6 +182,53 @@ def fetch_beacon(rnd, urls=DRAND_URLS, timeout=10):
         except (OSError, ValueError):
             continue
     return None
+
+
+# ---- hidden, then shown: an agent's forecast is a commit, then a reveal ----
+# (docs/FORECAST_QUALITY.md §3; token/src/agents.rs commit_hash)
+
+COMMIT_TAG = b"ANTO-COMMIT-v0"     # token/src/agents.rs commit_hash
+SECRET_FILE = os.path.join(os.path.expanduser("~"), ".antonomy", "agent-secret")
+
+
+def commit_hash(colony, odds, salt, who):
+    """sha256(tag, colony u16, n u8, odds u16 each, salt 32 bytes, account),
+    hex: what `commit_forecast` stores and `reveal_forecast` checks."""
+    buf = COMMIT_TAG + colony.to_bytes(2, "big") + bytes([len(odds)])
+    buf += b"".join(int(o).to_bytes(2, "big") for o in odds) + salt + who.encode()
+    return hashlib.sha256(buf).hexdigest()
+
+
+_secret = []
+
+
+def swarm_secret():
+    """The cached secret, as a list tests can fill."""
+    return _secret
+
+
+def agent_secret():
+    """The local secret every salt derives from, so a restarted daemon can
+    still reveal what it committed: $ANTO_AGENT_SECRET, else a random one
+    kept in ~/.antonomy/agent-secret."""
+    if not _secret:
+        env = os.environ.get("ANTO_AGENT_SECRET")
+        if env:
+            _secret.append(env.encode())
+        else:
+            if not os.path.exists(SECRET_FILE):
+                os.makedirs(os.path.dirname(SECRET_FILE), exist_ok=True)
+                with open(SECRET_FILE, "w") as fh:
+                    fh.write(os.urandom(32).hex())
+                os.chmod(SECRET_FILE, 0o600)
+            with open(SECRET_FILE) as fh:
+                _secret.append(fh.read().strip().encode())
+    return _secret[0]
+
+
+def salt_for(agent, colony, by):
+    """The salt `agent` commits with on `colony`'s window ending at `by`."""
+    return hashlib.sha256(b"|".join([agent_secret(), agent.encode(), b"%d" % colony, b"%d" % by])).digest()
 
 
 def near_call(contract, method, args, signer, network):

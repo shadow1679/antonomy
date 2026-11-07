@@ -17,15 +17,21 @@ ask       pays the request fee for a forecast on the Polymarket event with slug
           (finalize the odds, crank the colonies) when they are due, which
           earns the crank bounty.
 register  becomes a forecaster agent: moves the refundable deposit.
-post      posts your odds for request ID (or --colony N for a trending market
-          of the round), in basis points, one per outcome, summing to 10000.
-          Your odds count once per request; a repost replaces them.
+post      forecasts your odds for request ID (or --colony N for a trending
+          market of the round), in basis points, one per outcome, summing to
+          10000. Agents' odds stay hidden until every agent has had its say:
+          in the first two thirds of the agents' window `post` commits a hash
+          of your odds and a salt; run it again with the same odds in the last
+          third and it reveals them (`ask --odds --wait` does both). Only
+          revealed odds count. The salt comes from a local secret
+          ($ANTO_AGENT_SECRET, else ~/.antonomy/agent-secret), so a restart
+          can still reveal.
 crank     finalizes the odds or runs the next colony of request ID, whichever
           is due. Three cranks run the three colonies, one each.
 verify    re-runs request ID with the Python reference sim (sim/python) from
           the seed, odds and agent median the contract stored, and compares
           every colony hash and the market hash. Read-only.
-mcp       serves ask_swarm, post_forecast and verify as an MCP server on
+mcp       serves ask_swarm, post_forecast (commit, then reveal) and verify as an MCP server on
           stdio (JSON-RPC 2.0, one message per line), for any MCP client.
 
 Pay is for work, never for being right: keepers, forecaster agents with
@@ -38,7 +44,7 @@ through the NEAR CLI and the local keychain. Give the agent a key that can
 only call these methods:
   near account add-key <agent> grant-function-call-access --allowance '0.5 NEAR' \\
     --contract-account-id <contract> --function-names 'request_forecast, register_agent, \\
-    unregister_agent, post_forecast, finalize_request_odds, crank_request' \\
+    unregister_agent, commit_forecast, reveal_forecast, finalize_request_odds, crank_request' \\
     autogenerate-new-keypair save-to-keychain network-config testnet sign-with-keychain send
 Python standard library only, no paid LLM calls. Your own model decides the
 odds you post; this tool only carries them.
@@ -54,7 +60,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, "..", "sim", "python"))
-from swarm import RPC, Chain, fetch_beacon, near_call  # noqa: E402
+from swarm import RPC, Chain, commit_hash, fetch_beacon, near_call, salt_for, swarm_secret  # noqa: E402,F401
 
 BPS = 10_000
 ONE = 10**24
@@ -165,9 +171,13 @@ def verify(chain, request_id):
     if r["phase"] != "done":
         return {"request_id": request_id, "ok": False, "reason": "not finished (phase %s)" % r["phase"]}
     m, ag, st = r["market"], r["agents"], r["stakes"]
+    # The colonies' weights frozen at the first crank, and the odds 1 hour and
+    # 24 hours ago when the keepers posted them (docs/FORECAST_QUALITY.md §4, §5).
+    ext = (m["odds_1h"], m["odds_24h"]) if m.get("odds_1h") and m.get("odds_24h") else None
     res = antosim.forecast_market(
         bytes.fromhex(r["seed"]), r["colony"], m["odds"], m["odds_6h"], st["weights"],
-        bytes.fromhex(st["hash"]), ag["odds"], bytes.fromhex(ag["hash"]))
+        bytes.fromhex(st["hash"]), ag["odds"], bytes.fromhex(ag["hash"]),
+        colony_weights=tuple(r.get("colony_weights") or antosim.EQUAL_WEIGHTS), odds_ext=ext)
     mine = [c["hash"] for c in res["colonies"]]
     colonies = [{"kind": k, "chain": a, "replay": b, "match": a == b}
                 for k, a, b in zip(KIND_NAMES, r["colony_hashes"], mine)]
@@ -225,8 +235,26 @@ class Tool:
             raise ValueError(why)
         if not self.chain.view("is_agent", {"account_id": self.account}):
             raise ValueError("%s is not a registered forecaster agent: run `register` first" % self.account)
-        sent = self.call("post_forecast", {"colony": int(colony), "odds": odds})
-        return {"colony": int(colony), "outcomes": outcomes, "odds": odds, "sent": sent}
+        colony = int(colony)
+        out = {"colony": colony, "outcomes": outcomes, "odds": odds}
+        try:
+            w = self.chain.view("agent_window", {"colony": colony})
+        except (RuntimeError, OSError, ValueError, KeyError):
+            # A contract from before commit and reveal takes the odds at once.
+            return dict(out, step="posted", sent=self.call("post_forecast", {"colony": colony, "odds": odds}))
+        if w is None:
+            raise ValueError("the agents' window on colony %d is closed" % colony)
+        salt = salt_for(self.account, colony, w["by_ms"])
+        if w["phase"] == "commit":
+            sent = self.call("commit_forecast", {"colony": colony, "hash": commit_hash(colony, odds, salt, self.account)})
+            return dict(out, step="committed", sent=sent, reveal_from_ms=w["reveal_from_ms"], by_ms=w["by_ms"],
+                        next="post the same odds again between reveal_from_ms and by_ms to reveal them; "
+                             "only revealed odds count")
+        if self.account not in w["committed"]:
+            raise ValueError("colony %d is in its reveal phase and you made no commit: too late to forecast "
+                             "here" % colony)
+        sent = self.call("reveal_forecast", {"colony": colony, "odds": odds, "salt": salt.hex()})
+        return dict(out, step="revealed", sent=sent)
 
     def register(self):
         if self.chain.view("is_agent", {"account_id": self.account}):
@@ -270,10 +298,14 @@ TOOLS = [
     },
     {
         "name": "post_forecast",
-        "description": "Post this forecaster agent's own odds for a requested market (request_id) or a "
+        "description": "Forecast this agent's own odds for a requested market (request_id) or a "
                        "trending market colony (colony): basis points, one per outcome in the market's "
-                       "order, summing to 10000. The agents' median feeds the Agents colony. Paid for "
-                       "posting on time, never for being right.",
+                       "order, summing to 10000. Odds stay hidden until all agents have had their say: "
+                       "call this once while the agents' window is in its commit phase (it commits a "
+                       "hash), then again with the same odds once the reply's reveal_from_ms has passed "
+                       "(it reveals them). Only revealed odds count. The skill-weighted median of the "
+                       "agents' odds feeds the Agents colony. Paid for posting on time, never for being "
+                       "right.",
         "inputSchema": {"type": "object", "properties": {
             "request_id": {"type": "integer"},
             "colony": {"type": "integer"},
@@ -348,9 +380,10 @@ def serve_mcp(tool, inp=sys.stdin, out=sys.stdout):
 
 def wait(tool, request_id, crank, sleep=time.sleep, odds=None):
     """Poll a request until it is done or skipped, cranking when asked. With
-    `odds` (see `resolve_odds`), post them as this agent's forecast once the
-    agents' window opens, so the Agents colony has your view in it."""
-    last, posted = None, odds is None
+    `odds` (see `resolve_odds`), forecast them as this agent once the agents'
+    window opens (commit), and again in its reveal phase (reveal), so the
+    Agents colony has your view in it."""
+    last, stage = None, (None if odds is not None else "revealed")
     while True:
         r = tool.chain.view("forecast_request", {"request_id": int(request_id)})
         if r["phase"] != last:
@@ -358,11 +391,18 @@ def wait(tool, request_id, crank, sleep=time.sleep, odds=None):
             last = r["phase"]
         if r["phase"] in ("done", "skipped"):
             return describe(r)
-        if not posted and r["phase"] == "forecasting":
-            out = tool.post_forecast(resolve_odds(odds, r["market"]["outcomes"]), request_id=r["id"])
-            print("posted your forecast: %s" % json.dumps(dict(zip(out["outcomes"], out["odds"]))), file=sys.stderr)
-            posted = True
-            continue
+        if stage != "revealed" and r["phase"] == "forecasting":
+            try:
+                w = tool.chain.view("agent_window", {"colony": r["colony"]})
+            except (RuntimeError, OSError, ValueError, KeyError):
+                w = {"phase": "commit"}          # an old contract: one post does it
+            due_now = w is not None and (w["phase"] == "commit") == (stage is None)
+            if due_now:
+                out = tool.post_forecast(resolve_odds(odds, r["market"]["outcomes"]), request_id=r["id"])
+                stage = "revealed" if out["step"] in ("posted", "revealed") else out["step"]
+                print("%s your forecast: %s" % (out["step"], json.dumps(dict(zip(out["outcomes"], out["odds"])))),
+                      file=sys.stderr)
+                continue
         if crank and due(r, tool.now_ms()):
             tool.crank(request_id)
             continue
