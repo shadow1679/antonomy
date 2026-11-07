@@ -1,0 +1,126 @@
+"""Offline tests for bots/swarm.py (no network, nothing signed).
+
+Run: python3 -I bots/test_swarm.py
+"""
+import contextlib
+import io
+import json
+import math
+import os
+import sys
+import unittest
+from types import SimpleNamespace
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import swarm as s  # noqa: E402
+
+ONE = s.ONE
+CAP = 100 * ONE
+
+
+def wallet(weights, balance=1000 * ONE, staked=0, cap=CAP):
+    return s.Wallet(weights, balance, staked, cap)
+
+
+class FakeChain:
+    def __init__(self, weights, balances=None, staked=None, close_at_ms=2**62, entries=()):
+        self.w = list(weights)
+        self.balances = balances or {}
+        self.staked = staked or {}
+        self.close_at_ms = close_at_ms
+        self.entries = list(entries)
+
+    def config(self):
+        return {"cap_per_wallet": str(CAP), "close_at_ms": self.close_at_ms, "publish_at_ms": self.close_at_ms + 1}
+
+    def wallet(self, account, cap):
+        return s.Wallet(list(self.w), self.balances.get(account, 1000 * ONE), self.staked.get(account, 0), cap)
+
+    def view(self, method, args=None):
+        assert method == "stake_snapshot"
+        return {"hash": "00" * 32, "entries": self.entries}
+
+
+def run_quiet(fn, *args):
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        code = fn(*args)
+    return code, [json.loads(l) for l in out.getvalue().splitlines()], err.getvalue()
+
+
+class Strategies(unittest.TestCase):
+    def test_follower_takes_the_heaviest_option(self):
+        self.assertEqual(s.plan("follower", wallet([5, 9, 9, 1, 0])), (1, s.FLOW_AMOUNT))
+
+    def test_contrarian_takes_the_lightest_option(self):
+        self.assertEqual(s.plan("contrarian", wallet([5, 0, 9, 1, 0])), (1, s.FLOW_AMOUNT))
+
+    def test_ties_go_to_lowest_index(self):
+        self.assertEqual(s.plan("follower", wallet([0] * 5))[0], 0)
+        self.assertEqual(s.plan("contrarian", wallet([0] * 5))[0], 0)
+
+    def test_heavy_fills_its_cap_on_the_top_burn(self):
+        self.assertEqual(s.plan("heavy", wallet([0] * 5, staked=30 * ONE)), (4, 70 * ONE))
+
+    def test_amount_clipped_to_balance_and_cap(self):
+        self.assertEqual(s.plan("follower", wallet([1, 0, 0, 0, 0], balance=3 * ONE)), (0, 3 * ONE))
+        self.assertEqual(s.plan("follower", wallet([1, 0, 0, 0, 0], staked=95 * ONE)), (0, 5 * ONE))
+
+    def test_nothing_to_stake_at_cap_or_broke(self):
+        self.assertIsNone(s.plan("heavy", wallet([0] * 5, staked=CAP)))
+        self.assertIsNone(s.plan("contrarian", wallet([0] * 5, balance=0)))
+
+
+class Round(unittest.TestCase):
+    def args(self, send=False):
+        return SimpleNamespace(contract="anto.testnet", network="testnet", send=send)
+
+    def test_dry_run_later_bots_see_earlier_stakes(self):
+        chain = FakeChain([0, 0, 0, 0, 0])
+        bots = [("heavy", "h.testnet"), ("follower", "f.testnet"), ("contrarian", "c.testnet")]
+        cmds = []
+        code, plans, _ = run_quiet(s.stake_round, chain, bots, self.args(), cmds.append)
+        self.assertEqual(code, 0)
+        # Heavy puts 100 on option 4; follower follows it; contrarian takes the empty option 0.
+        self.assertEqual([(p["strategy"], p["option"]) for p in plans],
+                         [("heavy", 4), ("follower", 4), ("contrarian", 0)])
+        self.assertEqual(int(plans[1]["weights"][4]), math.isqrt(100 * ONE))
+        self.assertEqual(len(cmds), 3)
+        self.assertEqual(cmds[0][5], "stake")
+        self.assertEqual(json.loads(cmds[0][7]), {"colony": 0, "option": 4, "amount": str(100 * ONE)})
+        self.assertEqual(cmds[0][cmds[0].index("sign-as") + 1], "h.testnet")
+
+    def test_closed_round_stakes_nothing(self):
+        cmds = []
+        code, plans, err = run_quiet(s.stake_round, FakeChain([0] * 5, close_at_ms=0),
+                                     [("heavy", "h.testnet")], self.args(), cmds.append)
+        self.assertEqual((code, plans, cmds), (1, [], []))
+        self.assertIn("closed", err)
+
+    def test_bot_with_nothing_to_add_sends_no_call(self):
+        chain = FakeChain([0] * 5, staked={"h.testnet": CAP})
+        cmds = []
+        _, plans, _ = run_quiet(s.stake_round, chain, [("heavy", "h.testnet")], self.args(), cmds.append)
+        self.assertIsNone(plans[0]["option"])
+        self.assertEqual(cmds, [])
+
+    def test_withdraw_unstakes_only_the_bots_entries(self):
+        entries = [["alice.testnet", 0, 2, "5"], ["f.testnet", 0, 4, "7"], ["f.testnet", 1, 0, "3"]]
+        cmds = []
+        run_quiet(s.withdraw, FakeChain([0] * 5, entries=entries), [("follower", "f.testnet")],
+                  self.args(), cmds.append)
+        self.assertEqual([json.loads(c[7]) for c in cmds],
+                         [{"colony": 0, "option": 4, "amount": "7"}, {"colony": 1, "option": 0, "amount": "3"}])
+        self.assertTrue(all(c[5] == "unstake" for c in cmds))
+
+
+class Cli(unittest.TestCase):
+    def test_parse_bots(self):
+        self.assertEqual(s.parse_bots(["heavy=w.testnet"]), [("heavy", "w.testnet")])
+        for bad in ["heavy", "whale=w.testnet", "heavy="]:
+            with self.assertRaises(SystemExit):
+                s.parse_bots([bad])
+
+
+if __name__ == "__main__":
+    unittest.main()

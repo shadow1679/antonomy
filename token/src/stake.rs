@@ -66,6 +66,10 @@ impl Staking {
         })
     }
 
+    pub fn config(&self) -> StakeConfig {
+        self.cfg
+    }
+
     pub fn staked_by(&self, who: &str) -> u128 {
         self.wallet_total.get(who).copied().unwrap_or(0)
     }

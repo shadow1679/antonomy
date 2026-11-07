@@ -8,6 +8,11 @@
 //! per-outcome median odds. The forecasters themselves don't run on-chain yet:
 //! that waits for the drand round lifecycle, like the Burn colony.
 //!
+//! Rewards: anyone moves play tokens into the pool with `fund_rewards`. When
+//! the colony executes the burn (only after staking has closed), 10% of the
+//! pool goes to the Burn colony stakers on the chosen index, pro rata to
+//! stake. Forecast colonies never pay. Testnet play token only.
+//!
 //! Known gaps: no `ft_transfer_call` or storage-management (wallets cannot
 //! register accounts yet), the whole state is read on every call (fine for a
 //! demo, not for many stakers), and `execute_burn` trusts one `colony` account
@@ -17,6 +22,7 @@ use antotoken::{
     burn::BurnExecutor,
     ledger::{Ledger, DECIMALS, SYMBOL},
     market::{Market, MarketPost, Registry},
+    reward::Rewards,
     stake::{hash_hex, StakeConfig, Staking},
     Error,
 };
@@ -31,6 +37,8 @@ pub struct Contract {
     staking: Staking,
     /// Forecast markets of the round, posted by keepers.
     markets: Registry,
+    /// Play-token reward pool for the Burn colony.
+    rewards: Rewards,
     /// Holds the genesis supply and is the account that gets burned from.
     treasury: AccountId,
     /// Only account allowed to call `execute_burn` (later: the colony run itself).
@@ -125,6 +133,13 @@ impl From<&Market> for MarketView {
 }
 
 #[near(serializers = [json])]
+pub struct StakeConfigView {
+    pub cap_per_wallet: U128,
+    pub close_at_ms: u64,
+    pub publish_at_ms: u64,
+}
+
+#[near(serializers = [json])]
 pub struct Metadata {
     pub spec: String,
     pub name: String,
@@ -169,6 +184,7 @@ impl Contract {
             burn: BurnExecutor::default(),
             staking,
             markets,
+            rewards: Rewards::default(),
             treasury,
             colony,
             guardian,
@@ -247,6 +263,15 @@ impl Contract {
     pub fn settle(&mut self) {
         ok(self.staking.settle(env::block_timestamp_ms()));
         env::log_str("EVENT settle");
+    }
+
+    pub fn stake_config(&self) -> StakeConfigView {
+        let c = self.staking.config();
+        StakeConfigView {
+            cap_per_wallet: U128(c.cap_per_wallet),
+            close_at_ms: c.close_at,
+            publish_at_ms: c.publish_at,
+        }
     }
 
     pub fn staked_by(&self, account_id: AccountId) -> U128 {
@@ -328,12 +353,15 @@ impl Contract {
     // ---- burn ----
 
     /// The colony picks `index` in the burn menu; the amount comes from the menu.
+    /// Needs staking to have closed, and pays the round's rewards to the Burn
+    /// colony stakers on `index`.
     pub fn execute_burn(&mut self, round: u64, index: u8) -> U128 {
         require!(!self.paused, "paused");
         require!(
             env::predecessor_account_id() == self.colony,
             "only the colony account may execute a burn"
         );
+        let snap = ok(self.staking.snapshot(env::block_timestamp_ms()));
         let burned = ok(self.burn.execute(
             &mut self.ledger,
             self.treasury.as_str(),
@@ -343,7 +371,40 @@ impl Contract {
         env::log_str(&format!(
             "EVENT burn round={round} index={index} amount={burned}"
         ));
+        let paid = ok(self
+            .rewards
+            .distribute(&mut self.ledger, round, index, &snap.entries));
+        for (who, amount) in paid {
+            env::log_str(&format!("EVENT reward round={round} {who} amount={amount}"));
+        }
         U128(burned)
+    }
+
+    // ---- rewards ----
+
+    /// Move `amount` of the caller's tokens into the reward pool.
+    pub fn fund_rewards(&mut self, amount: U128) {
+        require!(!self.paused, "paused");
+        let who = env::predecessor_account_id();
+        ok(self.rewards.fund(&mut self.ledger, who.as_str(), amount.0));
+        env::log_str(&format!("EVENT fund_rewards {who} amount={}", amount.0));
+    }
+
+    pub fn reward_pool(&self) -> U128 {
+        U128(self.rewards.pool(&self.ledger))
+    }
+
+    pub fn rewards_earned(&self, account_id: AccountId) -> U128 {
+        U128(self.rewards.earned_by(account_id.as_str()))
+    }
+
+    /// (account, lifetime reward), highest first.
+    pub fn reward_leaderboard(&self) -> Vec<(AccountId, U128)> {
+        self.rewards
+            .leaderboard()
+            .into_iter()
+            .map(|(a, e)| (a.parse().unwrap(), U128(e)))
+            .collect()
     }
 
     // ---- safety ----
@@ -419,6 +480,8 @@ mod tests {
         assert_eq!(c.staked_by(acct("alice.test")).0, 25 * ONE);
         assert_eq!(c.ft_balance_of(acct("alice.test")).0, 475 * ONE);
         assert_eq!(c.stake_weights(0, 3)[2].0, antotoken::isqrt(25 * ONE));
+        let cfg = c.stake_config();
+        assert_eq!((cfg.cap_per_wallet.0, cfg.close_at_ms), (100 * ONE, 1_000));
 
         testing_env!(ctx("anyone.test", 1_000).build());
         let snap = c.stake_snapshot();
@@ -446,7 +509,7 @@ mod tests {
     fn colony_burn_lowers_supply_by_menu_amount() {
         let mut c = fresh();
         let treasury_before = c.ft_balance_of(acct("treasury.test")).0;
-        testing_env!(ctx("colony.test", 0).build());
+        testing_env!(ctx("colony.test", 1_000).build());
         let burned = c.execute_burn(1, 4).0;
         assert_eq!(burned, treasury_before / 50);
         assert_eq!(c.ft_total_supply().0, 1_000_000 * ONE - burned);
@@ -456,7 +519,7 @@ mod tests {
     #[should_panic(expected = "BadBurnIndex")]
     fn burn_index_outside_menu_panics() {
         let mut c = fresh();
-        testing_env!(ctx("colony.test", 0).build());
+        testing_env!(ctx("colony.test", 1_000).build());
         c.execute_burn(1, 5);
     }
 
@@ -476,7 +539,7 @@ mod tests {
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.stake(0, 0, U128(ONE))))
                 .is_err()
         );
-        testing_env!(ctx("colony.test", 20).build());
+        testing_env!(ctx("colony.test", 1_000).build());
         assert!(
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.execute_burn(1, 0)))
                 .is_err()
@@ -506,6 +569,61 @@ mod tests {
         testing_env!(ctx("alice.test", 2_001).build());
         c.unstake(0, 0, U128(10 * ONE));
         assert_eq!(c.ft_balance_of(acct("alice.test")).0, 500 * ONE);
+    }
+
+    #[test]
+    #[should_panic(expected = "StakingStillOpen")]
+    fn burn_waits_for_staking_to_close() {
+        let mut c = fresh();
+        testing_env!(ctx("colony.test", 999).build());
+        c.execute_burn(1, 0);
+    }
+
+    fn give(c: &mut Contract, to: &str, amount: u128) {
+        testing_env!(ctx("treasury.test", 0)
+            .attached_deposit(near_sdk::NearToken::from_yoctonear(1))
+            .build());
+        c.ft_transfer(acct(to), U128(amount), None);
+    }
+
+    #[test]
+    fn burn_pays_rewards_to_burn_stakers_on_the_winner() {
+        let mut c = fresh();
+        give(&mut c, "bot-follower.test", 100 * ONE);
+        give(&mut c, "bot-contrarian.test", 100 * ONE);
+        testing_env!(ctx("treasury.test", 0).build());
+        c.fund_rewards(U128(1_000 * ONE));
+        assert_eq!(c.reward_pool().0, 1_000 * ONE);
+
+        testing_env!(ctx("alice.test", 10).build());
+        c.stake(0, 2, U128(30 * ONE));
+        c.stake(1, 2, U128(50 * ONE)); // forecast colony: never paid
+        testing_env!(ctx("bot-follower.test", 10).build());
+        c.stake(0, 2, U128(10 * ONE));
+        testing_env!(ctx("bot-contrarian.test", 10).build());
+        c.stake(0, 4, U128(10 * ONE));
+
+        testing_env!(ctx("colony.test", 1_000).build());
+        c.execute_burn(1, 2);
+        // Pot is 100: alice 30/40, follower 10/40.
+        assert_eq!(c.rewards_earned(acct("alice.test")).0, 75 * ONE);
+        assert_eq!(c.rewards_earned(acct("bot-follower.test")).0, 25 * ONE);
+        assert_eq!(c.rewards_earned(acct("bot-contrarian.test")).0, 0);
+        assert_eq!(c.reward_pool().0, 900 * ONE);
+        assert_eq!(c.ft_balance_of(acct("bot-follower.test")).0, 115 * ONE);
+        let board = c.reward_leaderboard();
+        assert_eq!(board[0], (acct("alice.test"), U128(75 * ONE)));
+        assert_eq!(board.len(), 2);
+    }
+
+    #[test]
+    #[should_panic(expected = "paused")]
+    fn fund_rewards_blocked_while_paused() {
+        let mut c = fresh();
+        testing_env!(ctx("guardian.test", 0).build());
+        c.set_paused(true);
+        testing_env!(ctx("treasury.test", 0).build());
+        c.fund_rewards(U128(ONE));
     }
 
     fn market(odds: Vec<u16>) -> MarketPostView {
