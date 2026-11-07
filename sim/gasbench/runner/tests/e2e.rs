@@ -1,7 +1,7 @@
 //! Keeper, contract and token end to end in a local NEAR sandbox. The keeper
 //! is the real `keeper/trending.py` reading live Polymarket for a requested
 //! event; its `--request` output is posted to the contract unchanged. Then the
-//! agents' window, five cranks, the fee split in $ANTO, and the market hash
+//! agents' window, three cranks, the fee split in $ANTO, and the market hash
 //! checked against the native run. Needs network, so it is ignored by default:
 //!
 //!   cargo near build non-reproducible-wasm --manifest-path contract/Cargo.toml
@@ -114,6 +114,7 @@ async fn keeper_contract_token() -> Res<()> {
             .into_result()?;
     }
     let (req0, agent0) = (balance(&c, &requester).await?, balance(&c, &agent).await?);
+    let treasury0 = balance(&c, &treasury).await?;
     assert_eq!(supply(&c).await?, supply0);
 
     // Requester pays the fee into escrow.
@@ -187,16 +188,16 @@ async fn keeper_contract_token() -> Res<()> {
     assert_eq!(v["market_hash"].as_str().unwrap(), native.hash_hex());
 
     // Token side: 20% to the keeper, 30% to the lone agent, 10% to the
-    // crankers (no bounty here), the rest burned; the deposit comes back on
+    // crankers (no bounty here), the rest to the treasury; the deposit comes back on
     // unregister.
     let keeper_got = balance(&c, &keeper).await?;
     let agent_net = balance(&c, &agent).await? as i128 - agent0 as i128;
-    let burned = supply0 - supply(&c).await?;
+    let to_treasury = balance(&c, &treasury).await? - treasury0;
     println!(
-        "keeper +{} agent net {:+} burned {} (whole tokens, deposit still held)",
+        "keeper +{} agent net {:+} treasury +{} (whole tokens, deposit still held)",
         keeper_got / ONE,
         agent_net / ONE as i128,
-        burned / ONE
+        to_treasury / ONE
     );
     assert_eq!(keeper_got, fee * 2000 / 10_000);
     assert_eq!(agent_net, (fee * 3000 / 10_000) as i128 - deposit as i128, "payout, deposit still held");
@@ -206,7 +207,8 @@ async fn keeper_contract_token() -> Res<()> {
         (fee * 3000 / 10_000) as i128,
         "deposit refunded on unregister"
     );
-    assert_eq!(burned, fee - fee * (2000 + 3000 + 1000) / 10_000);
+    assert_eq!(to_treasury, fee - fee * (2000 + 3000 + 1000) / 10_000);
+    assert_eq!(supply(&c).await?, supply0, "nothing is burned");
     assert_eq!(balance(&c, &requester).await?, req0 - fee, "requester pays once");
     println!("swarm {:?}, hash {}", v["swarm"], v["market_hash"]);
     Ok(())

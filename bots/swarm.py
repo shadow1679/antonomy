@@ -1,5 +1,5 @@
-"""Antonomy bot swarm: rule-based bots that stake on the Burn colony and earn
-from the play-token reward pool when their burn size wins.
+"""Antonomy bot swarm: rule-based bots that stake on the Burn colony and share
+the reward part of the daily pot when their pot size wins.
 
 Usage:
   python3 -I bots/swarm.py --contract <contract> \\
@@ -13,9 +13,10 @@ Strategies (Burn colony only; forecast colonies never pay out):
               Square-root weighting makes a thin option's first tokens count
               the most, and a winning thin option has fewer stakers to share with.
   heavy       stakes everything up to the per-wallet cap on HEAVY_FAVOURITE,
-              the largest burn. Shows that the cap and square-root weighting
-              stop one rich wallet from taking over the colony.
-  echo        stakes FLOW_AMOUNT on the burn size the colony picked in its
+              the largest pot. Shows that the cap, square-root weighting and
+              the sim's handicap on big pots stop one rich wallet from taking
+              over the colony.
+  echo        stakes FLOW_AMOUNT on the pot size the colony picked in its
               newest finished run (`burn_run`), so yesterday's pick gets more
               sugar today. A new seed draws a new map, so the pick doesn't
               repeat by itself. Before any run has finished it acts like follower.
@@ -38,10 +39,11 @@ Fund it with play tokens from the treasury (`ft_transfer`) before the first run.
 
 Burn days (token/src/day.rs): Burn stakes stay in and count for every day
 until withdrawn. Each day they freeze at 12:00 UTC, so a stake made after 12:00
-counts from the next day. --withdraw unstakes every entry the bots hold; the
-contract refuses that from 12:00 to 24:00 UTC while the colony runs, so the
-script does too. Rewards land in the bots' balances when the colony executes
-a day's burn at 24:00.
+counts from the next day. Burn stakes lock for a day: the contract refuses to
+unstake them until the pot of every day they count for has paid
+(`burn_lock`). --withdraw unstakes every entry the bots hold, leaving out the
+Burn stakes of a bot whose lock hasn't lifted. Rewards land in the bots'
+balances when the day's pot is executed after 24:00.
 
 Reads go to a public RPC (read-only, no keys); writes go through the NEAR CLI
 and the local keychain. No paid LLM calls.
@@ -225,20 +227,22 @@ def stake_round(chain, bots, a, run, now_ms=None):
     return 0
 
 
-def withdraw(chain, bots, a, run, now_ms=None):
-    if burn_day(int(time.time() * 1000) if now_ms is None else now_ms)[2]:
-        print("Burn stakes are locked from 12:00 to 24:00 UTC while the colony runs", file=sys.stderr)
-        return 1
+def withdraw(chain, bots, a, run):
+    held = 0
     for _, account in bots:
+        lock = chain.view("burn_lock", {"account_id": account})
         for colony, option, amount in chain.view("stakes_of", {"account_id": account}):
+            if colony == BURN_COLONY and lock["locked"]:
+                held += 1
+                print("%s: Burn stakes locked until day %s's pot pays" % (account, lock["day"]), file=sys.stderr)
+                continue
             print(json.dumps({"bot": account, "unstake": [colony, option, amount]}))
             run(near_call(a.contract, "unstake",
                           {"colony": colony, "option": option, "amount": amount}, account, a.network))
-    return 0
+    return 1 if held else 0
 
 
 def summary(chain, bots):
-    print("reward pool: %s" % chain.view("reward_pool"), file=sys.stderr)
     for strategy, account in bots:
         earned = chain.view("rewards_earned", {"account_id": account})
         print("%-10s %s earned %s" % (strategy, account, earned), file=sys.stderr)
@@ -250,7 +254,7 @@ def main(argv=None):
     p.add_argument("--bot", action="append", required=True, metavar="STRATEGY=ACCOUNT")
     p.add_argument("--rpc", default=RPC)
     p.add_argument("--network", default="testnet")
-    p.add_argument("--withdraw", action="store_true", help="unstake everything (not from 12:00 to 24:00 UTC)")
+    p.add_argument("--withdraw", action="store_true", help="unstake everything not locked until a pot pays")
     p.add_argument("--send", action="store_true", help="sign and send with the NEAR CLI")
     a = p.parse_args(argv)
     bots = parse_bots(a.bot)

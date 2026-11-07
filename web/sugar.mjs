@@ -1,7 +1,7 @@
 // Drop sugar: what the Burn colony would do if one more stake went on an
 // option. Pure data and no DOM, so Node can test it. The sim itself is
 // untouched: sugar only changes the summed sqrt weight per option, which
-// stakeRichness turns into food richness (the "scent"). Same map and same ants
+// burnRichness turns into food richness (the "scent"). Same map and same ants
 // on both sides, so any difference comes from the extra stake.
 // The preview is a short TICKS (800) run, not the day's BURN_TICKS, so it
 // finishes in seconds. Nothing here is sent anywhere.
@@ -13,7 +13,7 @@
 // wallets while staking is open, so everyone else is one "other wallets" row
 // of ants; the connected wallet is its own tinted row.
 
-import { Colony, colonySeed, stakeRichness, sha256, N_ANTS, TICKS, BURN_COLONY } from "../sim/js/antosim.mjs";
+import { Colony, colonySeed, burnRichness, sha256, N_ANTS, TICKS, BURN_COLONY } from "../sim/js/antosim.mjs";
 import { stakerAnts, stakeWeight } from "./ds/staker-ants.mjs";
 
 export const YOU = "you";
@@ -49,7 +49,7 @@ export function withSugar(base, option, tokens, cap = SUGAR_CAP) {
 // staker ants (cosmetic).
 export function previewSide(daySeed, weights, wallets) {
   const seed = colonySeed(daySeed, BURN_COLONY);
-  const richness = stakeRichness(weights);
+  const richness = burnRichness(weights);
   return {
     wallets,
     weights,

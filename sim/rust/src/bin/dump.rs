@@ -72,15 +72,13 @@ fn main() {
             .hash_hex()
         };
         println!(
-            "{{\"i\":{},\"h5\":\"{}\",\"h2\":\"{}\",\"h3\":\"{}\",\"w5\":{},\"hb\":\"{}\",\"hf\":\"{}\",\"hc\":\"{}\",\"hm\":\"{}\",\"hk\":\"{}\",\"ha\":\"{}\",\"hs\":\"{}\",\"hy\":\"{}\"}}",
+            "{{\"i\":{},\"h5\":\"{}\",\"h2\":\"{}\",\"h3\":\"{}\",\"w5\":{},\"hb\":\"{}\",\"hm\":\"{}\",\"hk\":\"{}\",\"ha\":\"{}\",\"hs\":\"{}\",\"hy\":\"{}\"}}",
             i,
             a.hash_hex(),
             b.hash_hex(),
             c.hash_hex(),
             a.winner_option,
             burn.hash_hex(),
-            small(Kind::Follower),
-            small(Kind::Contrarian),
             small(Kind::Momentum),
             small(Kind::Community),
             small(Kind::Agents),

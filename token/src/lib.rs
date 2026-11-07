@@ -3,8 +3,9 @@
 //! all maps are `BTreeMap`, so iteration order is fixed.
 //!
 //! `market` holds the forecast market registry: keepers post the trending list
-//! and odds, and the contract keeps the per-outcome median. `reward` holds the
-//! Burn colony's play-token reward pool, and `day` its burn-day schedule.
+//! and odds, and the contract keeps the per-outcome median. `burn` is the
+//! Burn colony's daily pot (part burned, part paid to stakers by `reward`),
+//! and `day` its burn-day schedule and the one-day stake lock.
 //! `request` and `agents` are Recruit the swarm: requested forecasts paid in
 //! $ANTO, and the forecaster agents whose median odds feed the Agents colony.
 //!
@@ -21,6 +22,7 @@ pub mod burnrun;
 pub mod day;
 pub mod ledger;
 pub mod market;
+pub mod random;
 pub mod request;
 pub mod reward;
 pub mod round;
@@ -59,7 +61,8 @@ pub enum Error {
     StakingStillOpen,
     /// Config must have `close_at < publish_at`.
     BadSchedule,
-    /// Unstake while the round is running and not yet settled.
+    /// Unstake while the round is running and not yet settled, or a Burn
+    /// stake before its day's pot has paid.
     Locked,
     /// Settle before the drand round is published.
     NotPublished,

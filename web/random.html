@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Antonomy · randomness as a service</title>
+<link rel="stylesheet" href="app.css">
+<style>
+  /* The request is the stage: steps, one big answer, the facts, the check. */
+  .rnd-stage { display: grid; gap: var(--space-5); }
+  .rnd-stage .chamber__header { margin: 0; align-items: baseline; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
+  .rnd-stage .chamber__title { margin-right: auto; }
+  .rnd-track { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; counter-reset: rnd; }
+  .rnd-track li { position: relative; padding: 26px var(--space-2) 0; text-align: center; font-size: var(--text-xs); color: var(--text-faint); counter-increment: rnd; }
+  .rnd-track li::before { content: counter(rnd); position: absolute; z-index: 1; top: 0; left: 50%; translate: -50% 0; display: grid; place-items: center; width: 18px; height: 18px; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--surface); font: 600 10px/1 var(--font-mono); }
+  .rnd-track li + li::after { content: ""; position: absolute; top: 9px; left: -50%; right: 50%; height: 1px; background: var(--border-strong); }
+  .rnd-track li[data-state="done"]::before { content: "✓"; color: var(--success); border-color: var(--success); }
+  .rnd-track li[data-state="done"]::after, .rnd-track li[data-state="now"]::after { background: var(--success); }
+  .rnd-track li[data-state="now"] { color: var(--text); font-weight: 600; }
+  .rnd-track li[data-state="now"]::before { color: var(--text); border-color: var(--text); }
+  .rnd-result { display: grid; place-content: center; justify-items: center; gap: var(--space-2); min-height: 10rem; padding: var(--space-5) var(--space-4); text-align: center; background: var(--bg-canvas); border: 1px solid var(--border); border-radius: var(--radius-md); }
+  .rnd-result p { margin: 0; max-width: 46ch; }
+  .rnd-big { font-family: var(--font-display); font-size: clamp(1.75rem, 1.2rem + 2vw, 2.75rem); line-height: 1.1; overflow-wrap: anywhere; }
+  .rnd-big .glyph { color: var(--text-muted); margin-right: var(--space-2); }
+  .rnd-result .cluster { justify-content: center; margin-top: var(--space-2); }
+  .rnd-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4) var(--space-5); margin: 0; }
+  .rnd-facts > div { display: grid; gap: var(--space-1); min-width: 0; }
+  .rnd-facts dt { font-size: var(--text-xs); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-faint); }
+  .rnd-facts dd { margin: 0; min-width: 0; font-size: var(--text-sm); overflow-wrap: anywhere; }
+  .rnd-check { display: grid; gap: var(--space-3); }
+  .rnd-ask .chamber__header { flex-wrap: wrap; gap: var(--space-1) var(--space-3); }
+  .rnd-check .verify-panel__result { margin: 0; }
+  @media (max-width: 560px) { .rnd-facts { grid-template-columns: 1fr; } }
+  .chip[data-state="ready"] { color: var(--success); border-color: rgb(147 207 110 / 0.35); background: var(--success-tint); }
+  .chip[data-state="unproven"] { color: var(--warning); border-color: rgb(233 205 91 / 0.35); }
+  #rows tr[data-me="1"] th a { font-weight: 600; }
+</style>
+</head>
+<body>
+<div id="topbar"></div>
+
+<main>
+  <div class="page-head container">
+    <div class="page-head__split">
+      <div class="page-head__title">
+        <p class="eyebrow">Randomness as a service · testnet play token</p>
+        <h1>A number nobody could pick.</h1>
+      </div>
+      <p class="lede">Ask the contract for a value. It commits to a drand round that isn't out yet, checks drand's signature on chain once it is, and gives your request its own 32-byte hash. Use it for draws and seeding. <a class="what" href="docs.html#random">How it works</a></p>
+    </div>
+  </div>
+
+  <section class="page-section">
+    <div class="container workbench">
+      <div class="workbench__col">
+        <div class="chamber rnd-stage">
+          <div class="chamber__header">
+            <h2 class="chamber__title" id="req-title">Request</h2>
+            <span class="text-xs text-faint" id="req-note"></span>
+            <span class="eyebrow" id="req-stage">reading the contract…</span>
+          </div>
+          <p id="req-empty" class="text-sm text-faint" style="margin: 0">Request a value, or open one from the list below. A request is ready a few seconds after its drand round is published and proven.</p>
+          <ol class="rnd-track" id="r-steps" aria-label="Where the request stands" hidden></ol>
+          <div class="rnd-result" id="result" aria-live="polite" hidden></div>
+          <dl class="rnd-facts" id="r-facts" hidden>
+            <div><dt>Asked by</dt><dd id="r-by"></dd></div>
+            <div><dt>drand round</dt><dd id="r-round"></dd></div>
+            <div><dt>drand randomness</dt><dd id="r-rand"></dd></div>
+            <div><dt>Value</dt><dd id="r-value"></dd></div>
+          </dl>
+          <div class="rnd-check" id="verify-box" hidden>
+            <div class="verify-panel__result">
+              <span class="verify-badge" data-state="idle" id="badge" role="status" aria-live="polite">Not checked</span>
+              <button class="btn btn--sm" type="button" id="verify">Check against drand</button>
+            </div>
+            <div class="table-wrap" id="verify-rows" hidden>
+              <table class="table">
+                <caption class="text-xs text-faint">Re-derived in your browser from drand's own signature for the round.</caption>
+                <thead><tr><th scope="col">What</th><th scope="col">Chain says</th><th scope="col">Here</th></tr></thead>
+                <tbody id="vrows"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="workbench__col workbench__col--sticky">
+        <div class="chamber stack rnd-ask">
+          <div class="chamber__header" style="margin: 0"><h3 class="chamber__title">Ask for a value</h3><span class="eyebrow" id="fee-line">reading…</span></div>
+          <div class="field">
+            <label class="field__label" for="choices">Draw a winner among (optional)</label>
+            <textarea class="input" id="choices" rows="5" spellcheck="false" autocomplete="off" aria-describedby="choices-hint">Ann
+Bo
+Cy
+Dee</textarea>
+            <span class="field__hint" id="choices-hint">One name per line, up to 100. The winner is the value mod the number of names, so the same list in the same order always gives the same winner. The list never goes on chain.</span>
+          </div>
+          <div class="cluster">
+            <button class="btn btn--primary" type="button" id="ask">Request a value</button>
+            <button class="btn btn--sm" type="button" id="share">Copy share link</button>
+          </div>
+          <span class="text-xs text-faint" id="share-msg" role="status" aria-live="polite"></span>
+          <p class="text-sm" id="tx" role="status" aria-live="polite" hidden></p>
+          <p class="text-xs text-faint" style="margin-bottom: 0">Testnet play token. The fee is burned. Nothing real is at stake; a draw is not betting.</p>
+        </div>
+        <div class="chamber stack" id="contract">
+          <div class="chamber__header" style="margin: 0"><h3 class="chamber__title">From a contract</h3></div>
+          <p class="text-sm text-muted" style="margin-bottom: 0">Call <code>request_randomness</code> cross-contract, then read <code>randomness_value(id)</code> once the round is proven.</p>
+          <a class="text-sm" href="docs.html#random-contract">The code to copy, latency and what you trust →</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="page-section">
+    <div class="container">
+      <div class="chamber">
+        <div class="chamber__header"><h3 class="chamber__title">Recent requests</h3><span class="eyebrow" id="recent-count"></span></div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th scope="col">#</th><th scope="col">Asked by</th><th scope="col">drand round</th><th scope="col">Status</th><th scope="col">Value</th></tr></thead>
+            <tbody id="rows"><tr><td colspan="5" class="text-faint">Reading the contract…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="footer"></div>
+
+<script type="module">
+import { chain, wallet, ensureTokens, contractId, tokens } from "./chain.mjs";
+import { beacon } from "./drand.mjs";
+import {
+  newestFirst, parseChoices, pickIndex, publishedAt, returnValueOf, secondsLeft, stage, steps, verifyRequest,
+} from "./random.mjs";
+import { failureOf } from "./recruit.mjs";
+import { GLYPHS } from "./round.mjs";
+import { $, esc, hashHTML, installCopy, refreshTokenChip, topbar, footer } from "./ui.mjs";
+
+$("topbar").outerHTML = topbar("random");
+$("footer").outerHTML = footer();
+installCopy();
+
+const q = new URLSearchParams(location.search);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const STAGE_TEXT = {
+  waiting: "waiting for its drand round",
+  unproven: "drand round out · needs proving",
+  ready: "ready",
+};
+const idParam = q.has("id") ? Math.max(0, Math.floor(+q.get("id") || 0)) : null;
+// `missing` is an id the contract doesn't have (yet), so the card can say so.
+const state = { cfg: null, cur: idParam, latest: false, req: null, missing: null, recent: [] };
+if (q.has("c")) $("choices").value = q.get("c").split(",").join("\n");
+
+const showNote = (html) => { $("tx").hidden = false; $("tx").innerHTML = html; };
+const showError = (e) => {
+  $("tx").hidden = false;
+  $("tx").innerHTML = `<span class="notice notice--danger" style="display: inline-block; padding: var(--space-2) var(--space-3)"><strong>Failed:</strong> ${esc(e.message || e)}</span>`;
+};
+
+async function send(method, args, opts) {
+  const out = await wallet.call(method, args, opts);
+  const f = failureOf(out);
+  if (f) throw new Error(f);
+  return out;
+}
+
+function setBadge(s, text) { $("badge").dataset.state = s; $("badge").textContent = text; }
+
+// drand rounds are minutes to years old: the date only when it isn't today.
+function utc(ms) {
+  const iso = new Date(ms).toISOString();
+  return iso.slice(0, 10) === new Date().toISOString().slice(0, 10) ? `${iso.slice(11, 19)} UTC` : `${iso.slice(0, 16).replace("T", " ")} UTC`;
+}
+
+// ---- the current request ----
+// The clock repaints every second, but only the parts that change: the steps
+// and the result line are keyed on what they show, and the facts (hashes a
+// reader may be selecting or copying) only when the chain's answer changes.
+
+const painted = { facts: "", live: "" };
+
+function resultHTML(r, st, names) {
+  if (st === "waiting") {
+    const left = secondsLeft(r, Date.now());
+    return `<p class="rnd-big num">${left} s</p>
+      <p class="text-sm text-muted">until drand publishes round ${r.drand_round}. Nobody, you included, can know the value before then.</p>`;
+  }
+  if (st === "unproven") {
+    return `<p class="rnd-big">Round out</p>
+      <p class="text-sm text-muted">drand has published round ${r.drand_round}. It needs one proof on chain, then the value is here.</p>
+      <div class="cluster"><button class="btn btn--primary btn--sm" type="button" id="prove">Prove the round</button>
+      <span class="text-xs text-faint">Anyone can. The keeper daemon does it too; the first proof to land counts.</span></div>`;
+  }
+  if (names.length < 2) {
+    return `<p class="rnd-big">Ready</p>
+      <p class="text-sm text-muted">The value is below. Add two or more names to draw a winner from it.</p>`;
+  }
+  const i = pickIndex(r.value, names.length);
+  return `<p class="rnd-big"><span class="glyph" aria-hidden="true">${GLYPHS[i % GLYPHS.length]}</span>${esc(names[i])}</p>
+    <p class="text-sm text-muted">Name ${i + 1} of ${names.length}: the value mod ${names.length} is ${i}.</p>`;
+}
+
+function renderRequest() {
+  const r = state.req;
+  $("req-empty").hidden = !!r;
+  for (const id of ["r-steps", "result", "r-facts"]) $(id).hidden = !r;
+  $("req-note").textContent = r && state.latest ? "newest on the contract" : "";
+  if (!r) {
+    $("verify-box").hidden = true;
+    $("req-title").textContent = state.missing != null ? `Request #${state.missing}` : "Request";
+    $("req-stage").textContent = state.missing != null ? "not found" : "none yet";
+    $("req-empty").textContent = state.missing != null
+      ? `The contract has no request #${state.missing} yet. Pick one from the list below, or ask for a new value.`
+      : "Request a value, or open one from the list below. A request is ready a few seconds after its drand round is published and proven.";
+    painted.facts = painted.live = "";
+    return;
+  }
+  const now = Date.now();
+  const st = stage(r, now);
+  const names = parseChoices($("choices").value);
+
+  const live = JSON.stringify([r.id, r.status, r.value, st, st === "waiting" ? secondsLeft(r, now) : 0, names]);
+  if (live !== painted.live) {
+    painted.live = live;
+    $("req-title").textContent = `Request #${r.id}`;
+    $("req-stage").textContent = STAGE_TEXT[st];
+    $("r-steps").innerHTML = steps(r, now).map((s) => `<li data-state="${s.state}">${esc(s.label)}</li>`).join("");
+    if (!$("prove")?.disabled) $("result").innerHTML = resultHTML(r, st, names); // keep a proof in flight on screen
+    $("verify-box").hidden = st !== "ready";
+  }
+
+  const facts = JSON.stringify([r.id, r.status, r.value]);
+  if (facts !== painted.facts) {
+    painted.facts = facts;
+    $("r-by").textContent = r.requester + (r.requester === wallet.accountId ? " (you)" : "");
+    $("r-round").innerHTML = `<span class="num">${r.drand_round}</span> <span class="text-xs text-faint">published ${utc(publishedAt(r.drand_round))}</span>`;
+    $("r-rand").innerHTML = r.randomness ? hashHTML(r.randomness, "drand randomness") : `<span class="text-faint">not proven yet</span>`;
+    $("r-value").innerHTML = r.value ? hashHTML(r.value, "value") : `<span class="text-faint">not proven yet</span>`;
+  }
+}
+
+async function loadCurrent() {
+  if (state.cur == null) return;
+  try {
+    const req = await chain.randomness(state.cur);
+    state.req = req;
+    state.missing = req == null ? state.cur : null;
+  } catch { /* keep what we had */ }
+  renderRequest();
+}
+
+function setCurrent(id) {
+  state.cur = id;
+  state.latest = false;
+  state.req = null;
+  state.missing = null;
+  const url = new URL(location.href);
+  url.searchParams.set("id", id);
+  history.replaceState(null, "", url);
+  setBadge("idle", "Not checked");
+  $("verify-rows").hidden = true;
+  return loadCurrent();
+}
+
+// ---- recent requests ----
+
+let paintedRows = "";
+
+async function loadRecent() {
+  let n;
+  try {
+    n = Number(await chain.randomnessCount());
+    state.recent = newestFirst(n ? await chain.randomnessRequests(Math.max(0, n - 15), 15) : []);
+  } catch (e) {
+    paintedRows = "";
+    $("rows").innerHTML = `<tr><td colspan="5" class="text-faint">${esc(e.message)}</td></tr>`;
+    return;
+  }
+  $("recent-count").textContent = `${n.toLocaleString("en")} so far`;
+  const me = wallet.accountId;
+  const now = Date.now();
+  const rows = state.recent.map((r) => ({ ...r, st: stage(r, now) }));
+  const key = JSON.stringify([me, rows.map((r) => [r.id, r.st, r.value])]);
+  if (key === paintedRows) return; // unchanged: leave a reader's selection alone
+  paintedRows = key;
+  $("rows").innerHTML = rows.length ? rows.map((r) => {
+    const mine = r.requester === me;
+    return `<tr data-me="${mine ? 1 : 0}"><th scope="row"><a href="?id=${r.id}" data-id="${r.id}">#${r.id}</a></th>` +
+      `<td>${esc(r.requester)}${mine ? ` <span class="text-xs text-faint">you</span>` : ""}</td><td class="num">${r.drand_round}</td>` +
+      `<td><span class="chip" data-state="${r.st}">${STAGE_TEXT[r.st]}</span></td>` +
+      `<td>${r.value ? hashHTML(r.value, "value") : `<span class="text-faint">–</span>`}</td></tr>`;
+  }).join("") : `<tr><td colspan="5" class="text-faint">No request yet. Be the first.</td></tr>`;
+}
+
+$("rows").addEventListener("click", (e) => {
+  const a = e.target.closest("a[data-id]");
+  if (!a) return;
+  e.preventDefault();
+  setCurrent(+a.dataset.id);
+  $("req-title").scrollIntoView({ block: "nearest", behavior: "smooth" });
+});
+
+// ---- actions ----
+
+async function until(fn, ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) { if (await fn()) return true; await sleep(1500); }
+  return false;
+}
+
+// The request a `request_randomness` call made: the id it returned, read
+// back once a final block has it; else the caller's newest request after
+// `before` (a wallet that doesn't hand back the outcome).
+async function findMine(out, me, before) {
+  const id = returnValueOf(out);
+  let mine = null;
+  await until(async () => {
+    if (Number.isInteger(id)) {
+      mine = await chain.randomness(id);
+    } else {
+      const n = Number(await chain.randomnessCount());
+      if (n > before) mine = (await chain.randomnessRequests(before, n - before)).filter((r) => r.requester === me).at(-1) ?? null;
+    }
+    return !!mine;
+  }, 30_000);
+  return mine;
+}
+
+$("ask").addEventListener("click", async () => {
+  const btn = $("ask");
+  btn.disabled = true;
+  try {
+    if (!wallet.accountId) await wallet.connect();
+    const me = wallet.accountId;
+    if (!me) return;
+    if (await ensureTokens(me)) {
+      showNote("Claimed your free play tokens. Waiting for them to land…");
+      await until(async () => (await chain.balance(me)) > 0n, 20_000);
+    }
+    const before = Number(await chain.randomnessCount());
+    showNote(state.cfg.fee ? `Approve the request in your wallet (it burns ${tokens(state.cfg.fee)} $ANTO)…` : "Approve the request in your wallet…");
+    const out = await send("request_randomness", {}, { gasTgas: 30 });
+    showNote("Sent. Reading your request back…");
+    refreshTokenChip();
+    const mine = await findMine(out, me, before);
+    if (!mine) throw new Error("The request went out but isn't on the chain yet. Check the list below in a moment.");
+    showNote(`Request #${mine.id} is in. It commits to drand round ${mine.drand_round}, published ${utc(publishedAt(mine.drand_round))}.`);
+    await setCurrent(mine.id);
+    await loadRecent();
+  } catch (e) {
+    showError(e);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// The prove button lives in the result line, which repaints: listen on it.
+$("result").addEventListener("click", async (e) => {
+  const btn = e.target.closest("#prove");
+  const r = state.req;
+  if (!btn || !r) return;
+  btn.disabled = true;
+  try {
+    if (!wallet.accountId) await wallet.connect();
+    if (!wallet.accountId) return;
+    showNote(`Approve proving drand round ${r.drand_round} in your wallet…`);
+    await send("fulfill_randomness", { drand_round: r.drand_round }, { gasTgas: 30 });
+    showNote("Proved. Reading the value…");
+    for (let i = 0; i < 6 && state.req?.status !== "ready"; i++) { await sleep(2000); await loadCurrent(); }
+    await loadRecent();
+  } catch (e) {
+    showError(e);
+  } finally {
+    btn.disabled = false;
+    painted.live = ""; // the result line skipped repaints while the proof was in flight
+    renderRequest();
+  }
+});
+
+$("verify").addEventListener("click", async () => {
+  const r = state.req;
+  if (!r || r.status !== "ready") return;
+  $("verify").disabled = true;
+  setBadge("pending", "Asking drand");
+  try {
+    const sig = await beacon(r.drand_round);
+    const res = verifyRequest(r, contractId(), sig);
+    $("vrows").innerHTML = res.rows.map((row) =>
+      `<tr><th scope="row">${esc(row.name)}</th><td>${hashHTML(row.expected, "chain")}</td>` +
+      `<td>${row.actual ? hashHTML(row.actual, "re-derived") : `<span class="text-faint">drand didn't answer</span>`} ` +
+      `<span class="chip" data-state="${row.state}">${row.state === "match" ? "✓ match" : row.state === "missing" ? "○ missing" : "✗ mismatch"}</span></td></tr>`).join("");
+    $("verify-rows").hidden = false;
+    setBadge(res.ok ? "match" : "mismatch", res.ok ? "Matches drand" : res.rows.some((x) => x.state === "missing") ? "Couldn't reach drand" : "Does not match");
+  } catch (e) {
+    setBadge("mismatch", e.message);
+  } finally {
+    $("verify").disabled = false;
+  }
+});
+
+$("share").addEventListener("click", async () => {
+  const url = new URL(location.href);
+  url.search = "";
+  if (state.cur != null) url.searchParams.set("id", state.cur);
+  const names = parseChoices($("choices").value);
+  if (names.length) url.searchParams.set("c", names.map((n) => n.replace(/,/g, " ")).join(","));
+  try { await navigator.clipboard.writeText(url.toString()); $("share-msg").textContent = "Link copied."; }
+  catch { $("share-msg").textContent = url.toString(); }
+});
+
+$("choices").addEventListener("input", renderRequest);
+wallet.onChange(() => { painted.facts = ""; renderRequest(); loadRecent(); });
+
+// ---- go ----
+
+(async () => {
+  try {
+    state.cfg = await chain.randomnessConfig();
+    state.cfg.fee = BigInt(state.cfg.fee);
+    $("fee-line").textContent = state.cfg.fee === 0n ? "free" : `${tokens(state.cfg.fee)} $ANTO per request, burned`;
+  } catch (e) {
+    $("fee-line").textContent = "contract has no randomness service";
+    $("ask").disabled = true;
+    $("rows").innerHTML = `<tr><td colspan="5" class="text-faint">This contract has no randomness service yet.</td></tr>`;
+    showError(e);
+    return;
+  }
+  await Promise.all([loadCurrent(), loadRecent()]);
+  // No ?id: show the newest request rather than an empty stage (the URL stays bare).
+  if (state.cur == null && state.recent.length) {
+    state.cur = state.recent[0].id;
+    state.latest = true;
+    await loadCurrent();
+  }
+  setInterval(() => {
+    if (document.hidden) return;
+    if (state.req?.status !== "ready") loadCurrent();
+    loadRecent();
+  }, 4000);
+  setInterval(() => { if (!document.hidden) renderRequest(); }, 1000);
+})();
+</script>
+</body>
+</html>

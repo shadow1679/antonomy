@@ -23,8 +23,9 @@ def wallet(weights, balance=1000 * ONE, staked=0, cap=CAP):
 
 
 class FakeChain:
-    def __init__(self, weights, balances=None, staked=None, close_at_ms=2**62, entries=()):
+    def __init__(self, weights, balances=None, staked=None, close_at_ms=2**62, entries=(), locked=()):
         self.w = list(weights)
+        self.locked = set(locked)
         self.balances = balances or {}
         self.staked = staked or {}
         self.close_at_ms = close_at_ms
@@ -37,6 +38,8 @@ class FakeChain:
         return s.Wallet(list(self.w), self.balances.get(account, 1000 * ONE), self.staked.get(account, 0), cap)
 
     def view(self, method, args=None):
+        if method == "burn_lock":
+            return {"day": 20755, "locked": args["account_id"] in self.locked}
         assert method == "stakes_of"
         return [[c, o, amt] for who, c, o, amt in self.entries if who == args["account_id"]]
 
@@ -132,17 +135,18 @@ class Round(unittest.TestCase):
         entries = [["alice.testnet", 0, 2, "5"], ["f.testnet", 0, 4, "7"], ["f.testnet", 1, 0, "3"]]
         cmds = []
         run_quiet(s.withdraw, FakeChain([0] * 5, entries=entries), [("follower", "f.testnet")],
-                  self.args(), cmds.append, 0)
+                  self.args(), cmds.append)
         self.assertEqual([json.loads(c[7]) for c in cmds],
                          [{"colony": 0, "option": 4, "amount": "7"}, {"colony": 1, "option": 0, "amount": "3"}])
         self.assertTrue(all(c[5] == "unstake" for c in cmds))
 
-    def test_withdraw_waits_while_the_colony_runs(self):
+    def test_withdraw_holds_locked_burn_stakes(self):
         cmds = []
-        code, _, err = run_quiet(s.withdraw, FakeChain([0] * 5, entries=[["f.testnet", 0, 4, "7"]]),
-                                 [("follower", "f.testnet")], self.args(), cmds.append, s.STAKING_MS)
-        self.assertEqual((code, cmds), (1, []))
-        self.assertIn("locked", err)
+        chain = FakeChain([0] * 5, entries=[["f.testnet", 0, 4, "7"], ["f.testnet", 1, 0, "3"]], locked=["f.testnet"])
+        code, _, err = run_quiet(s.withdraw, chain, [("follower", "f.testnet")], self.args(), cmds.append)
+        self.assertEqual(code, 1)
+        self.assertEqual([json.loads(c[7]) for c in cmds], [{"colony": 1, "option": 0, "amount": "3"}])
+        self.assertIn("locked until day 20755", err)
 
 
 class Cli(unittest.TestCase):

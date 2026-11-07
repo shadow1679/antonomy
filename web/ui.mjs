@@ -7,6 +7,7 @@ import { ColonyView, leadingSource } from "./ds/colony-view.mjs";
 import { GLYPHS } from "./round.mjs";
 import { tripAt, deliveredBy } from "./autopsy.mjs";
 import { wallet, contractId, NETWORK } from "./chain.mjs";
+import { loadToken, chipText } from "./token.mjs";
 
 export const $ = (id) => document.getElementById(id);
 export const short = (hex) => `${hex.slice(0, 8)}…${hex.slice(-8)}`;
@@ -62,7 +63,7 @@ export function stakerLegendHTML(stakers, labels = null) {
   const on = (r) => labels
     ? " on " + r.stakes.map((t, o) => (t ? `<span class="opt" data-opt="${o}">${esc(labels[o])}</span>` : "")).filter(Boolean).join(" ")
     : " staked";
-  const meta = (r) => r.agent ? `posted ${postedHTML(r.odds, labels)}` : `${r.tokens.toLocaleString("en")} tANTO${on(r)}`;
+  const meta = (r) => r.agent ? `posted ${postedHTML(r.odds, labels)}` : `${r.tokens.toLocaleString("en")} $ANTO${on(r)}`;
   const rows = live.map((r) =>
     `<li><button type="button" class="roster__row" data-wallet="${r.i}" aria-pressed="false" style="--wallet-hue: ${r.hue}; --ants: ${(r.ants / most).toFixed(3)}">` +
     `<span class="wallet roster__id">${esc(r.id)}</span>` +
@@ -428,7 +429,7 @@ const PAGES = [
   ["live.html", "live", "Live"],
   ["burn.html", "burn", "Burn"],
   ["recruit.html", "recruit", "Recruit"],
-  ["sandbox.html", "sandbox", "Sandbox"],
+  ["random.html", "random", "Random"],
   null,
   ["replay.html", "replay", "Replay"],
   ["receipts.html", "receipts", "Receipts"],
@@ -437,22 +438,25 @@ const PAGES = [
 ];
 
 // Shared header. `page` is "home" (the landing page, which the brand links
-// to and the nav leaves out), "live", "burn", "recruit", "sandbox", "replay",
+// to and the nav leaves out), "live", "burn", "recruit", "random", "replay",
 // "receipts" or "docs". `demo` is kept as the name of the option that shows
 // the status strip (testnet, play token, which contract); pages that never
 // touch the chain pass `demo: false`. The wallet button sits at the end of the
-// bar on every page (`mountWallet` wires it).
+// bar on every page (`mountWallet` wires it), and every page has the $ANTO
+// chip before it (`mountTokenChip`).
 export function topbar(page, end = "", { demo = true } = {}) {
   const nav = PAGES.map((p) => p
     ? `<a href="${p[0]}"${p[1] === page ? ' aria-current="page"' : ""}>${p[2]}</a>`
     : `<span class="nav__sep" aria-hidden="true"></span>`).join("");
   const cid = contractId();
+  const chip = `<a class="anto-chip" id="anto-chip" href="index.html#anto" title="$ANTO, the play token on NEAR testnet"><b>$ANTO</b><span class="anto-chip__v num">…</span></a>`;
   queueMicrotask(mountWallet);
+  queueMicrotask(mountTokenChip);
   queueMicrotask(centerCurrentTab);
   return `<header class="topbar"><div class="container topbar__row">
     <a class="brand" href="index.html">${MARK}<b>Anto<span>nomy</span></b></a>
     <nav class="nav" aria-label="Pages">${nav}</nav>
-    <div class="topbar__end" id="topbar-end">${end}<button class="btn btn--sm" id="wallet-btn" type="button">Connect wallet</button></div>
+    <div class="topbar__end" id="topbar-end">${end}${chip}<button class="btn btn--sm" id="wallet-btn" type="button">Connect wallet</button></div>
   </div></header>` + (demo ? `<div class="demo-strip"><div class="container"><p style="margin: 0">
     <strong>${NETWORK} · play token.</strong> Everything here is read from the contract
     <a href="https://testnet.nearblocks.io/address/${cid}" target="_blank" rel="noopener"><code>${cid}</code></a>;
@@ -492,6 +496,30 @@ export function mountWallet() {
   });
   paint(wallet.accountId);
   wallet.restore();
+}
+
+// The top bar's $ANTO chip: the connected wallet's balance, else how much has
+// burned since launch. Repainted when the wallet changes, every minute, and
+// on `refreshTokenChip()` after a page's own write (a stake, a claim).
+let paintChip = null;
+export const refreshTokenChip = () => paintChip?.();
+export function mountTokenChip() {
+  const el = document.getElementById("anto-chip");
+  if (!el || el.dataset.bound) return;
+  el.dataset.bound = "1";
+  const v = el.querySelector(".anto-chip__v");
+  paintChip = async () => {
+    try {
+      const c = chipText(await loadToken({ account: wallet.accountId }));
+      if (!c) return;
+      v.innerHTML = `${esc(c.value)} <small>${c.label}</small>`;
+      el.title = c.label === "yours" ? `Your $ANTO balance (${wallet.accountId}). Play token on NEAR testnet.`
+        : `$ANTO ${c.label} since launch, read from the contract. Play token on NEAR testnet.`;
+    } catch { /* keep the last value */ }
+  };
+  wallet.onChange(paintChip);
+  paintChip();
+  setInterval(() => { if (!document.hidden) paintChip(); }, 60_000);
 }
 
 // Shared footer, with the known limits the README also states. The pages

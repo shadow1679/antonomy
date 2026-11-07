@@ -4,7 +4,8 @@
 // browser re-runs the Burn colony from the on-chain day seed and stake
 // snapshot, up to the tick the chain says it has reached. Pure data, no DOM.
 
-import { Colony, colonySeed, stakeRichness, BURN_COLONY, N_ANTS, BURN_TICKS } from "../sim/js/antosim.mjs";
+import { Colony, colonySeed, BURN_COLONY, N_ANTS, BURN_TICKS } from "../sim/js/antosim.mjs";
+import { burnRichnessFor } from "./burn.mjs";
 import { view, hexToBytes } from "./chain.mjs";
 
 // Integer square root of a non-negative BigInt.
@@ -31,7 +32,7 @@ export function burnWeights(entries, n = 5) {
 // BURN_COLONY, 0), five options, richness from the stake weights.
 export function burnColonyFor(run, weights) {
   const seed = colonySeed(hexToBytes(run.seed), BURN_COLONY, 0);
-  return new Colony(seed, 5, stakeRichness(weights), N_ANTS, BURN_TICKS, hexToBytes(run.stake_hash));
+  return new Colony(seed, 5, burnRichnessFor(run.day, weights), N_ANTS, BURN_TICKS, hexToBytes(run.stake_hash));
 }
 
 // state: "staking" (before 12:00 UTC, no seed), "waiting" (past 12:00 but

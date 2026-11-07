@@ -17,7 +17,7 @@
         <div>
           <p class="eyebrow">Forecast round · NEAR testnet</p>
           <h1 id="rc-title">Round <span class="num" id="rc-id">…</span></h1>
-          <p class="lv-round__lede">Five ant colonies forecast each trending Polymarket market inside the contract, from one public seed, and your browser re-runs every one. <a class="what" href="docs.html#how">How it works</a></p>
+          <p class="lv-round__lede">Three ant colonies forecast each trending Polymarket market inside the contract, from one public seed, and your browser re-runs every one. <a class="what" href="docs.html#how">How it works</a></p>
         </div>
         <ol class="lv-steps" id="rc-phases" aria-label="Round phases"></ol>
         <div class="lv-round__clock">
@@ -34,6 +34,14 @@
         <label class="text-xs" id="auto-wrap" title="While this tab is open and a wallet is connected, send each crank as soon as it is due (nothing happens until one is). Your wallet still approves every call; the keeper daemon cranks too."><input type="checkbox" id="auto-crank"> Auto-crank</label>
         <a class="what" href="docs.html#demo">Demo limits</a>
       </div>
+    </div>
+  </section>
+
+  <section class="lv-anto" aria-label="$ANTO">
+    <div class="container lv-anto__row">
+      <a class="anto-mark lv-anto__mark" href="index.html#anto">$ANTO</a>
+      <dl class="lv-anto__facts" id="tk-facts" aria-live="polite"><div><dt>Reading the contract…</dt><dd></dd></div></dl>
+      <div class="lv-anto__me" id="tk-me"></div>
     </div>
   </section>
 
@@ -78,6 +86,8 @@
         <summary>Run the daemon yourself</summary>
         <pre class="lv-auto__cmd"><code>python3 -I keeper/daemon.py --contract antonomy-oracle.testnet \
   --keeper keeper.antonomy-oracle.testnet \
+  --keeper keeper2.antonomy-oracle.testnet \
+  --keeper keeper3.antonomy-oracle.testnet \
   --cranker cranker.antonomy-oracle.testnet \
   --agent agent.antonomy-oracle.testnet --send
 
@@ -89,7 +99,7 @@ keeper/launchd.sh install    # keep it running after you log out of the terminal
   <section class="lv-section" id="burn" aria-labelledby="burn-title">
     <div class="container">
       <div class="lv-head">
-        <h2 id="burn-title">Today's burn</h2>
+        <h2 id="burn-title">Today's <span class="anto-mark">$ANTO</span> burn</h2>
         <span class="lv-head__count">one colony a day · hard cap 2% of the treasury</span>
         <a class="what" href="docs.html#burn-day">How the daily burn works</a>
       </div>
@@ -122,10 +132,12 @@ import { GLYPHS, BURN_MENU, KIND_NAMES } from "./round.mjs";
 import { loadRound, verifyMarket, buildMarket, slugTitle } from "./roundchain.mjs";
 import { loadBurnCard, burnColonyFor } from "./burncard.mjs";
 import { chain, wallet, tokens, ZERO_HASH } from "./chain.mjs";
+import { loadToken, fmtAnto, burnedPct, nextStep } from "./token.mjs";
+import { burnAmount } from "./burn.mjs";
 import { createAutoCrank } from "./autocrank.mjs";
 import { automationRows } from "./automation.mjs";
-import { $, esc, hms, hashHTML, installCopy, liveShares, shareBars, topbar, footer } from "./ui.mjs";
-import { REPLAY_TPS, pct, utc, wait, tick0, sumBig, argmax, deltaCls, gl, stackHTML, marketHref, stepsHTML, clockOf, finished, sigOf, makeVerifier, marketState, colonyCache } from "./lv.mjs";
+import { $, esc, hms, hashHTML, installCopy, liveShares, shareBars, topbar, footer, refreshTokenChip } from "./ui.mjs";
+import { LIVE_TPS, pct, utc, wait, tick0, sumBig, argmax, deltaCls, gl, stackHTML, marketHref, stepsHTML, clockOf, finished, sigOf, makeVerifier, marketState, colonyCache } from "./lv.mjs";
 
 // Old links opened a market under the rows (#market-m3, or #market-3 for the
 // first round's); markets now have their own page.
@@ -147,25 +159,30 @@ let round = null;               // the normalized round from the chain
 let groups = [];                // [{ id: "cur" | "prev", rd, items: [{ m, rd }], page }]
 const pages = { cur: 0, prev: 0 };
 let cards = [];                 // the mini colonies on screen: { m, el, cols, thumbs, starts, lastT, visible }
+let idles = [];                 // cards before the seed, their colonies idling: { gid, el, thumbs, phase, visible }
 const colonyFor = colonyCache();
 const verifyOf = makeVerifier((m) => paintCardState(m));
 
 // Draw a card's mini colonies only while it is on screen; they still step.
 const io = new IntersectionObserver((es) => {
-  for (const e of es) { const c = cards.find((x) => x.el === e.target); if (c) c.visible = e.isIntersecting; }
+  for (const e of es) {
+    const c = cards.find((x) => x.el === e.target) ?? idles.find((x) => x.el === e.target);
+    if (c) c.visible = e.isIntersecting;
+  }
 });
 
 // ---- market cards ----
 
-const ABSTAIN_LONG = { 3: "Nobody staked on this market, so Community sits out of the swarm belief.",
-  4: "No forecaster agent posted, so Agents sits out of the swarm belief." };
+const ABSTAIN_LONG = { 1: "Nobody staked on this market, so Community sits out of the swarm belief.",
+  2: "No forecaster agent posted, so Agents sits out of the swarm belief." };
 
-// Before the seed there is no map: an empty plot, and what the colony will read.
+// Before the seed there is no map: the bare plot with its scouts idling
+// (ColonyThumb.drawIdle), and what the colony will read.
 function waitSlot(m, k, phase, at) {
   const t = m.stakes ? sumBig(m.stakes) : null;
-  const out = k === 3 && !t && phase !== "posting";
-  const note = ["reads odds", "reads odds", "reads odds moves", out ? "no stakes: out" : "reads stakes", "reads agents"][k];
-  return `<li class="lv-cols__slot"><canvas width="144" height="96" data-idle title="Map drawn from the seed${at}" aria-hidden="true"></canvas>
+  const out = k === 1 && !t && phase !== "posting";
+  const note = ["reads odds moves", out ? "no stakes: out" : "reads stakes", "reads agents"][k];
+  return `<li class="lv-cols__slot"><canvas width="144" height="96" data-idle title="Scouts waiting: the map is drawn from the seed${at}" aria-hidden="true"></canvas>
     <span class="lv-cols__name">${KIND_NAMES[k]}</span><span class="lv-cols__lead"${out ? ' data-state="out"' : ""}>${note}</span></li>`;
 }
 
@@ -195,8 +212,8 @@ function cardHTML(it, i) {
       <span class="lv-card__sub" data-r="sub">${m.swarm ? `swarm belief · market ${pct(m.odds[o])} <span class="delta ${deltaCls(d)}">${pct(Math.abs(d))}</span>` : `market odds · ${m.outcomes.length} outcomes`}${b ? ` · ${gl(b)}` : ""}${m.forecasters ? "" : ` · maps${seedAt(rd)}`}</span>
     </div>
     <span class="lv-card__bar" title="${esc(spoken)}">${stackHTML(shares)}<span class="visually-hidden">${m.swarm ? "Swarm belief" : "Market odds"}: ${esc(spoken)}.</span></span>
-    ${m.forecasters ? `<ul class="lv-cols" aria-label="The five colonies">${m.forecasters.map(colSlot).join("")}</ul>`
-      : `<ul class="lv-cols lv-cols--idle" aria-label="The five colonies, before the seed">${KIND_NAMES.map((_, k) => waitSlot(m, k, rd.phase, seedAt(rd))).join("")}</ul>`}
+    ${m.forecasters ? `<ul class="lv-cols" aria-label="The three colonies">${m.forecasters.map(colSlot).join("")}</ul>`
+      : `<ul class="lv-cols lv-cols--idle" aria-label="The three colonies, before the seed">${KIND_NAMES.map((_, k) => waitSlot(m, k, rd.phase, seedAt(rd))).join("")}</ul>`}
     <span class="lv-card__go" aria-hidden="true">Open →</span>
   </li>`;
 }
@@ -225,7 +242,9 @@ function pagerHTML(g) {
 }
 
 function dropCards(gid) {
-  cards = cards.filter((c) => { if (c.gid !== gid) return true; io.unobserve(c.el); return false; });
+  const keep = (c) => { if (c.gid !== gid) return true; io.unobserve(c.el); return false; };
+  cards = cards.filter(keep);
+  idles = idles.filter(keep);
 }
 
 // Render one group's current page and attach its mini colonies.
@@ -236,7 +255,15 @@ function renderGroup(g) {
   pages[g.id] = Math.min(pages[g.id], n - 1);
   const p = pages[g.id], shown = g.items.slice(p * PAGE, p * PAGE + PAGE);
   host.innerHTML = g.items.length ? `<ol class="lv-cards" aria-label="${g.id === "cur" ? "This round's markets" : "The previous round's markets"}">${shown.map((it, i) => cardHTML(it, p * PAGE + i)).join("")}</ol>${pagerHTML(g)}` : "";
-  for (const cv of host.querySelectorAll("canvas[data-idle]")) new ColonyThumb(cv, { glyphs: GLYPHS }).drawIdle();
+  host.querySelectorAll(".lv-card").forEach((el, i) => {
+    const cvs = el.querySelectorAll("canvas[data-idle]");
+    if (!cvs.length) return;
+    // Each card starts its scouts at a different point, so cards don't move in step.
+    const c = { gid: g.id, el, thumbs: [...cvs].map((cv) => new ColonyThumb(cv, { glyphs: GLYPHS })), phase: i * 3.7, visible: false };
+    c.thumbs.forEach((th, k) => th.drawIdle(k, c.phase));
+    idles.push(c);
+    io.observe(el);
+  });
   for (const it of shown) {
     const { m } = it;
     if (!m.forecasters) continue;
@@ -279,7 +306,7 @@ function build() {
   boardSig = sig;
   groups = [cur, prev].filter(Boolean);
   const n = cur.items.length;
-  $("fc-count").textContent = n ? `${n} market${n === 1 ? "" : "s"} · ${n * 5} colonies${round.proposed ? " · posted by the keepers, final when staking closes" : ""}` : "no market yet";
+  $("fc-count").textContent = n ? `${n} market${n === 1 ? "" : "s"} · ${n * KIND_NAMES.length} colonies${round.proposed ? " · posted by the keepers, final when staking closes" : ""}` : "no market yet";
   $("fc-empty").hidden = !!n;
   $("fc-empty").textContent = n ? "" : round.phase === "skipped" ? "No market was posted for this round." : "The keepers have not posted this round's markets yet. They appear here as soon as they do.";
   renderGroup(cur);
@@ -289,7 +316,7 @@ function build() {
   for (const g of groups) for (const it of g.items) verifyOf(it.m);
 }
 
-// Every frame: replay the mini colonies on screen at REPLAY_TPS. A card
+// Every frame: replay the mini colonies on screen at LIVE_TPS. A card
 // scrolled back into view catches up a few ticks a frame.
 const CATCH_UP = 24;
 function stepCards() {
@@ -299,7 +326,7 @@ function stepCards() {
     let running = false;
     const fracs = c.cols.map((col, k) => {
       if (!c.m.forecasters[k].cranked) return 1;
-      const exact = Math.min(col.ticks, ((now - c.starts[k]) / 1000) * REPLAY_TPS), target = Math.floor(exact);
+      const exact = Math.min(col.ticks, ((now - c.starts[k]) / 1000) * LIVE_TPS), target = Math.floor(exact);
       for (let n = 0; col.t < target && n < CATCH_UP; n++) { col.step(); c.thumbs[k].afterStep(); }
       if (col.t < col.ticks) running = true;
       return col.t < target ? 1 : col.t < col.ticks ? exact - target : 1;
@@ -316,6 +343,14 @@ function stepCards() {
       el.innerHTML = lead < 0 ? "no trail yet" : `${col.t === col.ticks ? '<span class="lv-g">✓</span> ' : ""}<span class="opt" data-opt="${lead}">${p[lead].toFixed(0)}%</span>`;
     });
   }
+}
+
+// Every frame: the idle scouts on cards still waiting for the seed.
+const stillMotion = matchMedia("(prefers-reduced-motion: reduce)");
+function stepIdle() {
+  if (stillMotion.matches) return;
+  const t = performance.now() / 1000;
+  for (const c of idles) if (c.visible) c.thumbs.forEach((th, k) => th.drawIdle(k, t + c.phase));
 }
 
 // ---- round bar ----
@@ -479,6 +514,13 @@ function burnEmpty(text) {
   $("bt-empty").textContent = text || "";
 }
 
+// A pot size, with what it would burn from today's treasury.
+function burnPickHTML(o, { amount = true } = {}) {
+  const t = antoNow?.treasury;
+  const anto = amount && t != null ? ` <span class="lv-burn__anto num">≈ ${fmtAnto(burnAmount(t, o))} $ANTO burned</span>` : "";
+  return `<span class="opt" data-opt="${o}">${esc(BURN_MENU[o])}</span>${anto}`;
+}
+
 function paintBurnStatic() {
   const { data } = bc, run = data.run;
   const note = $("bt-note");
@@ -490,14 +532,14 @@ function paintBurnStatic() {
     $("bt-tick").textContent = sum ? "Staking open · leading by stake" : "Staking open · seed at 12:00 UTC";
     if (sum) {
       const o = argmax(t.map(Number));
-      $("bt-value").innerHTML = `<span class="opt" data-opt="${o}">${esc(BURN_MENU[o])}</span>`;
+      $("bt-value").innerHTML = burnPickHTML(o);
       burnBars(BURN_MENU.map((_, k) => Number(((t[k] ?? 0n) * 10000n) / sum) / 100));
       burnEmpty("");
     } else {
       $("bt-value").innerHTML = `<span class="text-faint">No stakes yet</span>`;
-      burnEmpty("Nobody has staked on today's burn size yet. The colony starts at 12:00 UTC either way.");
+      burnEmpty("Nobody has staked on today's pot size yet. The colony starts at 12:00 UTC either way.");
     }
-    note.textContent = sum ? `${tokens(sum.toString()).toLocaleString("en")} tANTO staked so far, by raw stake.` : "";
+    note.textContent = sum ? `${tokens(sum.toString()).toLocaleString("en")} $ANTO staked so far, by raw stake.` : "";
     if (data.last?.done) note.textContent += ` Last burn (day ${data.last.day}): ${BURN_MENU[data.last.winner_option]}.`;
   } else if (data.state === "waiting") {
     $("bt-when").textContent = "Burns at 24:00 UTC";
@@ -526,12 +568,12 @@ function burnFrame(now) {
   const { pct: p, lead } = liveShares(col);
   const at = tk(col.t);
   $("bt-tick").textContent = col.t < chainT ? `Catching up · tick ${at} of the chain's ${tk(chainT)}` : run.done ? `Final · tick ${at}` : `Leading now · chain tick ${at} / ${tk(run.ticks)}`;
-  $("bt-value").innerHTML = lead < 0 ? `<span class="text-faint">No trail yet</span>` : `<span class="opt" data-opt="${lead}">${esc(BURN_MENU[lead])}</span>`;
+  $("bt-value").innerHTML = lead < 0 ? `<span class="text-faint">No trail yet</span>` : burnPickHTML(lead, { amount: !run.done });
   burnBars(p);
   if (run.done && col.t === col.ticks && bc.checked === null) {
     bc.checked = col.result().hash === run.result_hash;
     $("bt-note").textContent = `Burn executed: ${BURN_MENU[run.winner_option]} of the treasury. Replayed here: ${bc.checked ? "✓ result hash matches" : "✗ result hash DIFFERS from"} the chain's.`;
-    $("bt-value").innerHTML = `<span class="opt" data-opt="${run.winner_option}">${esc(BURN_MENU[run.winner_option])}</span>`;
+    $("bt-value").innerHTML = burnPickHTML(run.winner_option, { amount: false });
   }
 }
 
@@ -551,6 +593,7 @@ async function refresh() {
 
 function frame() {
   stepCards();
+  stepIdle();
   burnFrame(Date.now());
   requestAnimationFrame(frame);
 }
@@ -563,6 +606,46 @@ setInterval(() => {
   header(now);
   if (bc) $("bt-left").textContent = hms((bc.data.state === "staking" ? bc.data.sched.run_at_ms : bc.data.sched.end_at_ms) - now);
 }, 500);
+
+// ---- $ANTO strip: burned since launch, supply, the stakes feeding this
+// round's Community colonies, and the connected wallet's balance or claim ----
+
+let antoNow = null; // the last loadToken(), for the burn card's amounts
+let antoBusy = false;
+async function refreshAnto() {
+  try { antoNow = await loadToken({ account: wallet.accountId }); } catch { return; }
+  const t = antoNow;
+  const staked = round?.markets.length && round.markets.every((m) => m.stakes) ? round.markets.reduce((a, m) => a + sumBig(m.stakes), 0n) : null;
+  const facts = [];
+  if (t.burned != null) facts.push(["burned since launch", fmtAnto(t.burned), burnedPct(t.burned, t.genesis)]);
+  if (t.supply != null) facts.push(["supply", fmtAnto(t.supply, { compact: true }), ""]);
+  if (t.treasury != null) facts.push(["treasury", fmtAnto(t.treasury, { compact: true }), ""]);
+  if (staked !== null) facts.push([`staked on round ${round.id}`, fmtAnto(staked), ""]);
+  if (facts.length) $("tk-facts").innerHTML = facts.map(([k, v, x]) => `<div><dt>${esc(k)}</dt><dd class="num">${esc(v)}${x ? ` <small>${esc(x)}</small>` : ""}</dd></div>`).join("");
+  const faucet = t.faucet != null ? fmtAnto(t.faucet) : "";
+  const step = nextStep(t);
+  $("tk-me").innerHTML = step === "connect" ? `<a class="btn btn--sm" href="index.html#anto">Get ${faucet} free $ANTO</a>`
+    : step === "claim" ? `<button class="btn btn--sm" type="button" id="tk-claim">Claim ${faucet} $ANTO</button>`
+    : `<span class="text-sm">You hold <b class="num">${t.me.balance != null ? fmtAnto(t.me.balance) : "…"}</b>${t.me.staked ? ` · <span class="num">${fmtAnto(t.me.staked)}</span> staked` : ""}</span>`;
+  if (bc?.data.state === "staking") paintBurnStatic(); // the pick's amount needs the treasury
+}
+$("tk-me").addEventListener("click", async (e) => {
+  const btn = e.target.closest("#tk-claim");
+  if (!btn || antoBusy) return;
+  antoBusy = true;
+  btn.disabled = true;
+  try {
+    await wallet.call("claim_play_tokens");
+    refreshTokenChip();
+    await refreshAnto();
+  } catch (err) {
+    btn.disabled = false;
+    btn.title = String(err.message || err);
+  } finally {
+    antoBusy = false;
+  }
+});
+wallet.onChange(() => refreshAnto());
 
 // ---- who keeps it moving ----
 
@@ -578,7 +661,7 @@ async function refreshAuto() {
     }));
     const shown = round?.shown;
     const cranks = (shown?.all ?? []).map((f) => f.cranker).filter(Boolean);
-    const rows = automationRows({ keepers, quorum, agents, marketCount: final.length, cranks, total: shown?.markets.length * 5 || 0 });
+    const rows = automationRows({ keepers, quorum, agents, marketCount: final.length, cranks, total: shown?.markets.length * KIND_NAMES.length || 0 });
     if (shown && shown !== round) rows[2].status += " (last round)";
     $("au-rows").innerHTML = rows.map((r) => `
       <div class="lv-auto__card">
@@ -593,6 +676,7 @@ async function refreshAuto() {
 }
 async function poll() {
   await refresh();
+  refreshAnto();
   buildRequested().catch(() => {});
   refreshAuto();
 }

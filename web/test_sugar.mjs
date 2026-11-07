@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { withSugar, sugarPreview, othersWallet, YOU, OTHERS, SUGAR_CAP, SAMPLE_DAY_SEED } from "./sugar.mjs";
 import { stakeWeight } from "./ds/staker-ants.mjs";
-import { seedFromInt, trailShares } from "../sim/js/antosim.mjs";
+import { seedFromInt, trailShares, burnRichness } from "../sim/js/antosim.mjs";
 
 const seed = seedFromInt(7);
 const finish = (col) => { while (col.t < col.ticks) col.step(); return col.result(); };
@@ -45,11 +45,12 @@ for (const w of [[0, 6527, 0, 8000, 707], [1, 2, 3, 4, 5]]) {
   assert.deepEqual(othersWallet(w).stakes.map(stakeWeight), w);
 }
 
-// Same inputs, same colony; an empty chain (no stakes) is an even map with no staker ants.
+// Same inputs, same colony; an empty chain (no stakes) is the handicapped map with no staker ants.
 assert.equal(finish(p.with.make()).hash, finish(sugarPreview(seed, 0, 25, chainBase).with.make()).hash);
 const empty = sugarPreview(seed, 0, 0, undefined);
 assert.equal(empty.without.stakers.total, 0);
-assert.ok(empty.without.richness.every((x) => x === empty.without.richness[0]));
+assert.deepEqual(empty.without.richness, burnRichness([0, 0, 0, 0, 0]));
+assert.ok(empty.without.richness.every((x, i) => i === 0 || x < empty.without.richness[i - 1]), "bigger pots start poorer");
 assert.equal(SAMPLE_DAY_SEED.length, 32);
 assert.equal(YOU, "you");
 

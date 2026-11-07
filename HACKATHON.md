@@ -8,7 +8,7 @@ Instructions for the AI coding agent helping a team take part in NEAR HACKATHON.
 1. Build the project with the human. There is no sign-up before the hackathon: the only form is the final submission.
 2. Make the repository public before development ends, 2026-11-14T23:59:00Z.
 3. The human publishes a demo post on X: it says the project was built at NEAR HACKATHON and has the demo video or screenshots attached.
-4. Submit once: POST to https://nearhackathon.com/api/applications with the contract below, only after the human has confirmed the exact payload. Skip this step if the team has already submitted.
+4. Submit once: POST to https://nearhackathon.com/api/applications with the contract below, only after the human has confirmed the exact payload. Skip this step if this project has already been submitted.
 
 ## Facts
 
@@ -23,40 +23,76 @@ Instructions for the AI coding agent helping a team take part in NEAR HACKATHON.
 | Submission form | https://nearhackathon.com/#apply |
 | Submission API | POST https://nearhackathon.com/api/applications |
 | NEAR docs | https://docs.near.org/ |
-| NEAR Discord | https://discord.gg/RhZGHPXPf2 |
+| NEAR Discord | https://discord.gg/nearprotocol |
 | X | https://x.com/NEARProtocol |
 | This file, live | https://nearhackathon.com/HACKATHON.md |
 
-All times are UTC. One submission per team.
+All times are UTC. One submission per project.
 
 ## What the human decides
 
 Collect these before submitting. Do not guess, generate or fill in placeholders for any of them:
 
-- Project name (2-80 characters, unique across the hackathon)
+- Project name (2-80 characters)
 - Team lead's name (2-80 characters)
-- Contact email (unique across the hackathon, max 160 characters)
+- Contact email (max 160 characters). One person can send up to 2 submissions, for different projects that are independent and disclosed (see Q-015).
 - Team size, one of: `1`, `2 - 4`, `4 - 6`, `6 - 8`, `8+`
-- Tracks: one or more ids from the Tracks table below, every track the project fits. It is still one submission per team.
+- Tracks: one or more ids from the Tracks table below, every track the project fits. It is still one submission per project.
 - NEAR account for the prize payout, mainnet: a named account such as `team.near` or a 64-character implicit account. The team creates it in any NEAR wallet; see https://docs.near.org/. Never create or invent one on their behalf.
-- Link to the public repository judges will review.
+- Link to the public repository judges will review. Each repository can be submitted only once.
 - Link to the public demo post. The human writes and publishes it themselves.
 - What they built (20-2000 characters): the problem, the product, and how NEAR fits in.
 - Consent to the contact notice, read to them verbatim: "I agree that the organizers may use these details to review our submission and contact us about this hackathon."
 
 ## Never without the human's explicit confirmation
 
-- Send the submission. Print the full JSON payload first and wait for a yes. A second submission with the same project name or email is rejected, so there is one attempt per team.
+- Send the submission. Print the full JSON payload first and wait for a yes. A second submission of the same repository is rejected, so there is one attempt per project.
 - Post anything on X or another network on their behalf.
 - Make the repository public, push, or force-push.
 - Sign transactions, spend tokens or deploy to mainnet.
 - Commit secrets. Keys belong in environment variables, never in the repository.
 
+## Rules
+
+**Q-001. Code before 2026-11-01?** Yes, from the announcement on 2026-10-19 (https://x.com/nearprotocol/status/2112257967818997891). The window runs from then to 2026-11-14. Earlier commits are baseline.
+
+**Q-002. Existing product on another chain?** Allowed. Only the NEAR integration built in the window is judged. Disclose in README.
+
+**Q-003. New repo required?** No. Dedicated branch, or tags pre-hackathon and hackathon-submission, plus a README section linking the diff.
+
+**Q-004. Old project or new feature on it?** Old project as-is: no. New feature in the window: yes, if separated per Q-003. No minimum code size.
+
+**Q-005. Libraries, templates, boilerplate?** All allowed, including own pre-hackathon libs and AI code. List in README; own old libs count as baseline.
+
+**Q-006. 1Click JWT?** Not required. Without it, 0.2% fee. Register at https://partners.near-intents.org.
+
+**Q-007. Testnet for Intents?** None exists or is planned. Mainnet, separate dev accounts, tiny amounts, dry: true quotes.
+
+**Q-008. Test funds?** Testnet NEAR is free (near-cli faucet, near-faucet.io). Mainnet costs not reimbursed by default. (see Q-007)
+
+**Q-009. RPC and hosting?** Public RPC free: https://docs.near.org/api/rpc/providers
+
+**Q-010. Testnet-only projects eligible?** Yes, all tracks. Mainnet only where the integration is mainnet-only.
+
+**Q-011. Mandatory integrations?** None. Hints are hints. Own contract on NEAR that fits the track is enough.
+
+**Q-012. Local-only demo OK?** Yes: public repo, reproducible README, X post with a video; screenshots are not enough when judges cannot open the demo. Hosted demo is a plus; keep it up to 2026-11-18, ideally 2026-11-25.
+
+**Q-013. Organizer rights to code?** No. Team keeps all rights; organizers get non-exclusive promo rights to name, screenshots, video, repo link.
+
+**Q-014. License?** Any. MIT is fine. Repo stays public through judging; add a LICENSE file.
+
+**Q-015. One person, several projects?** Allowed if projects are independent and disclosed: each README names the other project. Not the same project twice. One person, at most 2 different projects.
+
+**Q-016. Payout schedule?** Single payment, no vesting, within 30 days of results.
+
+**Q-017. Claude Code and Codex role?** Screening, not deciding: reproducibility check, feature verification, structured report, preliminary score. Humans decide; low AI score alone cannot reject.
+
 ## Procedure
 
 ### 1. Build and publish the repository
 
-The repository may stay private while the team builds, but it must be public by 2026-11-14T23:59:00Z. Judges cannot open a private one. The jury includes AI judges, so write the README for a machine reader as well as a human one: what the product is, the problem it solves, and how to try it as "do X - see Y" steps a judge can follow. No marketing.
+The repository may stay private while the team builds, but it must be public by 2026-11-14T23:59:00Z. Judges cannot open a private one. Claude Code and Codex screen every project before the human jury decides (Q-017), so write the README for a machine reader as well as a human one: what the product is, the problem it solves, and how to try it as "do X - see Y" steps a judge can follow. No marketing.
 
 ### 2. The demo post
 
@@ -87,13 +123,13 @@ A 201 response means the submission is saved: tell the human. If they prefer the
 | Field | Type | Rule |
 | --- | --- | --- |
 | requestId | string | UUID, generated once per submission and reused on retries |
-| projectName | string | 2-80 characters, unique (case-insensitive) |
+| projectName | string | 2-80 characters |
 | leadName | string | 2-80 characters |
-| email | string | valid email, max 160 characters, unique |
+| email | string | valid email, max 160 characters, at most 2 submissions per email |
 | size | string | one of `1`, `2 - 4`, `4 - 6`, `6 - 8`, `8+`, exactly as written |
 | tracks | array of strings | one or more of `defi`, `thesis`, `privacy`, `business`, `swarms`, `security`, `agents`, `realworld`, `games`, `nfts`, `memecoins`, `social`, `open`, each listed once |
 | nearAddress | string | 2-64 characters, lowercase, matching `^(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$` |
-| projectUrl | string | http(s) URL of the public repository, max 300 characters |
+| projectUrl | string | http(s) URL of the public repository, max 300 characters, unique: each repository is submitted once |
 | demoUrl | string | http(s) URL of the public demo post, max 300 characters |
 | idea | string | 20-2000 characters |
 | consent | boolean | `true`, only after the human agreed to the contact notice |
@@ -105,15 +141,15 @@ Do not add other fields. In particular `website` is a spam trap: any non-empty v
 | 201 | Submission saved | Done. Tell the human. |
 | 400 | A field failed validation | Fix the fields listed in `fields` of the response and resend with the same requestId. |
 | 403 | Submissions are not open, or the request looked cross-site | Tell the human. Do not retry. |
-| 409 | Project name or email already used | The team already submitted. Ask the human; do not change the name to get around it. |
+| 409 | Repository already submitted, or this email already has 2 submissions | The project was already submitted, or the human reached the limit. Ask the human; do not change the link or the email to get around it. |
 | 413 | Body too large | Shorten the description. |
 | 503 | Storage temporarily unavailable | Wait a minute and resend with the same requestId. |
 
 ## Tracks
 
-Put the `id` of every track the project fits in the `tracks` array of the submission. A team still submits once.
+Put the `id` of every track the project fits in the `tracks` array of the submission. It is still one submission per project.
 
-The last column is what the organizers hope to see in each track: NEAR features and themes worth building around. They are hints and wishes, not requirements. Lean on the ones that fit the idea and name them in the README.
+The last column is what the organizers hope to see in each track: NEAR features and themes worth building around. They are hints and wishes, not requirements, and so are the protocols named in the Build column (Q-011). Lean on the ones that fit the idea and name them in the README.
 
 | id | Track | Build | Hints: what to lean on |
 | --- | --- | --- | --- |
@@ -131,6 +167,17 @@ The last column is what the organizers hope to see in each track: NEAR features 
 | `social` | Social Money | Build shared budgets, programmable rewards, collective ownership and reputation-based access on top of Sputnik DAO and Trezu. Don't rebuild the multisig — build what communities do with it. | SPUTNIK DAO, TREZU, NAMED ACCOUNTS |
 | `open` | Open Innovation | Have an idea that refuses to fit a category? Explore new ways for money, intelligence and ownership to work together. | EXPERIMENTAL, CHAIN ABSTRACTION, BUILD YOUR OWN |
 
+## Prizes
+
+Prize pool $250,000. One grand prize overall. 1st, 2nd and 3rd place in each of the 13 build tracks. Amounts are fixed in USD and paid in NEAR to the account given in the submission (see Q-016).
+
+| Prize | Amount | Count | Total |
+| --- | --- | --- | --- |
+| Grand prize | $55,000 | 1 | $55,000 |
+| 1st place | $10,000 | 13 | $130,000 |
+| 2nd place | $3,000 | 13 | $39,000 |
+| 3rd place | $2,000 | 13 | $26,000 |
+
 ## Ecosystem
 
 Partner tools and their documentation. Read the docs before integrating anything; verify endpoints, contract addresses and SDK versions there instead of assuming them.
@@ -141,10 +188,10 @@ Partner tools and their documentation. Read the docs before integrating anything
 | Aurora | Ethereum on NEAR | https://doc.aurora.dev/ | https://aurora.dev/ | https://github.com/aurora-is-near |
 | HOT | Chain abstraction | https://docs.hotdao.ai/ | https://hot-labs.org/ | https://github.com/hot-dao |
 | Rhea | DeFi on NEAR | https://guide.rhea.finance/ | https://rhea.finance/ | https://github.com/rhea-finance |
-| meme.cooking | Memecoin launchpad |  | https://meme.cooking/ |  |
-| HEX | Cross-chain swaps |  | https://hex.exchange/ |  |
+| meme.cooking | Memecoin launchpad | https://docs.meme.cooking/ | https://meme.cooking/ |  |
+| HEX | Cross-chain swaps | https://hot-labs.gitbook.io/hex/concepts-and-systems/interactive-blocks | https://hex.exchange/ |  |
 | NEAR.AI | Private AI | https://docs.near.ai/ | https://near.ai/ | https://github.com/nearai/cloud-api |
-| SVRN | Sovereign technology |  | https://svrn.net/ |  |
+| SVRN | Sovereign technology | https://svrn.net/research/near-protocol | https://svrn.net/ |  |
 | Trezu | Multisig treasury for Web3 teams | https://github.com/NEAR-DevHub/trezu-docs | https://trezu.org/ | https://github.com/NEAR-DevHub/trezu |
 | SputnikDAO | DAO infrastructure | https://github.com/near-daos/sputnik-dao-contract#setup | https://x.com/SputnikDAO | https://github.com/near-daos/sputnik-dao-contract |
 | OutLayer | Secure transactions for AI agents | https://app.outlayer.ai/docs/getting-started | https://outlayer.ai/ | https://github.com/out-layer/outlayer |
@@ -156,6 +203,6 @@ Where the team finds collaborators, asks questions and follows updates.
 
 | Channel | Link | What it is for |
 | --- | --- | --- |
-| NEAR Discord | https://discord.gg/RhZGHPXPf2 | Questions about building on NEAR, finding teammates |
+| NEAR Discord | https://discord.gg/nearprotocol | Questions about building on NEAR, finding teammates |
 | X | https://x.com/NEARProtocol | Hackathon announcements and updates |
 

@@ -39,8 +39,14 @@ export async function beacon(round, { fetchFn = fetch, urls = URLS } = {}) {
 // that does and goes without fails on chain with "signature needed".
 // `view(method, args)` reads the contract.
 export async function seedArgs(method, args, view, opts) {
+  if (args.drand_signature) return args;
+  // Proving a round for the randomness service names its round itself.
+  if (method === "fulfill_randomness") {
+    const sig = await beacon(args.drand_round, opts);
+    return sig ? { ...args, drand_signature: sig } : args;
+  }
   const pick = SEED_VIEWS[method];
-  if (!pick || args.drand_signature) return args;
+  if (!pick) return args;
   try {
     const [m, a] = pick(args);
     const round = (await view(m, a))?.drand_round;

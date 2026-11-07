@@ -2,11 +2,11 @@
 // on a market of their choice, and agents are paid from the fee for work,
 // never for being right. Keepers post the market's odds, forecaster agents
 // post their own odds (the Agents colony reads their lower median), and
-// crankers run the five colonies, one per call. All of that happens on the
+// crankers run the three colonies, one per call. All of that happens on the
 // contract; this file is the pure part the pages share: it reads the
 // contract's `RequestView` JSON (views `forecast_request`, `forecast_requests`)
 // and works out what to show, what is due next, what each party was paid, and
-// whether a browser re-run of the five colonies matches the chain's hashes.
+// whether a browser re-run of the three colonies matches the chain's hashes.
 // No DOM and no wallet, so Node can test it (web/test_recruit.mjs).
 //
 // Amounts are yocto (BigInt) here, as on chain; the views carry them as
@@ -46,10 +46,10 @@ export function parseConfig(v) {
   };
 }
 
-// The fee split as fixed pools: keepers, agents and crank. Burn is the rest.
+// The fee split as fixed pools: keepers, agents and crank. The treasury gets the rest.
 export function feePools(cfg) {
   const keepers = (cfg.fee * cfg.keeperBps) / BPS, agents = (cfg.fee * cfg.agentBps) / BPS, crank = (cfg.fee * cfg.crankBps) / BPS;
-  return { keepers, agents, crank, burn: cfg.fee - keepers - agents - crank };
+  return { keepers, agents, crank, treasury: cfg.fee - keepers - agents - crank };
 }
 
 // ---- reading a request ----
@@ -70,7 +70,7 @@ export function stakesOf(r) {
   return { weights: st.weights, hash: st.hash, wallets: walletsFor(st.entries, r.colony, n) };
 }
 
-// The five colonies' inputs as `marketForecasters` takes them, from what the
+// The three colonies' inputs as `marketForecasters` takes them, from what the
 // contract stored. Null until the first crank freezes the agents' snapshot
 // and the stakes (holders stake on the request during the agents' window)
 // and draws the seed.
@@ -85,14 +85,13 @@ export function specOf(r) {
   };
 }
 
-// The five forecaster colony specs ({ name, make(), counted, ... }), or null.
+// The three forecaster colony specs ({ name, make(), counted, ... }), or null.
 export function forecastersOf(r) {
   const spec = specOf(r);
   return spec && marketForecasters(hexToBytes(r.seed), r.colony, spec, `r${r.id}`);
 }
 
-// Which colonies vote in the swarm belief: Follower, Contrarian and Momentum
-// always; Community only with stakes; Agents with a post.
+// Which colonies vote in the swarm belief: Momentum always; Community only with stakes; Agents with a post.
 export const countedOf = (r) => voters(stakesOf(r).weights, r.agents?.odds ?? []);
 
 // Run colony k to its final tick: its result (with `hash`).
@@ -102,7 +101,7 @@ export function runColony(spec) {
   return c.result();
 }
 
-// Re-run the colonies the chain has cranked (all five once done) from its
+// Re-run the colonies the chain has cranked (all three once done) from its
 // stored inputs and compare. { ok, colonies: [{ kind, name, chain, replay,
 // match }], market: { chain, replay, match } | null, swarm: match | null,
 // oddsHash, agentsHash } or { ok: false, reason }. `ok` needs every cranked
@@ -129,7 +128,7 @@ export function verifyRequest(r) {
 }
 
 // Who was paid what, as rows { role, account, amount } (BigInt), one per
-// payment; the burn row has no account. Once the request is done the rows sum
+// payment; the treasury row has no account. Once the request is done the rows sum
 // to the fee exactly; a skipped request refunds the fee to the requester.
 export function payoutRows(r) {
   if (r.phase === "skipped") return [{ role: "refund", account: r.requester, amount: big(r.fee) }];
@@ -138,7 +137,7 @@ export function payoutRows(r) {
   for (const [account, amount] of r.paid_keepers) rows.push({ role: "keeper", account, amount: big(amount) });
   for (const [account, amount] of r.paid_agents) rows.push({ role: "agent", account, amount: big(amount) });
   r.paid_cranks.forEach(([account, amount], k) => rows.push({ role: "cranker", account, amount: big(amount), call: k + 1 }));
-  rows.push({ role: "burn", account: null, amount: big(r.burned) });
+  rows.push({ role: "treasury", account: null, amount: big(r.to_treasury) });
   return rows;
 }
 
@@ -147,7 +146,7 @@ export function payoutRows(r) {
 // The permissionless call request r is waiting for at `nowMs`, or null:
 // "finalize_request_odds" once the keepers' window is over (or all of
 // `keepers`, if given, have posted), "crank_request" once the agents' window
-// is over and until the fifth colony has run. Posting odds is not permissionless
+// is over and until the third colony has run. Posting odds is not permissionless
 // (keepers) and posting forecasts is for registered agents, so neither is due.
 export function due(r, nowMs, keepers = null) {
   if (r.phase === "odds") {
@@ -165,7 +164,7 @@ export const agentsMayPost = (r, nowMs) => r.phase === "forecasting" && nowMs < 
 export const stakingOpen = agentsMayPost;
 
 // Whether stakes on the request's colony can be withdrawn: not from the end
-// of the agents' window until the fifth colony has run.
+// of the agents' window until the third colony has run.
 export const stakesLocked = (r, nowMs) => r.phase === "running" || (r.phase === "forecasting" && nowMs >= r.forecast_by_ms);
 
 // The lifecycle as steps with a state: "done", "now" or "" (to come).
@@ -174,7 +173,7 @@ export function timeline(r, cfg, nowMs = Date.now()) {
   const phase = r.phase;
   const at = { odds: 1, forecasting: 3, running: 4 + cranked(r), done: 4 + CRANK_CALLS + 1, skipped: 2 }[phase];
   const steps = [
-    { key: "request", title: "Request", text: `Fee of ${tokens(r.fee)} tANTO held by the contract` },
+    { key: "request", title: "Request", text: `Fee of ${tokens(r.fee)} $ANTO held by the contract` },
     { key: "odds", title: "Keepers post odds", text: `${r.keepers_posted.length} keeper${r.keepers_posted.length === 1 ? "" : "s"} posted so far; the window is ${Math.round(cfg.oddsWindowMs / 60_000)} minutes` },
   ];
   if (phase === "skipped") {

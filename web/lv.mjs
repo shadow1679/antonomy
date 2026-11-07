@@ -2,11 +2,12 @@
 // (market.html): formatting, the round's steps and clock, a market's status
 // line, its stacked bar, and one in-browser verification per market.
 
+import { KINDS } from "../sim/js/antosim.mjs";
 import { verifyMarket } from "./roundchain.mjs";
 import { tokens } from "./chain.mjs";
 import { esc, hms } from "./ui.mjs";
 
-export const REPLAY_TPS = 30; // colonies already ran on-chain; pages play them back at this pace
+export const LIVE_TPS = 12; // live pages play the colonies at the player's 1× pace (12 ticks/s); faster speeds are on the replay page
 export const pct = (b) => (b / 100).toFixed(1);
 export const utc = (ms) => new Date(ms).toISOString().slice(11, 16) + " UTC";
 export const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -55,8 +56,8 @@ export function clockOf(round, now = Date.now()) {
   const clocks = {
     posting: () => ["Staking closes in", hms(round.closeMs - now), `at ${utc(round.closeMs)}`],
     agents: () => ["Agents' window ends in", hms(round.publishMs - now), `at ${utc(round.publishMs)}`],
-    ready: () => ["Ready to crank", `0 / ${n * 5}`, "colonies cranked"],
-    running: () => ["Colonies cranked", `${cranked} / ${n * 5}`, "on-chain, one per call"],
+    ready: () => ["Ready to crank", `0 / ${n * KINDS.length}`, "colonies cranked"],
+    running: () => ["Colonies cranked", `${cranked} / ${n * KINDS.length}`, "on-chain, one per call"],
     done: () => ["Result", "✓ final", "all colonies cranked"],
     skipped: () => ["Round", "✗ skipped", "no keeper quorum"],
   };
@@ -87,12 +88,12 @@ export function makeVerifier(onDone) {
 export function marketState(m, phase, v) {
   if (m.forecasters) {
     const bad = v?.colonies.some((c) => c.state === "mismatch") || v?.market?.state === "mismatch";
-    if (bad) return ["bad", "✗ hash differs", `${m.cranked} of 5 cranked`];
+    if (bad) return ["bad", "✗ hash differs", `${m.cranked} of ${KINDS.length} cranked`];
     if (m.done) return v ? ["ok", "✓ verified here", "result final"] : ["", "◌ re-running here", "result final"];
-    return ["", `◌ ${m.cranked} of 5 cranked`, v?.colonies.some((c) => c.state === "match") ? "✓ cranked ones match" : "colonies running"];
+    return ["", `◌ ${m.cranked} of ${KINDS.length} cranked`, v?.colonies.some((c) => c.state === "match") ? "✓ cranked ones match" : "colonies running"];
   }
   const t = m.stakes ? sumBig(m.stakes) : null;
-  const staked = t === null ? "" : t ? `${fmtT(t)} tANTO staked` : "no stakes yet";
+  const staked = t === null ? "" : t ? `${fmtT(t)} $ANTO staked` : "no stakes yet";
   const ph = { posting: "◌ staking open", agents: "◌ agents posting", ready: "◌ ready to crank", running: "◌ ready to crank", skipped: "✗ skipped" }[phase] ?? esc(phase);
   return ["", ph, staked];
 }

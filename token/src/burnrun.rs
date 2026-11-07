@@ -21,7 +21,7 @@ use crate::{
     stake::{burn_weights, Snapshot},
     Error,
 };
-use antosim::{colony_seed, sha256, stake_richness, Colony, Commit, BURN_COLONY, BURN_TICKS, N_ANTS};
+use antosim::{burn_richness, colony_seed, sha256, Colony, Commit, BURN_COLONY, BURN_TICKS, N_ANTS};
 
 pub const SEED_TAG: &[u8] = b"ANTO-BURN-SEED-v0";
 /// Most ticks one crank steps. Measured: 2,000 ticks cost up to 258 TGas, so
@@ -100,7 +100,7 @@ impl BurnRun {
 
     /// The colony at tick 0 for these stake weights (milli sqrt-tokens).
     pub fn colony(&self, weights: &[u32]) -> Result<Colony, Error> {
-        let rich = stake_richness(weights).map_err(|_| Error::BadMarket)?;
+        let rich = burn_richness(weights).map_err(|_| Error::BadMarket)?;
         Colony::with_commit(
             &colony_seed(&self.seed, BURN_COLONY, 0),
             5,

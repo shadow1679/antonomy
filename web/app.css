@@ -31,6 +31,12 @@
 .nav__sep { align-self: center; width: 1px; height: 16px; margin-inline: var(--space-2); background: var(--border); }
 .topbar__end { margin-left: auto; display: flex; align-items: center; gap: var(--space-3); }
 .topbar__end .chip { min-height: 32px; }
+/* The $ANTO chip: the token is the brand, so it may wear amber. */
+.anto-chip { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 32px; padding: 0 var(--space-3); border: 1px solid rgb(242 165 65 / 0.4); border-radius: var(--radius-pill); background: var(--accent-tint); color: var(--text); font-size: var(--text-xs); text-decoration: none; white-space: nowrap; transition: border-color var(--dur-fast); }
+.anto-chip:hover { border-color: var(--accent); }
+.anto-chip b { color: var(--accent); font-weight: 600; letter-spacing: 0.02em; }
+.anto-chip small { color: var(--text-muted); font-size: inherit; }
+@media (max-width: 520px) { .anto-chip small { display: none; } }
 @media (max-width: 760px) {
   .topbar { position: static; } /* two rows are too tall to pin on a phone */
   .topbar__row { flex-wrap: wrap; gap: 0 var(--space-3); padding-top: var(--space-2); }
@@ -72,7 +78,7 @@
 .round-card__clocks dt { font-size: var(--text-xs); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-faint); }
 .round-card__clocks dd { margin: 0; font-size: var(--text-lg); color: var(--text); }
 
-/* Five colony tiles. On phones they become a swipeable row. */
+/* Colony tiles. On phones they become a swipeable row. */
 .tiles { display: grid; gap: var(--space-4); grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 640px) {
   .tiles { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 86%; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: var(--space-2); margin-inline: calc(-1 * var(--space-5)); padding-inline: var(--space-5); scroll-padding-inline: var(--space-5); }
@@ -104,7 +110,7 @@
    the day: day and phase, the 00:00 to 24:00 bar, the clocks, and facts
    (last burn, day seed, history). */
 .page-head__split { display: grid; gap: var(--space-4) var(--space-7); grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; }
-.day-strip { display: grid; gap: var(--space-4) var(--space-7); grid-template-columns: auto minmax(260px, 1fr) minmax(280px, auto); align-items: center; margin-top: var(--space-6); }
+.day-strip { display: grid; gap: var(--space-4) var(--space-7); grid-template-columns: auto minmax(260px, 1fr) minmax(280px, auto); align-items: center; margin-top: var(--space-6); margin-bottom: var(--space-6); }
 .day-strip__id { display: grid; gap: var(--space-2); justify-items: start; }
 .day-strip__id .chamber__title { white-space: nowrap; }
 .day-strip .round-card__clocks { gap: var(--space-6); }
@@ -120,7 +126,7 @@
    goes and the page reaches the first section sooner. */
 @media (max-width: 640px) {
   .page-head:has(.day-strip) .lede { display: none; }
-  .day-strip { margin-top: var(--space-4); }
+  .day-strip { margin-top: var(--space-4); margin-bottom: var(--space-4); }
   .day-strip .round-card__clocks dd { font-size: var(--text-lg); }
 }
 .day-facts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-7); margin: 0; padding-top: var(--space-4); border-top: 1px solid var(--border); font-size: var(--text-xs); }
@@ -213,6 +219,30 @@
 .roles__card h3 { margin: 0; font-size: var(--text-lg); }
 .roles__card > p:not(.eyebrow) { margin: 0; font-size: var(--text-sm); color: var(--text-muted); max-width: 64ch; }
 .roles__card .cluster { margin-top: auto; padding-top: var(--space-2); gap: var(--space-4); }
+
+/* ---- $ANTO on the landing page: the token's facts from the contract, the
+   connected wallet's balance or faucet claim, and four ways to use it. ---- */
+.anto-mark { color: var(--accent); font-family: var(--font-mono); font-weight: 600; letter-spacing: 0.01em; }
+.anto { display: grid; gap: var(--space-5); grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: stretch; }
+.anto__facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); align-content: center; gap: var(--space-4); margin: 0; padding: var(--space-5); border: 1px solid rgb(242 165 65 / 0.3); border-radius: var(--radius-lg); background: linear-gradient(180deg, var(--accent-tint), transparent 70%), var(--surface); }
+.anto__facts div { display: grid; gap: var(--space-1); align-content: start; }
+.anto__facts dt { font-size: var(--text-xs); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-faint); }
+.anto__facts dd { margin: 0; font-family: var(--font-display); font-size: var(--text-2xl); line-height: 1.05; color: var(--text); }
+.anto__facts dd.anto__fact-note { font-family: var(--font-mono); font-size: var(--text-xs); line-height: 1.4; color: var(--text-muted); }
+.anto__facts div:first-child dd:not(.anto__fact-note) { color: var(--accent); }
+.anto__me { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-5); }
+.anto__me p { margin: 0; }
+.anto__me .btn { align-self: flex-start; margin-top: var(--space-2); }
+.anto__me .cluster { margin-top: var(--space-2); gap: var(--space-2); }
+.anto__me-big { font-family: var(--font-display); font-size: var(--text-2xl); line-height: 1.05; }
+.anto__me-big small { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--accent); }
+.anto__uses { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); margin: var(--space-5) 0 0; padding: 0; list-style: none; }
+.anto__uses li { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4) var(--space-5); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.anto__uses h3 { margin: 0; font-size: var(--text-lg); }
+.anto__uses p { margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.anto__uses a { margin-top: auto; padding-top: var(--space-1); font-size: var(--text-sm); }
+.anto__note { margin: var(--space-4) 0 0; font-size: var(--text-xs); }
+@media (max-width: 900px) { .anto { grid-template-columns: minmax(0, 1fr); } }
 
 /* ---- How it works: three steps ---- */
 .steps { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); margin: 0; padding: 0; list-style: none; counter-reset: step; }
@@ -469,7 +499,7 @@ kbd { display: inline-block; min-width: 1.9em; padding: 1px 6px; border: 1px sol
 [data-fee="keepers"] { --fee-color: var(--bone-100); }
 [data-fee="agents"] { --fee-color: var(--bone-300); }
 [data-fee="crank"] { --fee-color: var(--soil-500); }
-[data-fee="burn"] { --fee-color: repeating-linear-gradient(135deg, var(--soil-500) 0 2px, var(--soil-700) 2px 5px); }
+[data-fee="treasury"] { --fee-color: repeating-linear-gradient(135deg, var(--soil-500) 0 2px, var(--soil-700) 2px 5px); }
 
 /* The run: the lifecycle strip, one step per stop, the current one lit. */
 .rq-track { display: grid; gap: var(--space-3); margin-bottom: var(--space-5); }
@@ -504,7 +534,7 @@ kbd { display: inline-block; min-width: 1.9em; padding: 1px 6px; border: 1px sol
 .rq-colony__by { margin-left: auto; font-size: var(--text-xs); color: var(--text-faint); }
 .rq-colony__empty { position: absolute; inset: 0; display: grid; place-items: center; padding: var(--space-5); font-size: var(--text-sm); color: var(--text-faint); text-align: center; }
 .rq-colony__empty[hidden] { display: none; }
-.rq-thumbs { min-width: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-2); }
+.rq-thumbs { min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
 @media (max-width: 560px) { .rq-thumbs { grid-auto-flow: column; grid-template-columns: none; grid-auto-columns: 38%; overflow-x: auto; padding-bottom: var(--space-1); } }
 .rq-thumb { display: grid; gap: 4px; min-width: 0; padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); background: transparent; color: var(--text-muted); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--dur-fast), background var(--dur-fast); }
 .rq-thumb:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface-raised); }
@@ -521,9 +551,9 @@ kbd { display: inline-block; min-width: 1.9em; padding: 1px 6px; border: 1px sol
 .rq-after[hidden] { display: none; }
 @media (max-width: 1000px) { .rq-after { grid-template-columns: minmax(0, 1fr); } }
 
-/* The agent tool: one tab per role, its commands and the call it signs. */
-.rq-tool { display: grid; gap: var(--space-5); grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); align-items: start; }
-@media (max-width: 1000px) { .rq-tool { grid-template-columns: minmax(0, 1fr); } }
+/* The agent tool on Docs (#recruit-tool): one tab per role, each with its
+   copyable .cmd lines. It sits in a prose entry, so it resets to the UI font. */
+.rq-tool { font-family: var(--font-mono); line-height: 1.5; }
 .rq-tool .seg { flex-wrap: wrap; margin-bottom: var(--space-4); }
 .rq-tool__panel { display: grid; gap: var(--space-3); }
 .rq-tool__panel h3 { margin: var(--space-2) 0 0; font-size: var(--text-base); }

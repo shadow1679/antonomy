@@ -2,7 +2,7 @@
 //! (`market`), staking closes, the agents' window ends at `publish_at`, and
 //! then anyone cranks: the first crank freezes the stake snapshot and the
 //! agents' posts, draws the round seed, and each crank runs one forecaster
-//! colony (Follower, Contrarian, Momentum, Community, Agents) of one market,
+//! colony (Momentum, Community, Agents) of one market,
 //! market by market. After the last colony the swarm belief and the market
 //! hash are stored; both are the same functions the browser re-runs.
 //!
@@ -215,7 +215,7 @@ mod tests {
     }
 
     #[test]
-    fn five_cranks_equal_the_native_market() {
+    fn three_cranks_equal_the_native_market() {
         let (_, st, mut ag) = setup();
         let m = market();
         let mut run =

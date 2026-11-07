@@ -1,10 +1,10 @@
 """Check that the Python reference, the JS port and the Rust port produce identical hashes.
 
 Usage: python3 -I sim/tests/crosscheck.py [count] [--no-py] [--day]   (default 50 seeds)
-Each seed runs nine colonies: 5 outcomes, 2 outcomes, 3 outcomes with fixed
-richness, a Burn colony with stakes, and the five forecasters (Follower,
-Contrarian, Momentum, Community, Agents) on one market. The last six use 60 ants
-and 300 ticks. Two more keys are whole forecast markets (five forecasters on
+Each seed runs seven colonies: 5 outcomes, 2 outcomes, 3 outcomes with fixed
+richness, a Burn colony with stakes, and the three forecasters (Momentum,
+Community, Agents) on one market. The last four use 60 ants
+and 300 ticks. Two more keys are whole forecast markets (three forecasters on
 their own maps, trail shares, swarm belief): a 3-outcome market with stakes and
 agent posts, and a binary market with neither. Python needs about 1.5 s per seed, so use
 --no-py to compare only JS against Rust on large counts (the 10,000-seed gate).
@@ -29,7 +29,7 @@ args = [a for a in sys.argv[1:] if not a.startswith("--")]
 use_py = "--no-py" not in sys.argv
 day = "--day" in sys.argv
 count = int(args[0]) if args else (3 if day else 50)
-KEYS = ("hd",) if day else ("h5", "h2", "h3", "hb", "hf", "hc", "hm", "hk", "ha", "hs", "hy")
+KEYS = ("hd",) if day else ("h5", "h2", "h3", "hb", "hm", "hk", "ha", "hs", "hy")
 mode = ["day"] if day else []
 
 # Fixtures shared with dump.mjs and dump.rs.
@@ -88,7 +88,6 @@ elif use_py:
                     seed, kind, ODDS, ODDS_6H, MARKET_WEIGHTS, STAKE_HASH, AGENT_ODDS, AGENT_HASH, 60, 300
                 )["hash"]
                 for key, kind in (
-                    ("hf", antosim.FOLLOWER), ("hc", antosim.CONTRARIAN),
                     ("hm", antosim.MOMENTUM), ("hk", antosim.COMMUNITY), ("ha", antosim.AGENTS),
                 )
             },

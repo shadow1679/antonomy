@@ -5,11 +5,14 @@
 //   BurnRun::start(noon of day 20000, entropy [7; 32], "antonomy-oracle.testnet", &snapshot, 20000)
 // on the snapshot below, advances it to the last tick and prints the run's
 // seed, stake hash, burn_weights and result. The JS sim must reproduce all of it.
+// V is from before the daily pot (plain stake richness, day < HANDICAP_FROM_DAY);
+// V2 is the same snapshot on day 20760 from the current BurnRun, which
+// handicaps the bigger pots (burn_richness).
 import assert from "node:assert/strict";
 import {
-  burnAmount, fmtTokens, fmtTokens2, toTokens, isqrt, snapshotWeights, snapshotHash, snapshotWallets, snapshotTotals,
+  burnAmount, potAmounts, potRules, HANDICAP_FROM_DAY, REWARD_MENU_BPS, fmtTokens, fmtTokens2, toTokens, isqrt, snapshotWeights, snapshotHash, snapshotWallets, snapshotTotals,
   clockTick, shownTick, dayRunAt, dayEndAt, dayStart, dayOf, dayDate, weightsFromSqrtYocto, parseBurnLogs,
-  ONE, BURN_MENU_BPS, DAY_MS, STAKING_MS, hexToBytes,
+  ONE, POT_MENU_BPS, DAY_MS, STAKING_MS, hexToBytes,
 } from "./burn.mjs";
 import { burnDay, drawnBurnDay, dayPhase, runProgress, dayProgress, rememberBurnDay, knownBurnDay, burnColony } from "./round.mjs";
 import {
@@ -35,18 +38,31 @@ const V = {
   scores: [11993864, 16308216, 39270930, 41861751, 16348107],
   perm: [4, 3, 0, 2, 1],
 };
+const V2 = {
+  day: 20760,
+  seed: "17b8e3e1ffcd07211abcb56edf7a2bc5cf3746228c1faaf5ed88881579f1001a",
+  winner_option: 3,
+  result_hash: "ae5c6ac79478703c4ca257bb6dd097a9616dbad4c89b942bfb11736f5ed2ea85",
+  scores: [24698345, 39065748, 38199105, 28345239, 15418050],
+  perm: [0, 2, 3, 1, 4],
+};
 const doneRun = {
   day: V.day, t: BURN_TICKS, ticks: BURN_TICKS, seed: V.seed, stake_hash: V.stake_hash, done: true,
   winner_option: V.winner_option, result_hash: V.result_hash, scores: V.scores, perm: V.perm,
 };
 const snap = { day: V.day, hash: V.stake_hash, entries: V.entries, ok: true };
 
-// ---- amounts, as token/src/burn.rs ----
-assert.equal(burnAmount(10_000n, 4), 200n);
-assert.equal(burnAmount(9_800n, 0), 9n);
+// ---- the daily pot, as token/src/burn.rs ----
+assert.deepEqual(potAmounts(10_000n, 4), { pot: 200n, reward: 16n, burn: 184n });
+assert.deepEqual(potAmounts(9_816n, 0), { pot: 9n, reward: 7n, burn: 2n });
+assert.equal(burnAmount(10_000n, 4), 184n);
 assert.equal(burnAmount(50n, 1), 0n);
-assert.throws(() => burnAmount(1n, 5), RangeError);
-assert.ok(Math.max(...BURN_MENU_BPS) <= 200);
+assert.throws(() => potAmounts(1n, 5), RangeError);
+assert.ok(Math.max(...POT_MENU_BPS) <= 200);
+assert.ok(REWARD_MENU_BPS.every((r, i) => r <= POT_MENU_BPS[i]));
+assert.equal(potRules(HANDICAP_FROM_DAY - 1), false);
+assert.equal(potRules(HANDICAP_FROM_DAY), true);
+assert.ok(V.day < HANDICAP_FROM_DAY && V2.day >= HANDICAP_FROM_DAY);
 assert.equal(fmtTokens(1_234_567n * ONE + ONE / 2n), "1,234,567");
 assert.equal(fmtTokens2(ONE / 2n), "0.5");
 assert.equal(fmtTokens2(25n * ONE), "25");
@@ -139,6 +155,14 @@ assert.equal(trailShares(res).reduce((a, b) => a + b, 0), 10_000);
   assert.equal((await verifyRun({ ...doneRun, done: false }, snap)).pending, true);
 }
 
+// Under the daily-pot rules the same snapshot runs handicapped, as the Rust BurnRun does.
+{
+  const run2 = { ...doneRun, day: V2.day, seed: V2.seed, winner_option: V2.winner_option, result_hash: V2.result_hash, scores: V2.scores, perm: V2.perm };
+  const ok2 = await verifyRun(run2, { ...snap, day: V2.day }, {});
+  assert.deepEqual(ok2.mismatches, []);
+  assert.equal(ok2.hash, V2.result_hash);
+}
+
 // runSpec refuses a snapshot that isn't the one the run committed to.
 assert.throws(() => runSpec({ ...doneRun, stake_hash: "11".repeat(32) }, snap), /does not match/);
 
@@ -170,7 +194,9 @@ function chainOf({ day, phase, run = null, last = null, snaps = {}, treasury = "
       case "stake_config": return { cap_per_wallet: "100000000000000000000000000", close_at_ms: 1, publish_at_ms: 2 };
       case "ft_balance_of": return args.account_id === treasuryId() ? treasury : (me?.balance ?? "0");
       case "ft_total_supply": return "1000000000000000000000000000000";
-      case "reward_pool": return "0";
+      case "daily_pot": return [0, 1, 2, 3, 4].map((i) => ({ pot_bps: POT_MENU_BPS[i], reward_bps: REWARD_MENU_BPS[i], burn_bps: POT_MENU_BPS[i] - REWARD_MENU_BPS[i], ...Object.fromEntries(Object.entries(potAmounts(BigInt(treasury), i)).filter(([k]) => k !== "pot").map(([k, v]) => [k, v.toString()])) }));
+      case "reward_leaderboard": return [["alice.testnet", "5"], ["bob.testnet", "2"]];
+      case "burn_lock": return { day: me?.lockDay ?? null, locked: !!me?.locked };
       case "burn_snapshot": if (snaps[args.day]) return { hash: snaps[args.day].hash, entries: snaps[args.day].entries }; throw new Error("no snapshot");
       case "has_claimed": return !!me;
       case "staked_by": return me?.staked ?? "0";
@@ -191,6 +217,8 @@ function chainOf({ day, phase, run = null, last = null, snaps = {}, treasury = "
   assert.deepEqual(early.weights, [0, 6527, 0, 8000, 707]);
   assert.equal(early.cap, 100n * ONE);
   assert.equal(early.me, null);
+  assert.deepEqual(early.board, [["alice.testnet", 5n], ["bob.testnet", 2n]]);
+  assert.deepEqual(early.pot.map((p) => [p.pot_bps, p.reward]), [0, 1, 2, 3, 4].map((i) => [POT_MENU_BPS[i], potAmounts(999_800n * ONE, i).reward]));
 
   // After 12:00, no crank yet: waiting, and no run, seed or map.
   const wait = await loadBurn({ account: null, read: chainOf({ day: V.day, phase: "running", snaps: { [V.day]: snap } }) });
@@ -212,7 +240,7 @@ function chainOf({ day, phase, run = null, last = null, snaps = {}, treasury = "
   // The next day's staking half, with yesterday's finished run not yet burned.
   const next = await loadBurn({ account: "me.testnet", read: chainOf({
     day: V.day + 1, phase: "staking", run: doneRun, last: V.day - 1, snaps: { [V.day]: snap },
-    me: { balance: ONE.toString(), staked: (3n * ONE).toString(), stakes: [[0, 2, (3n * ONE).toString()], [1, 0, "5"]] },
+    me: { balance: ONE.toString(), staked: (3n * ONE).toString(), stakes: [[0, 2, (3n * ONE).toString()], [1, 0, "5"]], lockDay: V.day + 1, locked: true },
   }) });
   const v3 = burnView(next, dayStart(V.day + 1) + 10_000);
   assert.equal(v3.phase, "staking");
@@ -221,6 +249,7 @@ function chainOf({ day, phase, run = null, last = null, snaps = {}, treasury = "
   assert.equal(next.me.stakes[2], 3n * ONE);
   assert.equal(next.me.stakes[0], 0n, "only Burn colony stakes count");
   assert.equal(next.me.balance, ONE);
+  assert.deepEqual(next.me.lock, { day: V.day + 1, locked: true });
   // Once executed, nothing is left to settle.
   const burned = await loadBurn({ account: null, read: chainOf({ day: V.day + 1, phase: "staking", run: doneRun, last: V.day }) });
   assert.equal(burnView(burned, dayStart(V.day + 1) + 10).prev, null);
@@ -229,8 +258,8 @@ function chainOf({ day, phase, run = null, last = null, snaps = {}, treasury = "
   assert.equal(burnView(stuck, dayStart(V.day + 1) + 10).prev.state, "unfinished");
   // A failing optional reader leaves a null and an error, not a crash; the schedule is required.
   const flaky = chainOf({ day: V.day, phase: "staking" });
-  const part = await loadBurn({ account: null, read: async (m, a) => { if (m === "reward_pool" || m === "ft_balance_of") throw new Error("rpc down"); return flaky(m, a); } });
-  assert.equal(part.pool, null);
+  const part = await loadBurn({ account: null, read: async (m, a) => { if (m === "daily_pot" || m === "ft_balance_of") throw new Error("rpc down"); return flaky(m, a); } });
+  assert.equal(part.pot, null);
   assert.equal(part.treasury, null);
   assert.equal(part.errors.length, 2);
   await assert.rejects(() => loadBurn({ account: null, read: async () => { throw new Error("down"); } }), /down/);
@@ -269,7 +298,9 @@ function chainOf({ day, phase, run = null, last = null, snaps = {}, treasury = "
     "EVENT reward day=20000 a.testnet amount=1",
     "EVENT burn day=x index=1 amount=1 stakes=cd",
   ]);
-  assert.deepEqual(p.burn, { day: 20000, index: 1, amount: 2499500000000000000000000n, stakes: "cd" });
+  assert.deepEqual(p.burn, { day: 20000, index: 1, amount: 2499500000000000000000000n, reward: 0n, stakes: "cd" });
+  assert.deepEqual(parseBurnLogs(["EVENT burn day=20760 index=4 amount=184 reward=16 stakes=cd"]).burn,
+    { day: 20760, index: 4, amount: 184n, reward: 16n, stakes: "cd" });
   assert.deepEqual(p.done, { day: 20000, winner: 1, hash: "ee" });
   assert.deepEqual(p.seed, { day: 20000, seed: "ab", stakes: "cd" });
   assert.deepEqual(parseBurnLogs(undefined), { burn: null, done: null, seed: null });
@@ -290,23 +321,28 @@ function chainOf({ day, phase, run = null, last = null, snaps = {}, treasury = "
   assert.deepEqual(list.map((x) => [x.day, x.tx, x.height]), [[V.day, "TX20000", 5000], [V.day - 1, "TX19999", 4000]]);
   assert.equal(list[0].ms, dayEndAt(V.day) + 60_000);
 
+  // Before the burn (block 4999) and at its block (5000): the supply fell by
+  // the burn, the treasury by the burn and the reward.
+  const T0 = 999_800n * ONE, S0 = 1_000_000n * ONE, BURNT = 1_000n * ONE, PAID = 80n * ONE;
   const calls = [];
   const readAt = async (h, method, args) => {
     calls.push([h, method]);
-    if (h !== 4999) throw new Error("archive has no such block");
+    if (h !== 4999 && h !== 5000) throw new Error("archive has no such block");
     if (method === "burn_run") return doneRun;
     if (method === "burn_snapshot") return { hash: V.stake_hash, entries: V.entries };
-    return (999_800n * ONE).toString(); // ft_balance_of treasury
+    if (method === "ft_total_supply") return String(h === 4999 ? S0 : S0 - BURNT);
+    return String(h === 4999 ? T0 : T0 - BURNT - PAID); // ft_balance_of treasury
   };
   const row = await burnRow(list[0], { read: readAt });
   assert.equal(row.detail, true);
   assert.equal(row.index, V.winner_option);
-  assert.equal(row.before, 999_800n * ONE);
-  assert.equal(row.burned, burnAmount(999_800n * ONE, 1)); // 0.25%
-  assert.equal(row.after, row.before - row.burned);
+  assert.equal(row.before, T0);
+  assert.equal(row.burned, BURNT);
+  assert.equal(row.reward, PAID);
+  assert.equal(row.after, T0 - BURNT - PAID);
   assert.equal(row.hash, V.result_hash);
   assert.equal(row.entries.length, 5);
-  assert.ok(calls.every(([h]) => h === 4999), "reads the block before the burn ran");
+  assert.ok(calls.every(([h, m]) => h === 4999 || (h === 5000 && /^ft_/.test(m))), "reads the run before the burn and the amounts after it");
   // The row's inputs re-run to the chain's hash.
   const again = await verifyRun({ ...doneRun, seed: row.seed }, { hash: row.stakeHash, entries: row.entries }, {});
   assert.equal(again.ok, true);

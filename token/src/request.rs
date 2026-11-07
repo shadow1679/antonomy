@@ -11,12 +11,13 @@
 //!    trending markets (`market::accept`). No quorum means the request is
 //!    skipped and the fee refunded.
 //! 3. Forecaster agents (`agents`) post their own odds until `forecast_by`.
-//! 4. `crank`: permissionless, one colony per call, five calls. The first call
+//! 4. `crank`: permissionless, one colony per call, three calls. The first call
 //!    freezes the agent posts and draws the seed. Each call pays the crank
 //!    bounty to its caller.
-//! 5. After the fifth colony: the swarm belief and market hash are stored and
+//! 5. After the third colony: the swarm belief and market hash are stored and
 //!    the rest of the fee is paid out (keepers in the accepted quorum, agents
-//!    whose posts counted) and the remainder, dust included, is burned.
+//!    whose posts counted) and the remainder, dust included, goes to the
+//!    treasury, which funds the play-token faucet and the Burn colony's pots.
 //!
 //! Stakes: holders stake on the request's colony (`stake`, `unstake`) while
 //! the agents' window is open, on the same one-wallet budget as every other
@@ -121,7 +122,7 @@ fn slug_ok(slug: &str) -> bool {
 pub struct RequestConfig {
     /// Fee per request, in yocto.
     pub fee: u128,
-    /// Shares of the fee in basis points; the burn gets the rest.
+    /// Shares of the fee in basis points; the treasury gets the rest.
     pub keeper_bps: u16,
     pub agent_bps: u16,
     pub crank_bps: u16,
@@ -146,7 +147,7 @@ impl RequestConfig {
         mul_div(self.fee, bps as u128, BPS)
     }
 
-    /// Paid to each crank call: the crank share over the five calls.
+    /// Paid to each crank call: the crank share over the three calls.
     pub fn crank_bounty(&self) -> u128 {
         self.share(self.crank_bps) / CRANKS as u128
     }
@@ -162,7 +163,7 @@ pub enum Phase {
     Odds,
     /// Odds accepted; forecaster agents posting.
     Forecasting,
-    /// Seed drawn; cranks running the five colonies.
+    /// Seed drawn; cranks running the three colonies.
     Running,
     Done,
     /// No keeper quorum: fee refunded.
@@ -206,7 +207,7 @@ impl ColonyRun {
 pub struct RequestStakes {
     /// Sorted by (account, colony, option), as in a round's stake snapshot.
     pub entries: Vec<Entry>,
-    /// `stake::hash_entries(entries)`, committed by all five colonies.
+    /// `stake::hash_entries(entries)`, committed by all three colonies.
     pub hash: [u8; 32],
     /// Community's food: milli sqrt-tokens per outcome (`Staking::sim_weights`).
     pub weights: Vec<u32>,
@@ -223,7 +224,8 @@ pub struct Payouts {
     pub agents: Vec<(AccountId, u128)>,
     /// One entry per crank call, in call order.
     pub cranks: Vec<(AccountId, u128)>,
-    pub burned: u128,
+    /// What was left of the fee, dust included: paid to the treasury.
+    pub treasury: u128,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -418,8 +420,10 @@ impl Requests {
         if now < r.odds_by && !all_posted {
             return Err(Error::PostingStillOpen);
         }
+        // A keeper removed since it posted no longer counts.
         let posts: BTreeMap<AccountId, Vec<MarketPost>> = std::mem::take(&mut r.keeper_posts)
             .into_iter()
+            .filter(|(k, _)| keepers.keepers().any(|x| x == k))
             .map(|(k, p)| (k, vec![p]))
             .collect();
         let colony = r.colony;
@@ -496,9 +500,9 @@ impl Requests {
     }
 
     /// Permissionless once the agents' window has closed: run the next of the
-    /// five colonies and pay `who` the crank bounty. The first call freezes
+    /// three colonies and pay `who` the crank bounty. The first call freezes
     /// the agent posts and the stakes and draws the seed from `entropy`; the
-    /// fifth stores the market result and pays the fee out.
+    /// third stores the market result and pays the fee out.
     #[allow(clippy::too_many_arguments)]
     pub fn crank(
         &mut self,
@@ -510,6 +514,7 @@ impl Requests {
         id: u32,
         entropy: [u8; 32],
         contract: &str,
+        treasury: &str,
     ) -> Result<Crank, Error> {
         let cfg = self.config;
         let r = self.get_mut(id)?;
@@ -583,7 +588,7 @@ impl Requests {
             .map_err(|_| Error::BadMarket)?;
             r.swarm = Some(out.swarm);
             r.market_hash = Some(out.hash);
-            r.payouts = pay_out(ledger, &cfg, &m, &ag, std::mem::take(&mut r.payouts))?;
+            r.payouts = pay_out(ledger, &cfg, treasury, &m, &ag, std::mem::take(&mut r.payouts))?;
             r.phase = Phase::Done;
         }
         Ok(Crank {
@@ -617,10 +622,11 @@ fn split(
 }
 
 /// Keepers in the accepted quorum and agents whose posts counted split their
-/// shares equally; whatever is left of the fee is burned from escrow.
+/// shares equally; whatever is left of the fee moves from escrow to `treasury`.
 fn pay_out(
     ledger: &mut Ledger,
     cfg: &RequestConfig,
+    treasury: &str,
     m: &Market,
     ag: &AgentSnapshot,
     mut p: Payouts,
@@ -636,9 +642,9 @@ fn pay_out(
         .chain(&p.cranks)
         .map(|(_, v)| v)
         .sum();
-    p.burned = cfg.fee - paid;
-    if p.burned > 0 {
-        ledger.burn(REQUEST_ESCROW, p.burned)?;
+    p.treasury = cfg.fee - paid;
+    if p.treasury > 0 {
+        ledger.ft_transfer(REQUEST_ESCROW, treasury, p.treasury)?;
     }
     Ok(p)
 }
@@ -726,7 +732,7 @@ mod tests {
         assert_eq!(Requests::new(bad).unwrap_err(), Error::BadRequestConfig);
         let free = RequestConfig { fee: 0, ..CFG };
         assert_eq!(Requests::new(free).unwrap_err(), Error::BadRequestConfig);
-        assert_eq!(CFG.crank_bounty(), 2 * ONE);
+        assert_eq!(CFG.crank_bounty(), 10 * ONE / 3);
     }
 
     #[test]
@@ -774,7 +780,7 @@ mod tests {
         assert_eq!(r.phase, Phase::Skipped);
         assert_eq!(w.l.ft_balance_of("req"), 200 * ONE);
         assert_eq!(w.l.ft_balance_of(REQUEST_ESCROW), 0);
-        let crank = w.rq.crank(&mut w.l, &mut w.ag, &w.st, LATE, "c", id, [0; 32], "x");
+        let crank = w.rq.crank(&mut w.l, &mut w.ag, &w.st, LATE, "c", id, [0; 32], "x", "t");
         assert_eq!(crank.unwrap_err(), Error::NotCrankable);
     }
 
@@ -819,7 +825,22 @@ mod tests {
     }
 
     #[test]
-    fn full_lifecycle_runs_five_colonies_and_splits_the_fee() {
+    fn a_removed_keepers_odds_no_longer_count() {
+        let mut w = world();
+        let id = w.rq.request(&mut w.l, 0, "req", SLUG).unwrap();
+        w.rq.post_odds(&w.reg, 1, "k1", id, post(&[6000, 4000]))
+            .unwrap();
+        w.rq.post_odds(&w.reg, 1, "k2", id, post(&[6000, 4000]))
+            .unwrap();
+        w.reg
+            .set_keepers(vec!["k2".into(), "k3".into(), "k4".into()], 2)
+            .unwrap();
+        let r = w.rq.finalize_odds(&mut w.l, &w.reg, 600_000, id).unwrap();
+        assert_eq!(r.phase, Phase::Skipped);
+    }
+
+    #[test]
+    fn full_lifecycle_runs_three_colonies_and_splits_the_fee() {
         let mut w = world();
         let id = forecasting(&mut w);
         let colony = w.rq.get(id).unwrap().colony;
@@ -847,18 +868,20 @@ mod tests {
                 "c1",
                 id,
                 [7; 32],
-                "anto.testnet"
+                "anto.testnet",
+                "t"
             )
             .unwrap_err(),
             Error::PostingStillOpen
         );
         let supply = w.l.ft_total_supply();
+        let treasury0 = w.l.ft_balance_of("t");
         let mut cranks = vec![];
-        for (i, who) in ["c1", "c2", "c1", "c1", "c2"].iter().enumerate() {
+        for (i, who) in ["c1", "c2", "c1"].iter().enumerate() {
             let c =
-                w.rq.crank(&mut w.l, &mut w.ag, &w.st, close, who, id, [7; 32], "anto.testnet")
+                w.rq.crank(&mut w.l, &mut w.ag, &w.st, close, who, id, [7; 32], "anto.testnet", "t")
                     .unwrap();
-            assert_eq!((c.kind, c.drew_seed, c.done), (i, i == 0, i == 4));
+            assert_eq!((c.kind, c.drew_seed, c.done), (i, i == 0, i == 2));
             cranks.push(c);
         }
         let r = w.rq.get(id).unwrap().clone();
@@ -891,7 +914,8 @@ mod tests {
         let want: Vec<_> = again.colonies.iter().map(|c| c.hash).collect();
         assert_eq!(run_hashes, want);
 
-        // Fee 100: keepers 20 over k1, k2; agents 30 over three; cranks 2 a call.
+        // Fee 100: keepers 20 over k1, k2; agents 30 over three; cranks 10/3 a call,
+        // the dust going to the treasury.
         let p = &r.payouts;
         assert_eq!(
             p.keepers,
@@ -899,24 +923,27 @@ mod tests {
         );
         let agent_pay: Vec<u128> = p.agents.iter().map(|x| x.1).collect();
         assert_eq!(agent_pay, vec![10 * ONE; 3]);
-        assert_eq!(p.cranks.len(), 5);
-        assert_eq!(w.l.ft_balance_of("c1"), 6 * ONE);
-        assert_eq!(w.l.ft_balance_of("c2"), 4 * ONE);
-        assert_eq!(p.burned, 40 * ONE);
-        assert_eq!(w.l.ft_total_supply(), supply - 40 * ONE);
+        let bounty = 10 * ONE / 3;
+        let dust = 10 * ONE - 3 * bounty;
+        assert_eq!(p.cranks.len(), 3);
+        assert_eq!(w.l.ft_balance_of("c1"), 2 * bounty);
+        assert_eq!(w.l.ft_balance_of("c2"), bounty);
+        assert_eq!(p.treasury, 40 * ONE + dust);
+        assert_eq!(w.l.ft_balance_of("t"), treasury0 + 40 * ONE + dust);
+        assert_eq!(w.l.ft_total_supply(), supply, "nothing is burned");
         assert_eq!(w.l.ft_balance_of(REQUEST_ESCROW), 0);
         assert_eq!(w.l.ft_balance_of(AGENT_VAULT), 30 * ONE);
         assert_eq!(
-            w.rq.crank(&mut w.l, &mut w.ag, &w.st, close, "c1", id, [7; 32], "x")
+            w.rq.crank(&mut w.l, &mut w.ag, &w.st, close, "c1", id, [7; 32], "x", "t")
                 .unwrap_err(),
             Error::NotCrankable
         );
     }
 
     #[test]
-    fn no_agents_burns_their_share_and_dust() {
+    fn no_agents_sends_their_share_and_dust_to_the_treasury() {
         let mut w = world();
-        // Three keepers agree: 20 over three leaves dust for the burn.
+        // Three keepers agree: 20 over three leaves dust for the treasury.
         let id = w.rq.request(&mut w.l, 0, "req", SLUG).unwrap();
         for k in ["k1", "k2", "k3"] {
             w.rq.post_odds(&w.reg, 1, k, id, post(&[7000, 3000]))
@@ -925,7 +952,7 @@ mod tests {
         w.rq.finalize_odds(&mut w.l, &w.reg, 1, id).unwrap();
         let close = 1 + CFG.forecast_window;
         for _ in 0..CRANKS {
-            w.rq.crank(&mut w.l, &mut w.ag, &w.st, close, "c", id, [1; 32], "x")
+            w.rq.crank(&mut w.l, &mut w.ag, &w.st, close, "c", id, [1; 32], "x", "t")
                 .unwrap();
         }
         let r = w.rq.get(id).unwrap();
@@ -933,7 +960,7 @@ mod tests {
         let each = 20 * ONE / 3;
         assert!(r.payouts.keepers.iter().all(|(_, v)| *v == each));
         assert!(r.payouts.agents.is_empty());
-        assert_eq!(r.payouts.burned, 100 * ONE - 3 * each - 10 * ONE);
+        assert_eq!(r.payouts.treasury, 100 * ONE - 3 * each - 3 * (10 * ONE / 3));
         assert_eq!(w.l.ft_balance_of(REQUEST_ESCROW), 0);
     }
 
@@ -942,7 +969,7 @@ mod tests {
         let seed = |entropy, contract: &str| {
             let mut w = world();
             let id = forecasting(&mut w);
-            w.rq.crank(&mut w.l, &mut w.ag, &w.st, LATE, "c", id, entropy, contract)
+            w.rq.crank(&mut w.l, &mut w.ag, &w.st, LATE, "c", id, entropy, contract, "t")
                 .unwrap();
             w.rq.get(id).unwrap().seed.unwrap()
         };
@@ -998,14 +1025,14 @@ mod tests {
         );
         // Request stakes stay out of the round's snapshot.
         assert!(w.st.snapshot(close).unwrap().entries.is_empty());
-        w.rq.crank(&mut w.l, &mut w.ag, &w.st, close, "c", id, [3; 32], "x")
+        w.rq.crank(&mut w.l, &mut w.ag, &w.st, close, "c", id, [3; 32], "x", "t")
             .unwrap();
         assert_eq!(
             w.rq.unstake(&mut w.st, &mut w.l, close, "a1", colony, 2, ONE),
             Err(Error::Locked)
         );
         for _ in 1..CRANKS {
-            w.rq.crank(&mut w.l, &mut w.ag, &w.st, close, "c", id, [3; 32], "x")
+            w.rq.crank(&mut w.l, &mut w.ag, &w.st, close, "c", id, [3; 32], "x", "t")
                 .unwrap();
         }
         let r = w.rq.get(id).unwrap().clone();
@@ -1036,14 +1063,14 @@ mod tests {
         .unwrap();
         assert_eq!(r.market_hash, Some(again.hash));
         assert_eq!(r.swarm.as_ref(), Some(&again.swarm));
-        // Community voted: the belief isn't the three odds colonies' mean.
-        let three = antosim::market_result(
+        // Community voted: the belief isn't Momentum alone.
+        let alone = antosim::market_result(
             colony,
             again.colonies.clone(),
-            [true, true, true, false, false],
+            [true, false, false],
         )
         .unwrap();
-        assert_ne!(three.hash, again.hash);
+        assert_ne!(alone.hash, again.hash);
         // Done: stakers withdraw, and the request pays them nothing.
         w.rq.unstake(&mut w.st, &mut w.l, close, "a1", colony, 2, 36 * ONE)
             .unwrap();

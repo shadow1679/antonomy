@@ -7,7 +7,7 @@
 // crosscheck.py compares these with Python.
 import {
   run, seedFromInt, sha256, burnRun, forecastRun,
-  FOLLOWER, CONTRARIAN, MOMENTUM, COMMUNITY, AGENTS, forecastMarket, marketColony, N_ANTS, BURN_TICKS,
+  MOMENTUM, COMMUNITY, AGENTS, forecastMarket, marketColony, N_ANTS, BURN_TICKS,
 } from "../js/antosim.mjs";
 
 // Fixtures shared with crosscheck.py and sim/rust/src/bin/dump.rs.
@@ -36,7 +36,7 @@ for (let i = first; i < first + count; i++) {
   console.log(JSON.stringify({
     i, h5: a.hash, h2: b.hash, h3: c.hash, w5: a.winner_option,
     hb: burnRun(seed, BURN_WEIGHTS, STAKE_HASH, 60, 300).hash,
-    hf: small(FOLLOWER), hc: small(CONTRARIAN), hm: small(MOMENTUM), hk: small(COMMUNITY), ha: small(AGENTS),
+    hm: small(MOMENTUM), hk: small(COMMUNITY), ha: small(AGENTS),
     hs: forecastMarket(seed, marketColony(0), ODDS, ODDS_6H, MARKET_WEIGHTS, STAKE_HASH, AGENT_ODDS, AGENT_HASH).hash,
     hy: forecastMarket(seed, marketColony(1), BINARY_ODDS, BINARY_ODDS, [0, 0], new Uint8Array(32), [0, 0], new Uint8Array(32)).hash,
   }));

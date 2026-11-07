@@ -21,7 +21,7 @@ post      posts your odds for request ID (or --colony N for a trending market
           of the round), in basis points, one per outcome, summing to 10000.
           Your odds count once per request; a repost replaces them.
 crank     finalizes the odds or runs the next colony of request ID, whichever
-          is due. Five cranks run the five colonies, one each.
+          is due. Three cranks run the three colonies, one each.
 verify    re-runs request ID with the Python reference sim (sim/python) from
           the seed, odds and agent median the contract stored, and compares
           every colony hash and the market hash. Read-only.
@@ -29,7 +29,7 @@ mcp       serves ask_swarm, post_forecast and verify as an MCP server on
           stdio (JSON-RPC 2.0, one message per line), for any MCP client.
 
 Pay is for work, never for being right: keepers, forecaster agents with
-on-time posts and crankers share the fee, and the rest is burned. Every swarm belief is a forecast, not advice, and not
+on-time posts and crankers share the fee, and the rest goes to the treasury. Every swarm belief is a forecast, not advice, and not
 yet calibrated as a probability. Testnet play token only.
 
 Without --send nothing is signed: the NEAR CLI command goes to stderr and the
@@ -59,7 +59,7 @@ from swarm import RPC, Chain, fetch_beacon, near_call  # noqa: E402
 BPS = 10_000
 ONE = 10**24
 REQUEST_COLONY_BASE = 0x8000     # token/src/request.rs: request id -> colony
-KIND_NAMES = ("Follower", "Contrarian", "Momentum", "Community", "Agents")
+KIND_NAMES = ("Momentum", "Community", "Agents")
 LABEL = "Forecast, not advice. Swarm belief is not yet calibrated as a probability."
 POLL_S = 15
 
@@ -262,7 +262,7 @@ TOOLS = [
         "name": "ask_swarm",
         "description": "Ask the Antonomy ant swarm for a forecast on a Polymarket event, by slug. "
                        "Returns the existing request for that slug, or pays the $ANTO fee for a new one. "
-                       "Once its five colonies are cranked the result has the swarm belief per outcome "
+                       "Once its three colonies are cranked the result has the swarm belief per outcome "
                        "(basis points) and a market hash. A forecast, not advice.",
         "inputSchema": {"type": "object", "properties": {
             "market": {"type": "string", "description": "Polymarket event slug, e.g. fed-decision-in-december"}},

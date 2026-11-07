@@ -38,6 +38,16 @@ const reply = (body, ok = true) => ({ ok, json: async () => body });
   assert.deepEqual(await seedArgs("stake", { colony: 0 }, view, opts), { colony: 0 });
   assert.equal(reads.length, 3);
 }
+// Proving a round for the randomness service takes its round from the call, with no view read.
+{
+  const opts = { fetchFn: async (u) => reply({ round: Number(u.split("/").pop()), signature: SIG }), urls: ["https://x"] };
+  const view = async () => { throw new Error("no read expected"); };
+  assert.deepEqual(await seedArgs("fulfill_randomness", { drand_round: 33 }, view, opts), { drand_round: 33, drand_signature: SIG });
+  // A signature already given is kept; a beacon not out yet leaves the call as given.
+  assert.deepEqual(await seedArgs("fulfill_randomness", { drand_round: 33, drand_signature: "cd" }, view, opts), { drand_round: 33, drand_signature: "cd" });
+  const none = { fetchFn: async () => reply({}, false), urls: ["https://x"] };
+  assert.deepEqual(await seedArgs("fulfill_randomness", { drand_round: 34 }, view, none), { drand_round: 34 });
+}
 // A contract without drand_round, a failed read or a missing beacon: the call goes as given.
 {
   const none = { fetchFn: async () => reply({}, false), urls: ["https://x"] };

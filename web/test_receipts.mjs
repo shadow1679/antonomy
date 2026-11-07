@@ -16,13 +16,13 @@ assert.equal(round8, loaded);
 assert.equal(round7, loaded.previous);
 assert.equal(roundFromChain(loaded, 3), null, "the chain keeps only two rounds");
 
-// Issuing reads the chain: seed, 5 colony hashes, one market hash.
+// Issuing reads the chain: seed, 3 colony hashes, one market hash.
 const receipt = issueReceipt(loaded, 7, "antonomy-oracle.testnet");
 assert.equal(receipt.spec, SPEC);
 assert.equal(receipt.round, 7);
 assert.equal(receipt.seed, a.run.seed);
-assert.equal(receipt.colonies.length, 5);
-assert.deepEqual(receipt.colonies.map((c) => c.key), ["m0-follower", "m0-contrarian", "m0-momentum", "m0-community", "m0-agents"]);
+assert.equal(receipt.colonies.length, 3);
+assert.deepEqual(receipt.colonies.map((c) => c.key), ["m0-momentum", "m0-community", "m0-agents"]);
 assert.deepEqual(receipt.colonies.map((c) => c.hash), a.run.markets[0].colony_hashes);
 assert.deepEqual(receipt.markets, [{ market: 0, hash: a.run.markets[0].market_hash }]);
 assert.equal(issueReceipt(loaded).round, 8, "default: the newest round with a result");
@@ -30,7 +30,7 @@ assert.equal(issueReceipt(loaded).round, 8, "default: the newest round with a re
 // An honest receipt checks out on every row, whether the round is current or previous.
 const ok = await checkReceipt(parseReceipt(JSON.stringify(receipt)), round7);
 assert.equal(ok.ok, true);
-assert.equal(ok.rows.length, 1 + 5 + 1);
+assert.equal(ok.rows.length, 1 + 3 + 1);
 assert.ok(ok.rows.every((r) => r.state === "match"));
 assert.equal((await checkReceipt(issueReceipt(loaded, 8), round8)).ok, true);
 
@@ -41,10 +41,10 @@ assert.ok(wrongRound.rows.every((r) => r.state === "mismatch"));
 
 // One flipped hex digit in one colony is caught, and only that row fails.
 const bad = structuredClone(receipt);
-bad.colonies[2].hash = flip(bad.colonies[2].hash);
+bad.colonies[1].hash = flip(bad.colonies[1].hash);
 const res = await checkReceipt(bad, round7);
 assert.equal(res.ok, false);
-assert.deepEqual(res.rows.filter((r) => r.state !== "match").map((r) => r.key), ["m0-momentum"]);
+assert.deepEqual(res.rows.filter((r) => r.state !== "match").map((r) => r.key), ["m0-community"]);
 
 // A tampered market hash and a tampered seed are caught too.
 const badMarket = structuredClone(receipt);
@@ -92,7 +92,7 @@ for (const text of ["", "[]", "null", "{", JSON.stringify({ ...receipt, spec: "A
 // The progress callback sees every cranked colony once, in order.
 const seen = [];
 await checkReceipt(receipt, round7, { onColony: (s, i, n) => seen.push([s.name, i, n]) });
-assert.deepEqual(seen.map((x) => x[0]), ["Follower", "Contrarian", "Momentum", "Community", "Agents"]);
-assert.ok(seen.every((x, i) => x[1] === i && x[2] === 5));
+assert.deepEqual(seen.map((x) => x[0]), ["Momentum", "Community", "Agents"]);
+assert.ok(seen.every((x, i) => x[1] === i && x[2] === 3));
 
 console.log("receipts ok");

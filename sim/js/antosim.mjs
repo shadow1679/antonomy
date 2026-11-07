@@ -30,10 +30,13 @@ const VERSION = enc.encode(SIM_VERSION);
 const BPS = 10000;
 const MOMENTUM_FLOOR = 200;
 const COMMUNITY_BASE = 2500; // milli sqrt-tokens
+// Burn colony: per-mille factor on each menu option's food weight, base and
+// stakes alike, so a bigger daily pot needs more stake to win.
+export const BURN_HANDICAP = [1000, 875, 750, 625, 500];
 const ODDS_TAG = enc.encode("ANTO-ODDS-v0");
 const ZERO32 = new Uint8Array(32);
-export const FOLLOWER = 0, CONTRARIAN = 1, MOMENTUM = 2, COMMUNITY = 3, AGENTS = 4;
-export const KINDS = [FOLLOWER, CONTRARIAN, MOMENTUM, COMMUNITY, AGENTS];
+export const MOMENTUM = 0, COMMUNITY = 1, AGENTS = 2;
+export const KINDS = [MOMENTUM, COMMUNITY, AGENTS];
 
 // --- Forecast colonies ---
 export const FORECAST_ANTS = 60, FORECAST_TICKS = 300;
@@ -122,7 +125,7 @@ function scaleRichness(weights) {
 
 // Food weights -> Q8 richness proportional to the weight, the richest source
 // at the band's top (1.3) and a zero weight at 0: the odds-driven colonies
-// (Follower, Contrarian, Momentum, Agents), so their trail shares track their food.
+// (Momentum, Agents), so their trail shares track their food.
 function oddsScale(weights) {
   const top = Math.max(...weights);
   if (!(top > 0)) throw new RangeError("all food weights are zero");
@@ -134,19 +137,15 @@ function checkOdds(odds, odds6h) {
   for (const o of [...odds, ...odds6h]) if (!Number.isInteger(o) || o < 0 || o > BPS) throw new RangeError("odds out of range");
 }
 
-// Per-option Q8 richness for Follower, Contrarian or Momentum. odds and odds6h
-// are basis points per outcome now and six hours ago.
+// Per-option Q8 richness for the Momentum colony. odds and odds6h are basis
+// points per outcome now and six hours ago.
 export function oddsRichness(kind, odds, odds6h) {
   checkOdds(odds, odds6h);
-  let w;
-  if (kind === FOLLOWER) w = [...odds];
-  else if (kind === CONTRARIAN) w = odds.map((o) => Math.floor((BPS - o) / 4));
-  else if (kind === MOMENTUM) w = odds.map((o, i) => Math.max(o + 2 * (o - odds6h[i]), MOMENTUM_FLOOR));
-  else throw new RangeError("kind must be FOLLOWER, CONTRARIAN or MOMENTUM");
-  return oddsScale(w);
+  if (kind !== MOMENTUM) throw new RangeError("kind must be MOMENTUM");
+  return oddsScale(odds.map((o, i) => Math.max(o + 2 * (o - odds6h[i]), MOMENTUM_FLOOR)));
 }
 
-// Per-option Q8 richness from stake weights (Burn and Community colonies):
+// Per-option Q8 richness from stake weights (the Community colony; the Burn colony uses burnRichness):
 // per option, the sum over wallets of sqrt(tokens staked) in milli-units, each < 2^32.
 export function stakeRichness(weights) {
   if (weights.length < 2 || weights.length > 5) throw new RangeError("bad weights length");
@@ -154,8 +153,17 @@ export function stakeRichness(weights) {
   return scaleRichness(weights.map((x) => COMMUNITY_BASE + x));
 }
 
-// Per-option Q8 richness for the Agents colony: the Follower rule on the
-// forecaster agents' per-outcome median odds (basis points). All zeros means
+// Per-option Q8 richness for the Burn colony: stakeRichness with each menu
+// option's food weight (flat base plus stakes) scaled by BURN_HANDICAP, so the
+// bigger daily pots are harder to win however much is staked.
+export function burnRichness(weights) {
+  if (weights.length !== 5) throw new RangeError("bad weights length");
+  for (const x of weights) if (!Number.isInteger(x) || x < 0 || x > 0xffffffff) throw new RangeError("stake weight out of u32 range");
+  return scaleRichness(weights.map((x, i) => Math.floor(((COMMUNITY_BASE + x) * BURN_HANDICAP[i]) / 1000)));
+}
+
+// Per-option Q8 richness for the Agents colony: the odds themselves as food
+// weights, on the forecaster agents' per-outcome median odds (basis points). All zeros means
 // no agent posted, and the map is even.
 export function agentRichness(agentOdds) {
   if (agentOdds.length < 2 || agentOdds.length > 5) throw new RangeError("bad agent odds length");
@@ -416,14 +424,15 @@ export function run(seed, n = 5, richness = null, ants = N_ANTS, ticks = TICKS, 
   return c.result();
 }
 
-// Burn colony: five menu options, richness from the Burn colony's stakes.
+// Burn colony: five menu options, richness from the Burn colony's stakes with
+// the bigger pots handicapped (burnRichness).
 export function burnRun(seed, weights, stakeHash, ants = N_ANTS, ticks = TICKS) {
-  return run(seed, 5, stakeRichness(weights), ants, ticks, stakeHash);
+  return run(seed, 5, burnRichness(weights), ants, ticks, stakeHash);
 }
 
 // One forecaster on one market. Community reads `weights` (that market's
-// stakes), Agents reads `agentOdds` (the forecaster agents' median odds) and the
-// others read the odds snapshot. Every forecaster commits the stake snapshot
+// stakes), Agents reads `agentOdds` (the forecaster agents' median odds) and
+// Momentum reads the odds snapshot. Every forecaster commits the stake snapshot
 // hash; the second commitment is the odds snapshot hash, except for Agents,
 // which commits `agentHash` (the agent-odds snapshot) instead.
 export function forecastRun(seed, kind, odds, odds6h, weights = null, stakeHash = ZERO32,
@@ -467,21 +476,21 @@ export function trailShares(result) {
   return shares;
 }
 
-// Which of the five forecasters (KINDS order) count in the swarm belief. A
+// Which of the three forecasters (KINDS order) count in the swarm belief. A
 // colony with no input abstains: Community when nobody staked on the market,
 // Agents when no agent posted. It still runs, on an even map, and its hash is
 // still committed; an even map is not a belief.
-export const voters = (weights, agentOdds) => [true, true, true, weights.some((x) => x > 0), agentOdds.some((o) => o > 0)];
+export const voters = (weights, agentOdds) => [true, weights.some((x) => x > 0), agentOdds.some((o) => o > 0)];
 
-// Combine the five forecaster runs (in KINDS order) of one market. counted:
-// five booleans from voters(). Swarm belief per option is the floored mean of
+// Combine the three forecaster runs (in KINDS order) of one market. counted:
+// three booleans from voters(). Swarm belief per option is the floored mean of
 // the counted colonies' trail shares; the remainder goes to the option with
 // the largest sum (lowest index on ties).
-// Market hash = sha256(tag, colony u16, n u8, five colony hashes, swarm u16 each).
+// Market hash = sha256(tag, colony u16, n u8, three colony hashes, swarm u16 each).
 export function marketResult(colony, runs, counted) {
   if (runs.length !== KINDS.length) throw new RangeError("need one run per kind");
-  if (!Array.isArray(counted) || counted.length !== KINDS.length || !counted[0] || !counted[1] || !counted[2]) {
-    throw new RangeError("counted: five booleans from voters()");
+  if (!Array.isArray(counted) || counted.length !== KINDS.length || !counted[0]) {
+    throw new RangeError("counted: three booleans from voters()");
   }
   const shares = runs.map(trailShares);
   const n = shares[0].length, k = counted.filter(Boolean).length;
@@ -501,7 +510,7 @@ export function marketResult(colony, runs, counted) {
   };
 }
 
-// The five forecasters on one market, each on its own map. colony: the
+// The three forecasters on one market, each on its own map. colony: the
 // market's colony id (marketColony(m)). weights: that colony's stake weights,
 // one per outcome (zeros when nobody staked). agentOdds, agentHash: the
 // forecaster agents' per-outcome median odds and the agent-odds snapshot hash

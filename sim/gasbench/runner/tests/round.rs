@@ -1,10 +1,10 @@
 //! The round and the faucet on the product contract in a local NEAR sandbox:
 //! play tokens from the faucet, keepers post the trending market, a wallet
-//! stakes on it, an agent posts, five cranks run the market's colonies with
+//! stakes on it, an agent posts, three cranks run the market's colonies with
 //! the stake and agent inputs, then `start_round` refunds the stake and opens
 //! the next round. Gas of every call. The Burn colony cannot be tested here:
 //! it only runs from 12:00 to 24:00 UTC and the sandbox clock is real time
-//! (see `docs/FEATURES.md` for the testnet measurement). Build first:
+//! (its gas is measured on testnet). Build first:
 //!
 //!   cargo near build non-reproducible-wasm --manifest-path contract/Cargo.toml
 //!   cargo test --release --manifest-path sim/gasbench/runner/Cargo.toml --test round -- --nocapture
@@ -143,14 +143,14 @@ async fn round_with_stake_agent_and_faucet() -> Res<()> {
         worst = worst.max(g);
         let v: Value = r.json()?;
         let n = v["markets"][0]["colony_hashes"].as_array().unwrap().len();
-        println!("  crank_round            {g:7.2} TGas  ({n} of 5)");
+        println!("  crank_round            {g:7.2} TGas  ({n} of 3)");
         if v["done"] == true {
             last = Some(v);
             break;
         }
     }
     let v = last.ok_or("round never finished")?;
-    println!("  five cranks            {total:7.2} TGas in total, worst {worst:.2} TGas");
+    println!("  three cranks           {total:7.2} TGas in total, worst {worst:.2} TGas");
 
     // The browser's native run matches the chain.
     let m = &v["markets"][0];

@@ -13,16 +13,16 @@
 <main>
   <section class="hero container" aria-labelledby="hero-title">
     <div class="hero__copy">
-      <p class="eyebrow">Ant Colony Oracle · NEAR testnet</p>
+      <p class="eyebrow"><span class="anto-mark">$ANTO</span> · Ant Colony Oracle · NEAR testnet</p>
       <h1 id="hero-title">The trending market, <span class="hero__accent">forecast by ants.</span></h1>
-      <p class="lede">Each round the swarm takes Polymarket's trending market, posted on-chain by keepers, and runs five ant colonies on it inside a NEAR testnet contract from one public seed. Their trails become a swarm belief, set beside the market's odds. $ANTO holders and AI agents steer two of the colonies, and every result has a hash you can check in your browser.</p>
+      <p class="lede">Each round the swarm takes Polymarket's trending market, posted on-chain by keepers, and runs three ant colonies on it inside a NEAR testnet contract from one public seed. Their trails become a swarm belief, set beside the market's odds. $ANTO holders and AI agents steer two of the colonies, and every result has a hash you can check in your browser.</p>
       <div class="cluster hero__actions">
         <a class="btn btn--primary btn--lg" href="live.html">Watch the live colonies</a>
-        <a class="btn btn--lg" href="#start">Start here</a>
+        <a class="btn btn--lg" href="#anto">Get $ANTO</a>
       </div>
       <dl class="hero__facts">
         <div><dt>Forecasters per market</dt><dd class="num">5</dd></div>
-        <div><dt>Public seed per round</dt><dd class="num">1</dd></div>
+        <div><dt>$ANTO burned so far</dt><dd class="num" id="hf-burned">…</dd></div>
         <div><dt>Languages, one hash</dt><dd class="num">3</dd></div>
       </dl>
     </div>
@@ -36,19 +36,41 @@
       <p class="text-xs text-faint" id="hl-id" style="margin: 0 0 var(--space-3)"></p>
       <p class="text-sm text-muted" id="hl-empty" hidden></p>
       <div class="sim-frame" id="hl-frame">
-        <canvas id="hl-map" width="1080" height="720" aria-label="The Follower colony for this market, live"></canvas>
+        <canvas id="hl-map" width="1080" height="720" aria-label="The Momentum colony for this market, live"></canvas>
         <div class="sim-frame__hud">
-          <span class="sim-frame__tick">Follower · tick <strong id="hl-tick">0000</strong>/<span id="hl-ticks">0300</span></span>
+          <span class="sim-frame__tick">Momentum · tick <strong id="hl-tick">0000</strong>/<span id="hl-ticks">0300</span></span>
           <span class="sim-frame__tick" id="hl-leader">no trail yet</span>
         </div>
       </div>
       <ul class="belief" id="hl-belief" aria-label="Swarm belief per outcome"></ul>
       <figcaption class="hero__foot">
         <span class="tag-forecast">Forecast · not advice</span>
-        <ul class="belief-key" id="hl-key"><li class="belief-key__swarm">swarm belief, all five</li><li class="belief-key__market">market odds</li></ul>
-        <a class="hero__go" id="hl-open" href="live.html#forecasts">Open all five colonies →</a>
+        <ul class="belief-key" id="hl-key"><li class="belief-key__swarm">swarm belief, all three</li><li class="belief-key__market">market odds</li></ul>
+        <a class="hero__go" id="hl-open" href="live.html#forecasts">Open all three colonies →</a>
       </figcaption>
     </figure>
+  </section>
+
+  <section class="page-section" id="anto" aria-labelledby="anto-title">
+    <div class="container">
+      <div class="section-head">
+        <h2 id="anto-title"><span class="anto-mark">$ANTO</span>: drop sugar</h2>
+        <span class="chip">play token · NEAR testnet</span>
+        <a class="what spacer" href="docs.html#stakes">How stakes work</a>
+      </div>
+      <p class="section-sub">The swarm's token. Stake it and a colony forages your way, spend it and the swarm works for you, and every day a colony picks how much of it burns. Nothing mints after launch, so the supply only goes down.</p>
+      <div class="anto">
+        <dl class="anto__facts" id="anto-facts" aria-live="polite"><div><dt>Reading the contract…</dt><dd class="num">…</dd></div></dl>
+        <div class="chamber anto__me" id="anto-me"><p class="text-sm text-muted">Reading the contract…</p></div>
+      </div>
+      <ol class="anto__uses">
+        <li><h3>Steer a forecast</h3><p>Stake on an outcome of a round's market and its Community colony's food follows the stakes. Weight is the square root: four times the tokens, twice the ants.</p><a href="live.html#forecasts">Pick a market →</a></li>
+        <li><h3>Steer the daily pot</h3><p>Stake on a pot size for the daily Burn colony. At 24:00 UTC its pick, <span id="au-burn-range">0.10% to 2.00% of the treasury</span>, pays the stakers on that size a small share and burns the rest for good.</p><a href="burn.html#sugar">Drop sugar →</a></li>
+        <li><h3>Recruit the swarm</h3><p>Pay <b class="num" id="au-fee">a fee</b> for a forecast on any open market. Keepers, agents and crankers are paid from it for their work; <span id="au-fee-burn">the rest goes to the treasury</span>.</p><a href="recruit.html#request">Make a request →</a></li>
+        <li><h3>Forecast as an agent</h3><p>Lock a refundable <b class="num" id="au-deposit">deposit</b> to post your own odds into each market's Agents colony, and earn a share of request fees for the work.</p><a href="docs.html#recruit-tool">The agent tool →</a></li>
+      </ol>
+      <p class="section-sub anto__note">Stakers get no payouts for being right, and nothing here is for sale: $ANTO is a play token on NEAR testnet, handed out free by the faucet.</p>
+    </div>
   </section>
 
   <section class="page-section" id="colonies" aria-labelledby="colonies-title">
@@ -58,16 +80,16 @@
         <span class="tag-forecast">Forecast · not advice</span>
         <a class="what spacer" href="docs.html#forecasts">The details</a>
       </div>
-      <p class="section-sub">They forecast what Polymarket is trading most right now. Every round, a trending market goes in, five colonies forage on it inside the contract, and a swarm belief comes out that anyone can re-run.</p>
+      <p class="section-sub">They forecast what Polymarket is trading most right now. Every round, a trending market goes in, three colonies forage on it inside the contract, and a swarm belief comes out that anyone can re-run.</p>
       <ol class="steps steps--four">
         <li><h3>A trending market</h3><p>A keeper (a trusted, allow-listed account) reads Polymarket's open markets by 24-hour volume and takes the first busy enough to matter: $100k traded in a day, $50k liquidity, ending in 1 to 90 days, no outcome above 97%. Markets about violence, deaths or private people are filtered out.</p></li>
         <li><h3>Odds on-chain</h3><p>Several keepers post the market's odds independently. The contract takes the median per outcome and stores a hash of each raw API response, so the pages read odds from the chain, never from Polymarket.</p></li>
-        <li><h3>Five colonies forage</h3><p>After staking closes and the agents' window ends, anyone cranks the contract: the first call draws the round's seed (the block's random seed, a stand-in for the drand commit) and each call runs one colony. The seed draws a map for each colony. Every outcome is a food pile, its richness set by that colony's input. 60 ants lay pheromone for 300 ticks; the outcome holding the most trail over the run wins that colony.</p></li>
-        <li><h3>One swarm belief</h3><p>The colonies' trail shares are averaged into a swarm belief per outcome, shown next to the market odds. A market hash pins the five results, and your browser can re-run them and compare.</p></li>
+        <li><h3>Three colonies forage</h3><p>After staking closes and the agents' window ends, anyone cranks the contract: the first call draws the round's seed (the block's random seed, a stand-in for the drand commit) and each call runs one colony. The seed draws a map for each colony. Every outcome is a food pile, its richness set by that colony's input. 60 ants lay pheromone for 300 ticks; the outcome holding the most trail over the run wins that colony.</p></li>
+        <li><h3>One swarm belief</h3><p>The colonies' trail shares are averaged into a swarm belief per outcome, shown next to the market odds. A market hash pins the three results, and your browser can re-run them and compare.</p></li>
       </ol>
 
-      <h3 class="sub-head">Five forecasters, one market <span class="text-xs text-faint" id="fx-market"></span></h3>
-      <ul class="forecasters" id="forecasters" aria-label="The five forecasters, live on the market above"></ul>
+      <h3 class="sub-head">Three forecasters, one market <span class="text-xs text-faint" id="fx-market"></span></h3>
+      <ul class="forecasters" id="forecasters" aria-label="The three forecasters, live on the market above"></ul>
       <p class="section-sub forecasters__note">The market comes from the contract (the keepers' pick), and its title is derived from the Polymarket event id the contract stores. To forecast any open market, <a href="recruit.html#request">recruit the swarm</a>.</p>
     </div>
   </section>
@@ -84,7 +106,7 @@
         <li data-step="watch"><a class="chamber tour__card" href="live.html#forecasts">
           <span class="tour__n" aria-hidden="true"></span>
           <h3>Watch a forecast</h3>
-          <p>Open the round's market and watch its five colonies forage on their own maps, replayed from the on-chain seed. Their average trail share is the swarm belief.</p>
+          <p>Open the round's market and watch its three colonies forage on their own maps, replayed from the on-chain seed. Their average trail share is the swarm belief.</p>
           <span class="tour__go">Open a market →<span class="tour__state"></span></span>
         </a></li>
         <li data-step="follow"><a class="chamber tour__card" href="replay.html">
@@ -96,7 +118,7 @@
         <li data-step="sugar"><a class="chamber tour__card" href="burn.html#sugar">
           <span class="tour__n" aria-hidden="true"></span>
           <h3>Drop sugar on the burn</h3>
-          <p>Stake play tokens on a burn size for the daily Burn colony and preview how your sugar tilts it. Testnet only; a wallet signs the stake.</p>
+          <p>Stake play tokens on a pot size for the daily Burn colony and preview how your sugar tilts it. Testnet only; a wallet signs the stake.</p>
           <span class="tour__go">Drop sugar →<span class="tour__state"></span></span>
         </a></li>
         <li data-step="recruit"><a class="chamber tour__card" href="recruit.html#request">
@@ -121,7 +143,7 @@
       <div class="roles">
         <div class="chamber roles__card">
           <p class="eyebrow">Hold $ANTO</p>
-          <h3>Feed the swarm</h3>
+          <h3>Drop sugar</h3>
           <p>Play-token stakes steer each market's Community colony and the daily Burn colony, which picks a burn from a fixed menu capped at 2%. Weight is the square root of the stake, so four times the tokens hatch twice the ants. Stakers get no payouts for being right.</p>
           <div class="cluster">
             <a class="btn btn--sm" href="burn.html">Open Burn</a>
@@ -158,18 +180,21 @@ import { ColonyView } from "./ds/colony-view.mjs";
 import { ColonyThumb } from "./ds/colony-thumb.mjs";
 import { GLYPHS } from "./round.mjs";
 import { loadRound } from "./roundchain.mjs";
-import { $, pad4, installCopy, liveShares, beliefBoard, shareBars, leaderHTML, topbar, footer } from "./ui.mjs";
+import { $, esc, pad4, installCopy, liveShares, beliefBoard, shareBars, leaderHTML, topbar, footer, refreshTokenChip } from "./ui.mjs";
+import { chain, wallet } from "./chain.mjs";
+import { loadToken, tokenFacts, fmtAnto, nextStep } from "./token.mjs";
+import { potAmounts } from "./burn.mjs";
 
 $("topbar").outerHTML = topbar("home");
 $("footer").outerHTML = footer();
 installCopy();
 
-const REPLAY_TPS = 30; // the colonies already ran on-chain; the page plays them back at this pace
+const LIVE_TPS = 12; // the colonies already ran on-chain; the page plays them back at 1× (12 ticks/s), faster speeds are on the replay page
 
 // ---- Hero: the round's first market, read from the contract. The round
 // shown is the current one once its colonies have run, else the previous
 // finished one, else the current market before any run (odds only: there is no
-// seed, so no map yet). The map is the Follower colony, replayed from the seed.
+// seed, so no map yet). The map is the Momentum colony, replayed from the seed.
 
 const view = new ColonyView($("hl-map"), { labels: [], glyphs: GLYPHS });
 view.selected = -1; // nobody followed here; Live and Replay do that
@@ -178,17 +203,15 @@ let round, m, cols = [], thumbs = [], starts = [], visible = true, busy = true, 
 // ---- What the colonies do: one card per forecaster, its colony drawn
 // small (the same colonies as the hero) with its live leader. Short rules
 // here; Docs has the long version.
-const READS = ["market odds", "market odds", "market odds and their 6-hour move", "$ANTO stakes", "AI agents' odds"];
+const READS = ["market odds and their 6-hour move", "$ANTO stakes", "AI agents' odds"];
 const RULES = [
-  "Trusts the market: the likelier an outcome, the richer its food.",
-  "Thinks the crowd is overconfident: the underdogs get the richer food.",
   "Rides the trend: food is the odds plus twice their change over six hours, with a 2% floor so no outcome starves.",
   "Ignores the odds: food follows what holders staked, each wallet weighted by the square root of its tokens.",
-  "Reads registered AI agents' own posted odds, their median per outcome, with the Follower rule.",
+  "Reads registered AI agents' own posted odds, their median per outcome: the likelier an outcome, the richer its food.",
 ];
-const NAMES = ["Follower", "Contrarian", "Momentum", "Community", "Agents"];
-const ABSTAIN = { 3: "Nobody staked on this market, so Community has no input and sits out of the swarm belief.",
-  4: "No forecaster agent posted, so Agents has no input and sits out of the swarm belief." };
+const NAMES = ["Momentum", "Community", "Agents"];
+const ABSTAIN = { 1: "Nobody staked on this market, so Community has no input and sits out of the swarm belief.",
+  2: "No forecaster agent posted, so Agents has no input and sits out of the swarm belief." };
 
 const forecasterHTML = (k, f) => `
   <li class="chamber forecaster">
@@ -255,7 +278,7 @@ function build(r) {
       : r.phase === "skipped" ? "This round was skipped: no quorum of keepers posted a market." : "The odds are on-chain. The colonies run when someone cranks the contract; their maps appear here then.";
   }
   $("hl-status").textContent = live
-    ? (m.done ? `✓ chain result · ${label}` : `${m.cranked} of 5 cranked · ${label}`)
+    ? (m.done ? `✓ chain result · ${label}` : `${m.cranked} of ${NAMES.length} cranked · ${label}`)
     : `${label} · ${r.phase}`;
   busy = true;
   forecasters();
@@ -284,7 +307,7 @@ function frame(perf) {
     let running = false;
     cols.forEach((col, k) => {
       if (!m.forecasters[k].cranked) return;
-      const exact = Math.min(col.ticks, ((now - starts[k]) / 1000) * REPLAY_TPS), target = Math.floor(exact);
+      const exact = Math.min(col.ticks, ((now - starts[k]) / 1000) * LIVE_TPS), target = Math.floor(exact);
       const fx = target - col.t <= 2;
       while (col.t < target) {
         col.step();
@@ -350,6 +373,75 @@ $("tour-reset").addEventListener("click", () => { write(new Set()); tour(); });
 addEventListener("pageshow", tour); // coming back with the back button
 addEventListener("storage", (e) => { if (e.key === TOUR_KEY) tour(); });
 tour();
+
+// ---- $ANTO: the token's facts from the contract, and what the connected
+// wallet holds or can claim. The request fee and agent deposit come from the
+// contract's request config.
+
+let tokenBusy = false;
+async function token() {
+  let t, cfg = null;
+  try {
+    [t, cfg] = await Promise.all([loadToken({ account: wallet.accountId }), chain.requestConfig().catch(() => null)]);
+  } catch { return; }
+  const facts = tokenFacts(t);
+  if (facts.length) {
+    $("anto-facts").innerHTML = facts.map(([k, v, note]) =>
+      `<div><dt>${esc(k)}</dt><dd class="num">${esc(v)}</dd><dd class="anto__fact-note">${esc(note)}</dd></div>`).join("");
+  }
+  if (t.burned != null) $("hf-burned").textContent = fmtAnto(t.burned);
+  if (cfg) {
+    const treasuryBps = 10_000 - cfg.keeper_bps - cfg.agent_bps - cfg.crank_bps;
+    $("au-fee").textContent = `${fmtAnto(cfg.fee)} $ANTO`;
+    $("au-fee-burn").textContent = treasuryBps > 0 ? `the other ${treasuryBps / 100}% goes to the treasury` : "none of it goes to the treasury";
+    $("au-deposit").textContent = `${fmtAnto(cfg.agent_deposit)} $ANTO`;
+  }
+  if (t.treasury != null) {
+    $("au-burn-range").textContent = `0.10% to 2.00% of the treasury (${fmtAnto(potAmounts(t.treasury, 0).pot)} to ${fmtAnto(potAmounts(t.treasury, 4).pot)} $ANTO today)`;
+  }
+  const faucet = t.faucet != null ? `${fmtAnto(t.faucet)} $ANTO` : "play $ANTO";
+  const step = nextStep(t);
+  const me = $("anto-me");
+  if (step === "connect") {
+    me.innerHTML = `<p class="eyebrow">Your $ANTO</p>
+      <p class="anto__me-big num">${faucet}</p>
+      <p class="text-sm text-muted">free from the faucet, once per testnet account: enough to stake, request a forecast or register as an agent.</p>
+      <button class="btn" type="button" data-act="connect">Connect a wallet to claim</button>
+      <p class="text-xs text-faint" data-r="msg" role="status"></p>`;
+  } else {
+    const m = t.me;
+    me.innerHTML = `<p class="eyebrow">Your $ANTO · <code>${esc(m.account)}</code></p>
+      <p class="anto__me-big num">${m.balance != null ? fmtAnto(m.balance) : "…"} <small>$ANTO</small></p>
+      <p class="text-sm text-muted">${m.staked ? `${fmtAnto(m.staked)} $ANTO staked across the colonies.` : "Nothing staked yet."}${step === "claim" ? ` The faucet still owes this account ${faucet}.` : ""}</p>
+      ${step === "claim" ? `<button class="btn btn--primary" type="button" data-act="claim">Claim ${faucet}</button>`
+        : `<div class="cluster"><a class="btn btn--sm" href="live.html#forecasts">Stake on a market</a><a class="btn btn--sm btn--ghost" href="burn.html#sugar">Stake on the burn</a></div>`}
+      <p class="text-xs text-faint" data-r="msg" role="status"></p>`;
+  }
+}
+
+$("anto-me").addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-act]");
+  if (!btn || tokenBusy) return;
+  tokenBusy = true;
+  btn.disabled = true;
+  try {
+    if (btn.dataset.act === "connect") await wallet.connect();
+    else {
+      await wallet.call("claim_play_tokens");
+      refreshTokenChip();
+    }
+    await token();
+  } catch (err) {
+    const msg = $("anto-me").querySelector('[data-r="msg"]');
+    if (msg) msg.textContent = `Not sent: ${String(err.message || err).slice(0, 140)}`;
+    btn.disabled = false;
+  } finally {
+    tokenBusy = false;
+  }
+});
+wallet.onChange(() => token());
+token();
+setInterval(() => { if (!document.hidden) token(); }, 60_000);
 </script>
 </body>
 </html>

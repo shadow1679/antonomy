@@ -38,10 +38,10 @@ const truth = forecastMarket(seed, 1, mv.odds, mv.odds_6h, weights, stakeBytes, 
 const hashes = truth.colonies.map((c) => c.hash);
 
 const run = (n) => ({
-  round: 4, seed: seedHex, stake_hash: stakeHash, done: n === 5,
+  round: 4, seed: seedHex, stake_hash: stakeHash, done: n === 3,
   markets: [{
-    colony: 1, weights, agents, colony_hashes: hashes.slice(0, n), crankers: ["c.testnet", "c.testnet", "d.testnet", "d.testnet", "c.testnet"].slice(0, n),
-    swarm: n === 5 ? truth.swarm : null, market_hash: n === 5 ? truth.hash : null,
+    colony: 1, weights, agents, colony_hashes: hashes.slice(0, n), crankers: ["c.testnet", "d.testnet", "c.testnet"].slice(0, n),
+    swarm: n === 3 ? truth.swarm : null, market_hash: n === 3 ? truth.hash : null,
   }],
 });
 const status = (phase, extra = {}) => ({ round: 4, phase, close_at_ms: 1_000, publish_at_ms: 2_000, markets: [mv], run: null, ...extra });
@@ -94,36 +94,36 @@ assert.equal(slugTitle("20260617190323537"), "Polymarket event 20260617190323537
   assert.equal(m.cranked, 2);
   assert.equal(m.done, false);
   assert.equal(m.swarm, null);
-  assert.deepEqual(m.forecasters.map((f) => f.cranked), [true, true, false, false, false]);
-  assert.deepEqual(m.forecasters.map((f) => f.counted), [true, true, true, true, true]);
+  assert.deepEqual(m.forecasters.map((f) => f.cranked), [true, true, false]);
+  assert.deepEqual(m.forecasters.map((f) => f.counted), [true, true, true]);
   const v = await verifyMarket(m);
-  assert.deepEqual(v.colonies.map((c) => c.state), ["match", "match", "pending", "pending", "pending"]);
+  assert.deepEqual(v.colonies.map((c) => c.state), ["match", "match", "pending"]);
   assert.equal(v.market, null);
   assert.equal(v.ok, true);
 }
 
 // ---- done: every hash, the market hash and the swarm belief reproduce
 {
-  const r = buildRound(status("done", { run: run(5) }));
+  const r = buildRound(status("done", { run: run(3) }));
   const m = r.markets[0];
   assert.equal(m.done, true);
   assert.deepEqual(m.swarm, truth.swarm);
-  assert.equal(r.all.length, 5);
+  assert.equal(r.all.length, 3);
   const v = await verifyRound(r);
   assert.equal(v.ok, true);
-  assert.equal(v.rows.length, 6);
+  assert.equal(v.rows.length, 4);
   assert.ok(v.rows.every((x) => x.state === "match"), JSON.stringify(v.rows.map((x) => x.state)));
   assert.equal(v.markets[0].market.hashOk, true);
   assert.equal(v.markets[0].market.swarmOk, true);
 
   // One wrong colony hash is caught, and the market hash fails with it.
-  const bad = run(5);
-  bad.markets[0].colony_hashes[3] = "0".repeat(64);
+  const bad = run(3);
+  bad.markets[0].colony_hashes[1] = "0".repeat(64);
   const vb = await verifyRound(buildRound(status("done", { run: bad })));
   assert.equal(vb.ok, false);
   assert.deepEqual(vb.rows.filter((x) => x.state === "mismatch").map((x) => x.kind), ["colony"]);
   // A wrong swarm belief is caught even when every colony matches.
-  const badSwarm = run(5);
+  const badSwarm = run(3);
   badSwarm.markets[0].swarm = [3333, 3333, 3334];
   const vs = await verifyMarket(buildRound(status("done", { run: badSwarm })).markets[0]);
   assert.equal(vs.ok, false);
@@ -137,19 +137,19 @@ assert.equal(slugTitle("20260617190323537"), "Polymarket event 20260617190323537
     colony: 1, weights: [0, 0, 0], agents: { odds: [0, 0, 0], hash: "0".repeat(64), posts: [] },
     colony_hashes: quiet.colonies.map((c) => c.hash), crankers: [], swarm: quiet.swarm, market_hash: quiet.hash }] };
   const m = buildRound(status("done", { run: rn })).markets[0];
-  assert.deepEqual(m.forecasters.map((f) => f.counted), [true, true, true, false, false]);
+  assert.deepEqual(m.forecasters.map((f) => f.counted), [true, false, false]);
   assert.equal((await verifyMarket(m)).ok, true);
 }
 
 // ---- the previous round shows while the current one has no run
 {
-  const last = { markets: [mv], run: run(5) };
+  const last = { markets: [mv], run: run(3) };
   const r = buildRound(status("posting", { round: 5 }), last);
   assert.equal(r.id, 5);
   assert.equal(r.previous.id, 4);
   assert.equal(r.shown, r.previous);
   assert.equal(r.previous.markets[0].key, "p0");
-  assert.equal(r.previous.markets[0].forecasters[0].key, "p0-follower");
+  assert.equal(r.previous.markets[0].forecasters[0].key, "p0-momentum");
   assert.equal((await verifyRound(r.previous)).ok, true);
   // Once the current round runs, it is the one shown.
   const r2 = buildRound(status("running", { round: 5, run: run(1) }), last);

@@ -16,6 +16,36 @@ const tok = (n) => {
 const rgb = (hex) => { const v = parseInt(hex.slice(1), 16); return [v >> 16, (v >> 8) & 255, v & 255]; };
 const css = ([r, g, b], a = 1) => `rgba(${r | 0},${g | 0},${b | 0},${a})`;
 
+// Idle scouts, before the seed: where scout i of a colony kind is at t
+// seconds, as an offset in cells from the nest. Pure functions of the clock
+// (no colony, no sim RNG); each path hints at the colony's rule, and none
+// says anything about the market.
+export const SCOUTS = 9;
+const out = (a) => (1 - Math.cos(a)) / 2; // 0 at the nest, 1 at the far end
+const IDLE = [
+  // Momentum: the whole band surges one way, and the way drifts.
+  (i, t) => {
+    const h = 1.3 * Math.sin(t * 0.21) + (i - (SCOUTS - 1) / 2) * 0.09, d = 20 * out(t * 0.8 - i * 0.35);
+    return [d * Math.cos(h), d * Math.sin(h) * 0.7];
+  },
+  // Community: crowding the nest, waiting for stakes.
+  (i, t) => {
+    const a = t * (i % 2 ? 0.35 : -0.45) + i * 2.1, d = 3.2 + (i % 3) * 1.7;
+    return [d * Math.cos(a), d * Math.sin(a) * 0.8];
+  },
+  // Agents: three squads, each on its own loop.
+  (i, t) => {
+    const j = i % 3, h = (j / 3) * TAU + t * 0.05, a = t * 0.7 + j * 2.1 - Math.floor(i / 3) * 0.2;
+    const d = 15 * out(a), s = 4 * Math.sin(a);
+    return [d * Math.cos(h) - s * Math.sin(h), (d * Math.sin(h) + s * Math.cos(h)) * 0.75];
+  },
+];
+export function idleScout(kind, i, t) {
+  const [x, y] = IDLE[kind % IDLE.length](i, t);
+  // A little jitter, so the paths don't look drawn with a ruler.
+  return [x + 0.5 * Math.sin(t * 2.3 + i * 1.9), y + 0.5 * Math.cos(t * 1.9 + i * 2.7)];
+}
+
 export class ColonyThumb {
   constructor(canvas, { glyphs }) {
     this.cv = canvas;
@@ -83,20 +113,51 @@ export class ColonyThumb {
     ctx.beginPath(); ctx.arc((NEST_X + 0.5) * S, (NEST_Y + 0.5) * S, S * 2, 0, TAU); ctx.stroke();
   }
 
-  // Before the seed there is no map yet: the bare plot and its nest, no food,
-  // no ants. Needs no colony.
-  drawIdle() {
-    const { ctx, cv, S, c } = this;
+  // The bare plot, painted once: soil and a faint grid.
+  paintBare() {
+    const b = document.createElement("canvas");
+    b.width = this.cv.width; b.height = this.cv.height;
+    const g = b.getContext("2d"), { S, c } = this;
     const nx = (NEST_X + 0.5) * S, ny = (NEST_Y + 0.5) * S;
-    const g = ctx.createRadialGradient(nx, ny, 0, nx, ny, cv.width * 0.6);
-    g.addColorStop(0, tok("--soil-700"));
-    g.addColorStop(1, c.bg);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, cv.width, cv.height);
-    ctx.fillStyle = css(c.bone, 0.16);
+    const grad = g.createRadialGradient(nx, ny, 0, nx, ny, b.width * 0.6);
+    grad.addColorStop(0, tok("--soil-700"));
+    grad.addColorStop(1, c.bg);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, b.width, b.height);
+    g.fillStyle = css(c.bone, 0.16);
     const d = Math.max(1, S * 0.6);
-    for (let y = 3; y < H; y += 6) for (let x = 3; x < W; x += 6) ctx.fillRect(x * S, y * S, d, d);
-    this.nest(0.5);
+    for (let y = 3; y < H; y += 6) for (let x = 3; x < W; x += 6) g.fillRect(x * S, y * S, d, d);
+    this.bare = b;
+  }
+
+  // Before the seed there is no map yet: the bare plot, the nest breathing,
+  // and a few scouts idling in the colony's own way (idleScout). No food and
+  // no trail, since nothing has been read. Needs no colony; t is in seconds.
+  // Under reduced motion it is one still frame.
+  drawIdle(kind = 0, t = performance.now() / 1000) {
+    const { ctx, S, c } = this;
+    const still = this.motion.matches;
+    if (still) t = 4;
+    if (!this.bare) this.paintBare();
+    ctx.drawImage(this.bare, 0, 0);
+    this.nest(still ? 0.5 : 0.42 + 0.14 * Math.sin(t * 2.2));
+    const r = Math.max(1, S * 0.6);
+    // Two faint steps behind each scout, then the scout.
+    for (const lag of still ? [0] : [0.24, 0.12, 0]) {
+      const rr = lag ? r * 0.7 : r;
+      ctx.beginPath();
+      for (let i = 0; i < SCOUTS; i++) {
+        const [dx, dy] = idleScout(kind, i, t - lag);
+        // Shrinks to nothing at the nest's mouth, going in or coming out.
+        const k = Math.min(1, Math.hypot(dx, dy) / 3);
+        if (k < 0.15) continue;
+        const x = (NEST_X + 0.5 + dx) * S, y = (NEST_Y + 0.5 + dy) * S;
+        ctx.moveTo(x + rr * k, y);
+        ctx.arc(x, y, rr * k, 0, TAU);
+      }
+      ctx.fillStyle = css(c.bone, lag ? 0.32 - lag : 0.9);
+      ctx.fill();
+    }
   }
 
   // frac (0..1) places ants between the last two ticks.

@@ -5,10 +5,18 @@
 // snapshot against the hash the run committed to. Reads and writes of the
 // contract are in burnchain.mjs.
 
-import { sha256, BURN_TICKS } from "../sim/js/antosim.mjs";
+import { sha256, BURN_TICKS, burnRichness, stakeRichness } from "../sim/js/antosim.mjs";
 
-export const ONE = 10n ** 24n;                     // yocto per token
-export const BURN_MENU_BPS = [10, 25, 50, 100, 200]; // token/src/burn.rs
+export const ONE = 10n ** 24n;                       // yocto per token
+// The daily pot (token/src/burn.rs): the colony picks a pot size; its reward
+// part goes to the stakers on that size and the rest is burned.
+export const POT_MENU_BPS = [10, 25, 50, 100, 200];  // 0.10% to 2.00% of the treasury
+export const REWARD_MENU_BPS = [8, 10, 12, 14, 16];  // 0.08% to 0.16%
+// The sim's handicap on each size (antosim BURN_HANDICAP), per mille.
+export { BURN_HANDICAP } from "../sim/js/antosim.mjs";
+// How often the colony picked each size with nobody staking, in percent: measured
+// over 300 days of 43,200 ticks (+-3 points). Stakes on a size raise its chance.
+export const BURN_BASE_PICK_PCT = [24, 22, 22, 15, 17];
 export const DAY_MS = 86_400_000;
 export const STAKING_MS = DAY_MS - BURN_TICKS * 1000; // 00:00 to 12:00 UTC
 export const BURN_COLONY = 0;
@@ -16,12 +24,27 @@ export const N_OPTIONS = 5;
 const SIM_WEIGHT_DIV = 10n ** 9n;                  // token/src/stake.rs: 1 token has isqrt 10^12
 const SNAPSHOT_TAG = new TextEncoder().encode("ANTO-STAKE-v0");
 
-// floor(treasury × bps / 10000) in base units, as burn_amount in token/src/burn.rs.
-export function burnAmount(treasury, index) {
-  const bps = BURN_MENU_BPS[index];
+// The pot of menu entry `index` in base units, as pot_amounts in
+// token/src/burn.rs: pot and reward each floor(treasury × bps / 10000), the
+// burn part the pot less the reward.
+export function potAmounts(treasury, index) {
+  const bps = POT_MENU_BPS[index];
   if (bps === undefined) throw new RangeError("bad burn index");
-  return (treasury * BigInt(bps)) / 10_000n;
+  const t = BigInt(treasury);
+  const pot = (t * BigInt(bps)) / 10_000n, reward = (t * BigInt(REWARD_MENU_BPS[index])) / 10_000n;
+  return { pot, reward, burn: pot - reward };
 }
+// The burn part alone.
+export const burnAmount = (treasury, index) => potAmounts(treasury, index).burn;
+
+// The first burn day run under the daily-pot rules, whose sim handicaps the
+// bigger pots (burnRichness). Earlier days ran with plain stakeRichness and
+// burned the whole pot. The colony is built at a day's 12:00 UTC, so this is
+// the day of the redeploy if it landed before 12:00, else the day after.
+export const HANDICAP_FROM_DAY = 20755;
+export const potRules = (day) => day >= HANDICAP_FROM_DAY;
+// Per-option richness for burn day `day` from its stake weights.
+export const burnRichnessFor = (day, weights) => (potRules(day) ? burnRichness(weights) : stakeRichness(weights));
 
 // Whole tokens with thousands separators (rounded down).
 export const fmtTokens = (base) => (BigInt(base) / ONE).toLocaleString("en");
@@ -137,7 +160,8 @@ export function snapshotTotals(entries, n = N_OPTIONS) {
 }
 
 // ---- burn events (contract logs) ----
-// `EVENT burn day=<d> index=<i> amount=<yocto> stakes=<hash>`,
+// `EVENT burn day=<d> index=<i> amount=<yocto burned> reward=<yocto> stakes=<hash>`
+// (no `reward=` before the daily pot),
 // `EVENT burn_run_done day=<d> winner=<i> hash=<hash>`,
 // `EVENT burn_seed day=<d> seed=<hex> stakes=<hash>`.
 
@@ -150,7 +174,9 @@ export function parseBurnLogs(logs) {
     const f = kv(m[2]);
     const day = Number(f.day);
     if (!Number.isSafeInteger(day)) continue;
-    if (m[1] === "burn" && /^\d+$/.test(f.amount ?? "") && /^\d$/.test(f.index ?? "")) out.burn = { day, index: Number(f.index), amount: BigInt(f.amount), stakes: f.stakes ?? null };
+    if (m[1] === "burn" && /^\d+$/.test(f.amount ?? "") && /^\d$/.test(f.index ?? "")) {
+      out.burn = { day, index: Number(f.index), amount: BigInt(f.amount), reward: /^\d+$/.test(f.reward ?? "") ? BigInt(f.reward) : 0n, stakes: f.stakes ?? null };
+    }
     else if (m[1] === "burn_run_done") out.done = { day, winner: Number(f.winner), hash: f.hash ?? null };
     else out.seed = { day, seed: f.seed ?? null, stakes: f.stakes ?? null };
   }

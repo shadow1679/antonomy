@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Antonomy · daily burn</title>
+<title>Antonomy · Burn: the daily pot</title>
 <link rel="stylesheet" href="app.css">
 <style>
   .scent-table th, .scent-table td { padding-inline: var(--space-2); }
@@ -24,11 +24,14 @@
   <div class="page-head container">
     <div class="page-head__split">
       <div class="page-head__title">
-        <p class="eyebrow">Burn colony · one run a day</p>
-        <h1>One burn a day. The ants pick the size.</h1>
+        <p class="eyebrow">Burn colony · testnet play token</p>
+        <h1>One pot a day. The ants pick the size.</h1>
       </div>
-      <p class="lede">Drop sugar on a burn size until 12:00 UTC. The colony then forages until 24:00, and the contract burns what it picks, never more than 2%. <a class="what" href="docs.html#burn">How the burn works</a></p>
+      <p class="lede">Stake on a pot size before 12:00 UTC. The colony picks one at 24:00; its stakers share a small reward and the rest is burned. <a class="what" href="docs.html#burn">How it works</a></p>
     </div>
+  </div>
+
+  <div class="container">
 
     <section class="chamber day-strip" aria-labelledby="dc-title">
       <div class="day-strip__id">
@@ -40,17 +43,17 @@
         <ol class="day-steps" id="dc-steps">
           <li><span class="num">00:00</span> stake</li>
           <li><span class="num">12:00</span> seed, run</li>
-          <li><span class="num">24:00</span> burn</li>
+          <li><span class="num">24:00</span> pot pays</li>
         </ol>
       </div>
       <dl class="round-card__clocks">
-        <div><dt id="dc-left-label">Burns in</dt><dd class="num" id="dc-left">…</dd></div>
+        <div><dt id="dc-left-label">Pot pays in</dt><dd class="num" id="dc-left">…</dd></div>
         <div><dt>Treasury</dt><dd class="num" id="dc-treasury">…</dd></div>
       </dl>
       <dl class="day-facts">
-        <div><dt>Last burn</dt><dd id="dc-last"><span class="text-faint">loading…</span></dd></div>
+        <div><dt>Last pot</dt><dd id="dc-last"><span class="text-faint">loading…</span></dd></div>
         <div><dt>Day seed</dt><dd id="dc-seed"></dd></div>
-        <div><dt>History</dt><dd><a href="#history">past burns ↓</a></dd></div>
+        <div><dt>History</dt><dd><a href="#history">past pots ↓</a></dd></div>
       </dl>
     </section>
     <div class="notice notice--danger" id="net-error" role="alert" hidden><p id="net-error-text"></p></div>
@@ -68,6 +71,93 @@
       </div>
     </section>
   </div>
+
+  <section class="page-section" id="sugar" aria-labelledby="sugar-title">
+    <div class="container">
+      <div class="section-head">
+        <h2 id="sugar-title">Stake sugar</h2>
+        <span class="chip" id="sugar-chip">…</span>
+        <a class="what spacer" href="docs.html#sugar">When sugar counts</a>
+      </div>
+      <p class="section-sub" id="sugar-sub"></p>
+      <div class="workbench workbench--controls-first">
+        <div class="workbench__col workbench__col--sticky">
+        <form class="chamber stack" id="form" novalidate>
+          <div class="chamber__header" style="margin: 0">
+            <h3 class="chamber__title">Your sugar</h3>
+            <span class="chip" id="me-chip">no wallet</span>
+          </div>
+          <p class="text-sm text-muted" style="margin: 0" id="me-line">Connect a NEAR testnet wallet to stake. A new wallet claims free play tokens first.</p>
+          <ul class="own-stakes" id="own-stakes" hidden></ul>
+          <fieldset class="option-cards option-cards--list" id="options" style="border: 0; padding: 0; margin-inline: 0; min-width: 0">
+            <legend class="field__label" style="margin-bottom: var(--space-2)">Pot size to back</legend>
+          </fieldset>
+          <div class="stake field">
+            <label class="field__label" for="stake-num">Sugar</label>
+            <div class="stake__row">
+              <input class="range" type="range" id="stake-range" min="0" step="1" aria-label="Sugar amount">
+              <div class="input-group"><input class="input num" type="number" id="stake-num" min="0" step="1"><span class="input-group__suffix">$ANTO</span></div>
+            </div>
+            <dl class="stake__readout">
+              <div><dt>Sugar</dt><dd class="num" id="r-stake">0</dd></div>
+              <div><dt>Weight √</dt><dd class="num is-accent" id="r-weight">0.0</dd></div>
+              <div><dt>Cap used</dt><dd class="num" id="r-cap">0%</dd></div>
+            </dl>
+            <span class="field__hint" id="cap-hint"></span>
+          </div>
+          <div class="cluster">
+            <button class="btn btn--primary" type="submit" id="stake-btn">Connect wallet to stake</button>
+            <button class="btn" type="button" id="drop" disabled>Preview</button>
+            <button class="btn btn--ghost" type="button" id="skip" disabled>Skip to the end</button>
+          </div>
+          <p class="text-xs text-faint" style="margin-bottom: 0" id="rule-line"></p>
+          <p class="text-xs text-faint" style="margin-bottom: 0">Stake sends a real testnet transaction (play tokens). Preview only runs a short colony in your browser and sends nothing. <a class="what" href="docs.html#sugar">More</a></p>
+          <p class="text-xs text-muted" style="margin: 0">Running an agent? <a href="recruit.html">Recruit the swarm</a>: request forecasts, post your own odds or crank the colonies, paid from the fee for the work.</p>
+        </form>
+        </div>
+
+        <div class="workbench__col">
+        <div class="section-head" style="margin: 0">
+          <h3 style="margin: 0" id="map-title">Preview: with and without</h3>
+          <span class="chip" id="run-chip">ready</span>
+        </div>
+        <div class="chamber" role="status" aria-live="polite" id="verdict"><p class="text-sm text-muted" style="margin: 0">Choose an amount to compare both colonies.</p></div>
+        <div class="tiles">
+          <div class="chamber tile" id="side-without">
+            <div class="chamber__header"><h4 class="chamber__title">Without your sugar</h4><span class="eyebrow" data-r="share-tick">tick 0</span></div>
+            <div class="sim-frame">
+              <canvas width="720" height="480" aria-label="Burn colony without your sugar"></canvas>
+              <div class="sim-frame__hud"><span class="sim-frame__tick">tick <strong data-r="tick">0000</strong>/0800</span><span class="sim-frame__tick" data-r="leader">no trail yet</span></div>
+            </div>
+            <ul class="share-bars share-bars--compact" data-r="bars"></ul>
+            <div data-r="result"></div>
+          </div>
+          <div class="chamber tile" id="side-with">
+            <div class="chamber__header"><h4 class="chamber__title">With your sugar</h4><span class="eyebrow" data-r="share-tick">tick 0</span></div>
+            <div class="sim-frame">
+              <canvas width="720" height="480" aria-label="Burn colony with your sugar"></canvas>
+              <div class="sim-frame__hud"><span class="sim-frame__tick">tick <strong data-r="tick">0000</strong>/0800</span><span class="sim-frame__tick" data-r="leader">no trail yet</span></div>
+            </div>
+            <ul class="share-bars share-bars--compact" data-r="bars"></ul>
+            <div data-r="result"></div>
+          </div>
+        </div>
+        <p class="text-xs text-faint" style="margin: 0">Your ants are tinted as <span class="wallet" style="--wallet-hue: 0" id="you-tint">you</span> and glow on the map with your sugar; every other wallet is one grey group, since the contract lists stakers only once the day freezes. One seed is one draw. <a class="what" href="docs.html#sugar">Why</a></p>
+
+        <details class="chamber scent-more">
+          <summary><h4 class="chamber__title">Scent, with and without</h4><span class="eyebrow">food richness per option</span></summary>
+          <div class="table-wrap">
+            <table class="table scent-table">
+              <thead><tr><th scope="col">Option</th><th scope="col" class="num">Weight</th><th scope="col" class="num">+ sugar</th><th scope="col" class="num">Scent</th><th scope="col" class="num">+ sugar</th></tr></thead>
+              <tbody id="scent"></tbody>
+            </table>
+          </div>
+          <p class="text-xs text-faint" style="margin: var(--space-3) 0 0"><span id="sqrt-note"></span> <a class="what" href="docs.html#scent">How to read this</a></p>
+        </details>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <section class="page-section" id="colony" aria-labelledby="colony-title">
     <div class="container">
@@ -150,112 +240,47 @@
     </div>
   </section>
 
-  <section class="page-section" id="sugar" aria-labelledby="sugar-title">
+  <section class="page-section" id="pot" aria-labelledby="pot-title">
     <div class="container">
-      <div class="section-head">
-        <h2 id="sugar-title">Stake sugar</h2>
-        <span class="chip" id="sugar-chip">…</span>
-        <a class="what spacer" href="docs.html#sugar">When sugar counts</a>
-      </div>
-      <p class="section-sub" id="sugar-sub"></p>
-      <div class="workbench workbench--controls-first">
-        <div class="workbench__col workbench__col--sticky">
-        <form class="chamber stack" id="form" novalidate>
-          <div class="chamber__header" style="margin: 0">
-            <h3 class="chamber__title">Your sugar</h3>
-            <span class="chip" id="me-chip">no wallet</span>
-          </div>
-          <p class="text-sm text-muted" style="margin: 0" id="me-line">Connect a NEAR testnet wallet to stake. A new wallet claims free play tokens first.</p>
-          <ul class="own-stakes" id="own-stakes" hidden></ul>
-          <fieldset class="option-cards option-cards--list" id="options" style="border: 0; padding: 0; margin-inline: 0; min-width: 0">
-            <legend class="field__label" style="margin-bottom: var(--space-2)">Burn size to back</legend>
-          </fieldset>
-          <div class="stake field">
-            <label class="field__label" for="stake-num">Sugar</label>
-            <div class="stake__row">
-              <input class="range" type="range" id="stake-range" min="0" step="1" aria-label="Sugar amount">
-              <div class="input-group"><input class="input num" type="number" id="stake-num" min="0" step="1"><span class="input-group__suffix">tANTO</span></div>
-            </div>
-            <dl class="stake__readout">
-              <div><dt>Sugar</dt><dd class="num" id="r-stake">0</dd></div>
-              <div><dt>Weight √</dt><dd class="num is-accent" id="r-weight">0.0</dd></div>
-              <div><dt>Cap used</dt><dd class="num" id="r-cap">0%</dd></div>
-            </dl>
-            <span class="field__hint" id="cap-hint"></span>
-          </div>
-          <div class="cluster">
-            <button class="btn btn--primary" type="submit" id="stake-btn">Connect wallet to stake</button>
-            <button class="btn" type="button" id="drop" disabled>Preview</button>
-            <button class="btn btn--ghost" type="button" id="skip" disabled>Skip to the end</button>
-          </div>
-          <p class="text-xs text-faint" style="margin-bottom: 0" id="rule-line"></p>
-          <p class="text-xs text-faint" style="margin-bottom: 0">Stake sends a real testnet transaction (play tokens). Preview only runs a short colony in your browser and sends nothing. <a class="what" href="docs.html#sugar">More</a></p>
-          <p class="text-xs text-muted" style="margin: 0">Running an agent? <a href="recruit.html">Recruit the swarm</a>: request forecasts, post your own odds or crank the colonies, paid from the fee for the work.</p>
-        </form>
-        </div>
-
-        <div class="workbench__col">
-        <div class="section-head" style="margin: 0">
-          <h3 style="margin: 0" id="map-title">Preview: with and without</h3>
-          <span class="chip" id="run-chip">ready</span>
-        </div>
-        <div class="chamber" role="status" aria-live="polite" id="verdict"><p class="text-sm text-muted" style="margin: 0">Choose an amount to compare both colonies.</p></div>
-        <div class="tiles">
-          <div class="chamber tile" id="side-without">
-            <div class="chamber__header"><h4 class="chamber__title">Without your sugar</h4><span class="eyebrow" data-r="share-tick">tick 0</span></div>
-            <div class="sim-frame">
-              <canvas width="720" height="480" aria-label="Burn colony without your sugar"></canvas>
-              <div class="sim-frame__hud"><span class="sim-frame__tick">tick <strong data-r="tick">0000</strong>/0800</span><span class="sim-frame__tick" data-r="leader">no trail yet</span></div>
-            </div>
-            <ul class="share-bars share-bars--compact" data-r="bars"></ul>
-            <div data-r="result"></div>
-          </div>
-          <div class="chamber tile" id="side-with">
-            <div class="chamber__header"><h4 class="chamber__title">With your sugar</h4><span class="eyebrow" data-r="share-tick">tick 0</span></div>
-            <div class="sim-frame">
-              <canvas width="720" height="480" aria-label="Burn colony with your sugar"></canvas>
-              <div class="sim-frame__hud"><span class="sim-frame__tick">tick <strong data-r="tick">0000</strong>/0800</span><span class="sim-frame__tick" data-r="leader">no trail yet</span></div>
-            </div>
-            <ul class="share-bars share-bars--compact" data-r="bars"></ul>
-            <div data-r="result"></div>
-          </div>
-        </div>
-        <p class="text-xs text-faint" style="margin: 0">Your ants are tinted as <span class="wallet" style="--wallet-hue: 0" id="you-tint">you</span> and glow on the map with your sugar; every other wallet is one grey group, since the contract lists stakers only once the day freezes. One seed is one draw. <a class="what" href="docs.html#sugar">Why</a></p>
-
-        <details class="chamber scent-more">
-          <summary><h4 class="chamber__title">Scent, with and without</h4><span class="eyebrow">food richness per option</span></summary>
+      <div class="section-head"><h2 id="pot-title">Pot sizes</h2></div>
+      <div class="chamber">
+          <div class="chamber__header"><h3 class="chamber__title">The daily pot</h3><span class="chip" id="pot-chip">at today's treasury</span></div>
           <div class="table-wrap">
-            <table class="table scent-table">
-              <thead><tr><th scope="col">Option</th><th scope="col" class="num">Weight</th><th scope="col" class="num">+ sugar</th><th scope="col" class="num">Scent</th><th scope="col" class="num">+ sugar</th></tr></thead>
-              <tbody id="scent"></tbody>
+            <table class="table">
+              <caption class="text-xs text-faint" style="text-align: left">What each size does if the colony picks it: the reward part goes to the stakers on that size (split by stake), the rest is burned. Base chance is the pick rate with no stakes; sugar on a size raises it, the handicap lowers it for bigger pots. Hover a heading for more. $ANTO.</caption>
+              <thead><tr>
+                <th scope="col">Pot</th>
+                <th scope="col" class="num" title="How often the colony picked this size when nobody staked (measured over 300 simulated days, give or take 3 points). Stakes on a size raise its chance.">Base chance</th>
+                <th scope="col" class="num" title="Burned for good if this size is picked: the pot minus its reward part.">Burned</th>
+                <th scope="col" class="num" title="Paid to the wallets staking on this size (split by stake) if it is picked. Stays in the treasury if nobody staked on it.">To its stakers</th>
+                <th scope="col" class="num" title="Scales this size's food in the sim, stakes included, so bigger pots are harder to pick.">Handicap</th>
+              </tr></thead>
+              <tbody id="pot-rows"></tbody>
             </table>
           </div>
-          <p class="text-xs text-faint" style="margin: var(--space-3) 0 0"><span id="sqrt-note"></span> <a class="what" href="docs.html#scent">How to read this</a></p>
-        </details>
         </div>
-      </div>
     </div>
   </section>
 
   <section class="page-section" id="history" aria-labelledby="history-title">
     <div class="container">
       <div class="section-head">
-        <h2 id="history-title">Burn history</h2>
+        <h2 id="history-title">Past pots</h2>
         <span class="chip" id="history-chip">…</span>
         <a class="what spacer" href="docs.html#burn-history">Where the numbers come from</a>
       </div>
       <dl class="stats">
         <div><dt>Burns listed</dt><dd class="num" id="h-days">…</dd></div>
-        <div><dt>Total burned</dt><dd class="num" id="h-burned">…</dd></div>
+        <div><dt title="Everything burned since launch: daily burns and randomness fees. Request fees go to the treasury. Read from the token supply.">Total burned</dt><dd class="num" id="h-burned">…</dd></div>
         <div><dt>Treasury now</dt><dd class="num" id="h-treasury">…</dd></div>
         <div><dt>Token supply</dt><dd class="num" id="h-supply">…</dd></div>
       </dl>
       <div class="table-wrap">
         <table class="table">
-          <caption class="text-xs text-faint" style="text-align: left">The list of burns is read from the nearblocks testnet indexer (history only). Each row's seed, stakes, pick and treasury are read from the contract at the block before that burn; Verify re-runs the 43,200 ticks here and compares the result hash. tANTO, whole tokens.</caption>
+          <caption class="text-xs text-faint" style="text-align: left">The list of burns is read from the nearblocks testnet indexer (history only). Each row's seed, stakes and pick are read from the contract at the block before that burn, and what it burned and paid from the supply and the treasury just before and after it; Verify re-runs the 43,200 ticks here and compares the result hash. Days before the daily pot burned the whole pick. $ANTO, whole tokens.</caption>
           <thead><tr>
             <th scope="col">Day (UTC)</th><th scope="col">Pick</th>
-            <th scope="col" class="num">Burned</th><th scope="col" class="num">Treasury after</th>
+            <th scope="col" class="num">Burned</th><th scope="col" class="num">To stakers</th><th scope="col" class="num">Treasury after</th>
             <th scope="col">Result hash</th><th scope="col">Check</th>
           </tr></thead>
           <tbody id="history-rows"></tbody>
@@ -263,17 +288,35 @@
       </div>
     </div>
   </section>
+  <section class="page-section" id="token">
+    <div class="container">
+      <details class="chamber">
+        <summary class="text-sm">$ANTO facts <span class="chip" id="token-chip">reading the contract…</span></summary>
+        <dl class="stats" style="margin-top: var(--space-4)">
+          <div><dt>Supply</dt><dd class="num" id="t-supply">…</dd></div>
+          <div><dt title="The starting supply less the supply now: daily pots, randomness fees and anything else burned.">Burned since launch</dt><dd class="num" id="t-burned">…</dd></div>
+          <div><dt>Treasury</dt><dd class="num" id="t-treasury">…</dd></div>
+          <div><dt title="Lifetime rewards from the daily pots, summed over every staker.">Paid to stakers</dt><dd class="num" id="t-paid">…</dd></div>
+        </dl>
+        <div style="margin-top: var(--space-4)">
+          <div class="chamber__header"><h3 class="chamber__title">Top earners</h3><span class="chip" id="board-chip">…</span></div>
+          <ol class="own-stakes" id="board"></ol>
+          <p class="text-xs text-faint" style="margin: var(--space-3) 0 0">Rewards are paid for staking on the size the colony picks, not for any forecast. Testnet play token only.</p>
+        </div>
+      </details>
+    </div>
+  </section>
 </main>
 
 <div id="footer"></div>
 
 <script type="module">
-import { trailShares, toHex, stakeRichness, BURN_TICKS, N_ANTS } from "../sim/js/antosim.mjs";
+import { trailShares, toHex, BURN_TICKS, N_ANTS } from "../sim/js/antosim.mjs";
 import { ColonyView } from "./ds/colony-view.mjs";
 import { stakerAnts, walletHue, stakeWeight } from "./ds/staker-ants.mjs";
 import { GLYPHS, BURN_MENU, knownBurnDay, knownBurnDays } from "./round.mjs";
 import {
-  burnAmount, fmtTokens, fmtTokens2, toTokens, dayStart, dayRunAt, dayEndAt, dayDate, shownTick, hexToBytes,
+  potAmounts, burnRichnessFor, BURN_HANDICAP, BURN_BASE_PICK_PCT, fmtTokens, fmtTokens2, toTokens, dayStart, dayRunAt, dayEndAt, dayDate, shownTick, hexToBytes,
   snapshotWeights, snapshotWallets, snapshotTotals, DAY_MS,
 } from "./burn.mjs";
 import {
@@ -281,7 +324,8 @@ import {
 } from "./burnchain.mjs";
 import { sugarPreview, othersWallet, SUGAR_CAP, N_OPTIONS, YOU, OTHERS, SAMPLE_DAY_SEED } from "./sugar.mjs";
 import { TripTracker } from "./autopsy.mjs";
-import { wallet } from "./chain.mjs";
+import { wallet, contractId } from "./chain.mjs";
+import { GENESIS_SUPPLY, fmtAnto } from "./token.mjs";
 import { $, esc, pad4, padTick, hms, hashHTML, installCopy, liveShares, shareBars, leaderHTML, topbar, footer, stakerRoster, wireMapPick, followHTML } from "./ui.mjs";
 
 $("topbar").outerHTML = topbar("burn", `<span class="chip chip--live" id="live-chip">live</span>`);
@@ -295,6 +339,8 @@ const txHref = (tx) => `https://testnet.nearblocks.io/txns/${tx}`;
 const nextFrame = () => new Promise((r) => setTimeout(r, 0));
 const num = (x) => x.toLocaleString("en");
 const zeros = () => new Array(N_OPTIONS).fill(0);
+// "1,234 burned · 80 to its stakers" for a pot at this treasury.
+const potLine = (t, o) => { const p = potAmounts(t, o); return `${fmtTokens(p.burn)} burned · ${fmtTokens(p.reward)} to its stakers`; };
 const CATCH_UP = 3000; // most ticks stepped per frame when the page opens mid-run
 const POLL_MS = 30_000;
 
@@ -349,6 +395,28 @@ function status(text, kind = "info") {
   el.hidden = !text;
 }
 
+// ---- the pot menu, and (folded away) the token's facts and top earners ----
+function renderToken() {
+  const genesis = GENESIS_SUPPLY[contractId()] ?? null;
+  $("t-supply").textContent = st.supply === null ? "—" : `${fmtAnto(st.supply)} $ANTO`;
+  $("t-burned").textContent = genesis !== null && st.supply !== null ? `${fmtAnto(genesis - st.supply)} $ANTO` : "—";
+  $("t-treasury").textContent = st.treasury === null ? "—" : `${fmtAnto(st.treasury)} $ANTO`;
+  $("t-paid").textContent = st.board === null ? "—" : `${fmtAnto(st.board.reduce((a, [, e]) => a + e, 0n))} $ANTO`;
+  $("token-chip").textContent = st.errors.length ? "some reads failed" : "read from the contract";
+  $("pot-rows").innerHTML = st.pot === null
+    ? `<tr><td colspan="5" class="text-sm text-muted">Could not read the pot menu.</td></tr>`
+    : st.pot.map((p, o) => `<tr><th scope="row">${optHTML(o)} <span class="text-faint text-xs">of the treasury</span></th>` +
+      `<td class="num" title="Picked about ${BURN_BASE_PICK_PCT[o]}% of days with no stakes">~${BURN_BASE_PICK_PCT[o]}%</td>` +
+      `<td class="num">${fmtTokens(p.burn)} <span class="text-faint text-xs">${(p.burn_bps / 100).toFixed(2)}%</span></td>` +
+      `<td class="num">${fmtTokens(p.reward)} <span class="text-faint text-xs">${(p.reward_bps / 100).toFixed(2)}%</span></td>` +
+      `<td class="num">×${(BURN_HANDICAP[o] / 1000).toFixed(2)}</td></tr>`).join("");
+  const board = st.board ?? [];
+  $("board-chip").textContent = st.board === null ? "could not read" : `${board.length} ${board.length === 1 ? "wallet" : "wallets"} paid`;
+  $("board").innerHTML = board.length
+    ? board.slice(0, 5).map(([who, e], i) => `<li><span class="num text-faint">${i + 1}</span> <span class="wallet" style="--wallet-hue: ${walletHue(who)}">${esc(who)}</span><span class="num">${fmtAnto(e)} $ANTO</span></li>`).join("")
+    : `<li class="text-sm text-muted">${st.board === null ? "—" : "No pot has paid a staker yet."}</li>`;
+}
+
 function applyState() {
   const v = burnView(st, nowMs());
   const was = bv;
@@ -356,6 +424,7 @@ function applyState() {
   const same = was && was.phase === v.phase && was.day === v.day && was.run?.seed === v.run?.seed;
   if (!same) enterPhase();
   renderDayCard(true);
+  renderToken();
   renderStakePanels();
   renderPrev();
   renderMe();
@@ -369,15 +438,12 @@ function enterPhase() {
   $("stake-view").hidden = running;
   $("run-view").hidden = !running;
   $("wait-actions").hidden = p !== "waiting";
-  // While staking is open, staking is the thing to do, so it comes first;
-  // once the colony runs (or waits for its seed), the colony does.
-  if (p === "staking") root.before($("sugar")); else root.after($("sugar"));
   $("colony-title").textContent = p === "staking" ? "Today's sugar so far" : p === "waiting" ? "Today's colony: waiting for the first crank" : "Today's colony";
   $("colony-chip").textContent = p === "staking" ? "staking open until 12:00 UTC · map at the first crank after 12:00"
     : p === "waiting" ? "stakes frozen at 12:00 UTC · no seed drawn yet"
-    : "on chain, one tick a second, 12:00 to 24:00 UTC · hard cap 2%";
+    : "on chain, one tick a second, 12:00 to 24:00 UTC · pot capped at 2%";
   $("dc-phase").textContent = p === "staking" ? "◌ staking" : p === "waiting" ? "◌ waiting for the crank" : "◌ foraging";
-  $("dc-left-label").textContent = p === "staking" ? "Stakes close in" : "Burns in";
+  $("dc-left-label").textContent = p === "staking" ? "Stakes close in" : "Pot pays in";
   $("dc-date").textContent = longDate(dayStart(bv.day));
   [...$("dc-steps").children].forEach((li, i) => {
     const at = p === "staking" ? 0 : 1;
@@ -441,7 +507,7 @@ function renderStakePanels() {
   if (key === panelKey) return;
   panelKey = key;
   stakers = stakerAnts(wallets, N_ANTS);
-  const rich = stakeRichness(weights);
+  const rich = burnRichnessFor(bv.day, weights);
   const tinted = stakers.rows.reduce((a, x) => a + x.ants, 0);
   const fresh = $("nest").dataset.n === undefined ? 0 : +$("nest").dataset.n;
   let k = 0;
@@ -517,7 +583,7 @@ function colonyPanels(tk) {
   if (follow >= 0) followPanel();
   r("pick-value").innerHTML = lead < 0 ? "no trail yet" : optHTML(lead);
   r("pick-note").textContent = lead < 0 || st.treasury === null ? "Can still change until 24:00 UTC."
-    : `≈ ${fmtTokens(burnAmount(st.treasury, lead))} tANTO if it ended now. Can still change until 24:00 UTC.`;
+    : `≈ ${potLine(st.treasury, lead)} if it ended now ($ANTO). Can still change until 24:00 UTC.`;
   bars(pct);
   chainNote(tk);
   todayRow(lead);
@@ -574,7 +640,7 @@ function renderPrev() {
       `<dt>Day seed</dt><dd>${hashHTML(run.seed, "day seed")}</dd><dt>Stakes</dt><dd>${hashHTML(run.stake_hash, "stake snapshot hash")}</dd>`;
     return;
   }
-  const idx = run.winner_option, amount = st.treasury === null ? null : burnAmount(st.treasury, idx);
+  const idx = run.winner_option;
   $("prev-title").textContent = `The ${date} colony picked`;
   $("prev-chip").textContent = verif.state === "ok" ? "✓ matches the chain" : verif.state === "bad" ? "✗ differs from the chain"
     : verif.state === "running" ? `checking ${verif.pct}%` : verif.state === "error" ? "could not check" : "…";
@@ -583,11 +649,11 @@ function renderPrev() {
     : verif.state === "bad" ? `Re-run here, the result differs from the chain's: ${esc(verif.res.mismatches.join("; "))}.`
     : verif.state === "error" ? `Could not re-run: ${esc(verif.err)}.`
     : `Re-running ${num(run.ticks)} ticks here from the day seed…`;
-  $("prev-body").innerHTML = `<p style="margin: 0 0 var(--space-3); font-size: var(--text-lg)">${optHTML(idx)} of the treasury${amount === null ? "" : `, about <span class="num">${fmtTokens(amount)}</span> tANTO now`}.</p>` +
+  $("prev-body").innerHTML = `<p style="margin: 0 0 var(--space-3); font-size: var(--text-lg)">A ${optHTML(idx)} pot${st.treasury === null ? "" : `: about <span class="num">${potLine(st.treasury, idx)}</span> ($ANTO, at today's treasury)`}.</p>` +
     `<p class="text-sm text-muted" style="margin: 0 0 var(--space-3)">${vtext}</p>` +
-    `<div class="cluster"><button class="btn btn--primary" type="button" data-act="execute" data-day="${run.day}">Send the burn</button>` +
+    `<div class="cluster"><button class="btn btn--primary" type="button" data-act="execute" data-day="${run.day}">Pay the pot</button>` +
     `<a class="btn btn--ghost" href="${replayHref(run.day)}">Replay ↗</a></div>` +
-    `<p class="text-xs text-faint" style="margin: var(--space-3) 0 0">The burn is not sent yet. <code>execute_burn</code> is open to anyone once the day is over: it burns this share of the treasury and pays the day's rewards to the stakers on the winning size.</p>`;
+    `<p class="text-xs text-faint" style="margin: var(--space-3) 0 0">The pot has not been paid yet. <code>execute_burn</code> is open to anyone once the day is over: it burns the pot's burn part and pays its reward part to the stakers on the winning size. Their stakes unlock once it has.</p>`;
   f.innerHTML = `<dt>Day</dt><dd>${esc(date)}</dd><dt>Pick</dt><dd>${optHTML(idx)}</dd>` +
     `<dt>Result hash</dt><dd>${hashHTML(run.result_hash, "result hash")}</dd><dt>Day seed</dt><dd>${hashHTML(run.seed, "day seed")}</dd>` +
     `<dt>Stakes</dt><dd>${hashHTML(run.stake_hash, "stake snapshot hash")}</dd>`;
@@ -673,23 +739,24 @@ function sugarMax() {
 }
 
 function renderMe() {
-  const me = st.me, p = phaseOf(), locked = p !== "staking";
+  const me = st.me, lock = me?.lock ?? null, locked = !!lock?.locked;
+  const until = lock?.day != null ? dayDate(Math.max(lock.day, st.schedule.drawn_day ?? 0)) : null;
   $("me-chip").textContent = me ? me.account : "no wallet";
   const cap = st.cap === null ? null : fmtTokens(st.cap);
   $("me-line").textContent = !me ? "Connect a NEAR testnet wallet to stake. A new wallet claims free play tokens first."
     : !me.claimed ? `${me.account} has not claimed play tokens yet: your first stake claims them (one extra approval), then stakes.`
-    : `Balance ${me.balance === null ? "…" : fmtTokens2(me.balance)} tANTO · locked in stakes ${me.staked === null ? "…" : fmtTokens2(me.staked)}${cap ? ` of the ${cap} cap` : ""}${me.earned ? ` · rewards earned ${fmtTokens2(me.earned)}` : ""}.`;
+    : `Balance ${me.balance === null ? "…" : fmtTokens2(me.balance)} $ANTO · locked in stakes ${me.staked === null ? "…" : fmtTokens2(me.staked)}${cap ? ` of the ${cap} cap` : ""}${me.earned ? ` · rewards earned ${fmtTokens2(me.earned)}` : ""}.`;
   const own = $("own-stakes"), mine = me ? me.stakes : [];
   own.hidden = !mine.some((v) => v > 0n);
   own.innerHTML = mine.map((v, o) => v <= 0n ? "" :
-    `<li>${optHTML(o)} <span class="num">${fmtTokens2(v)} tANTO</span>` +
-    `<button class="btn btn--sm btn--ghost" type="button" data-unstake="${o}" ${locked ? 'disabled title="Burn stakes are locked from 12:00 to 24:00 UTC while the colony runs."' : ""}>Unstake</button></li>`).join("");
-  if (!own.hidden && locked) own.insertAdjacentHTML("beforeend", `<li class="text-xs text-faint">Locked from 12:00 to 24:00 UTC while the colony runs. Unstake opens at 00:00.</li>`);
+    `<li>${optHTML(o)} <span class="num">${fmtTokens2(v)} $ANTO</span>` +
+    `<button class="btn btn--sm btn--ghost" type="button" data-unstake="${o}" ${locked ? 'disabled title="Burn stakes are locked until the pot they count for has paid."' : ""}>Unstake</button></li>`).join("");
+  if (!own.hidden && locked) own.insertAdjacentHTML("beforeend", `<li class="text-xs text-faint">Locked until the ${esc(until ?? "next")} pot has paid, just after 24:00 UTC that day. A stake counts for every day until you take it out.</li>`);
   $("stake-btn").textContent = !me ? "Connect wallet to stake" : "Stake sugar";
   const max = sugarMax();
   stakeNum.max = stakeRange.max = max;
   if (state.tokens > max) setTokens(max);
-  $("cap-hint").textContent = `Weight = √ sugar. You can add up to ${max} tANTO (the cap is ${cap ?? "…"} per wallet across all colonies).`;
+  $("cap-hint").textContent = `Weight = √ sugar. You can add up to ${max} $ANTO (the cap is ${cap ?? "…"} per wallet across all colonies).`;
   $("stake-btn").disabled = !!me && (state.tokens === 0 || max === 0);
   $("r-cap").textContent = st.cap ? `${Math.min(100, Math.round(((me?.staked ? toTokens(me.staked) : 0) + state.tokens) / toTokens(st.cap) * 100))}%` : "—";
 }
@@ -697,8 +764,8 @@ function renderMe() {
 function renderRule() {
   const p = phaseOf(), d = bv.day;
   $("rule-line").textContent = p === "staking"
-    ? `Sugar staked now is frozen at 12:00 UTC and counts for today's colony (${dayDate(d)}). You can unstake until then.`
-    : `Today's stakes froze at 12:00 UTC. Sugar staked now counts from ${dayDate(d + 1)} and is locked until 24:00 UTC.`;
+    ? `Sugar staked now counts for today's pot (${dayDate(d)}) and is locked until that pot pays, just after 24:00 UTC.`
+    : `Today's stakes froze at 12:00 UTC. Sugar staked now counts from ${dayDate(d + 1)} and is locked until that day's pot pays.`;
 }
 
 $("form").addEventListener("submit", async (e) => {
@@ -710,14 +777,14 @@ $("form").addEventListener("submit", async (e) => {
   }
   if (!state.tokens) return;
   const o = state.option, n = state.tokens;
-  const out = await send(`Stake ${n} tANTO on ${BURN_MENU[o]}`, () => stakeSugar(o, n).then((x) => x.outcome));
-  if (out) status(`Staked ${n} tANTO on ${BURN_MENU[o]}. It counts for ${phaseOf() === "staking" ? "today's" : `the ${dayDate(bv.day + 1)}`} colony. Reading the chain again.`, "success");
+  const out = await send(`Stake ${n} $ANTO on ${BURN_MENU[o]}`, () => stakeSugar(o, n).then((x) => x.outcome));
+  if (out) status(`Staked ${n} $ANTO on ${BURN_MENU[o]}. It counts for ${phaseOf() === "staking" ? "today's" : `the ${dayDate(bv.day + 1)}`} colony. Reading the chain again.`, "success");
 });
 $("own-stakes").addEventListener("click", (e) => {
   const b = e.target.closest("[data-unstake]");
   if (!b || !st.me) return;
   const o = +b.dataset.unstake;
-  send(`Unstake ${fmtTokens2(st.me.stakes[o])} tANTO from ${BURN_MENU[o]}`, () => unstakeSugar(o, st.me.stakes[o]));
+  send(`Unstake ${fmtTokens2(st.me.stakes[o])} $ANTO from ${BURN_MENU[o]}`, () => unstakeSugar(o, st.me.stakes[o]));
 });
 // crank_burn and execute_burn buttons anywhere on the page.
 document.addEventListener("click", async (e) => {
@@ -767,15 +834,15 @@ function historyRows() {
   const p = phaseOf(), run = bv.run;
   const today = `<tr data-today><th scope="row">${esc(dayDate(bv.day))} <span class="chip">${p === "staking" ? "staking" : p === "waiting" ? "waiting" : "running"}</span></th>` +
     (p === "staking" ? `<td class="text-faint">seed after 12:00</td>` : p === "waiting" ? `<td class="text-faint">seed not drawn</td>` : `<td></td>`) +
-    `<td class="num text-faint">after 24:00</td><td class="num text-faint">—</td><td class="text-faint">at tick ${num(BURN_TICKS)}</td>` +
+    `<td class="num text-faint">after 24:00</td><td class="num text-faint">—</td><td class="num text-faint">—</td><td class="text-faint">at tick ${num(BURN_TICKS)}</td>` +
     (run ? `<td><a class="btn btn--sm btn--ghost" href="${replayHref(bv.day)}" aria-label="Replay today's colony">Replay ↗</a></td>` : `<td></td>`) + `</tr>`;
   let body = today;
-  if (hist.loading && !hist.rows.length) body += `<tr><td colspan="6" class="text-sm text-muted">Reading past burns…</td></tr>`;
-  else if (!hist.rows.length) body += `<tr><td colspan="6" class="text-sm text-muted">${hist.indexer === false ? `The indexer could not be reached (${esc(hist.error)}), so past burns cannot be listed.` : "No burn has been sent yet. The first one goes out after 24:00 UTC of the first full day."}</td></tr>`;
+  if (hist.loading && !hist.rows.length) body += `<tr><td colspan="7" class="text-sm text-muted">Reading past pots…</td></tr>`;
+  else if (!hist.rows.length) body += `<tr><td colspan="7" class="text-sm text-muted">${hist.indexer === false ? `The indexer could not be reached (${esc(hist.error)}), so past pots cannot be listed.` : st?.lastBurnDay != null ? `The indexer lists no burns, but the contract has executed up to ${esc(dayDate(st.lastBurnDay))}. Those rows come back when the indexer catches up.` : "No pot has been paid yet. The first one goes out after 24:00 UTC of the first full day."}</td></tr>`;
   body += hist.rows.map((x) => {
     const date = dayDate(x.day);
     if (!x.detail) {
-      return `<tr><th scope="row">${esc(date)}</th><td class="text-faint" colspan="3">burn sent; its details could not be read from the archive${x.error ? ` (${esc(x.error)})` : ""}</td><td></td><td><a class="btn btn--sm btn--ghost" href="${txHref(x.tx)}" target="_blank" rel="noopener">Tx ↗</a></td></tr>`;
+      return `<tr><th scope="row">${esc(date)}</th><td class="text-faint" colspan="4">pot paid; its details could not be read from the archive${x.error ? ` (${esc(x.error)})` : ""}</td><td></td><td><a class="btn btn--sm btn--ghost" href="${txHref(x.tx)}" target="_blank" rel="noopener">Tx ↗</a></td></tr>`;
     }
     const c = rowCheck.get(x.tx) ?? (knownBurnDay(x.day)?.verified ? { state: "ok" } : null);
     const chk = c?.state === "ok" ? `<span class="chip" data-state="match">✓ re-run here</span>`
@@ -784,7 +851,7 @@ function historyRows() {
       : x.entries ? `<button class="btn btn--sm btn--ghost" type="button" data-verify="${esc(x.tx)}" aria-label="Verify the ${esc(date)} burn here">Verify</button>`
       : `<span class="text-faint">no stake snapshot</span>`;
     return `<tr><th scope="row">${esc(date)}</th><td>${optHTML(x.index)}</td>` +
-      `<td class="num">${x.burned === undefined ? "—" : fmtTokens(x.burned)}</td><td class="num">${x.after === undefined ? "—" : fmtTokens(x.after)}</td>` +
+      `<td class="num">${x.burned === undefined ? "—" : fmtTokens(x.burned)}</td><td class="num">${x.reward === undefined ? "—" : fmtTokens(x.reward)}</td><td class="num">${x.after === undefined ? "—" : fmtTokens(x.after)}</td>` +
       `<td>${hashHTML(x.hash, `result hash for ${date}`)}</td>` +
       `<td class="cluster">${chk}${x.entries ? `<a class="btn btn--sm btn--ghost" href="${replayHref(x.day)}" aria-label="Replay ${esc(date)}">Replay ↗</a>` : ""}${x.partial ? "" : `<a class="btn btn--sm btn--ghost" href="${txHref(x.tx)}" target="_blank" rel="noopener" aria-label="Transaction for ${esc(date)}">Tx ↗</a>`}</td></tr>`;
   }).join("");
@@ -794,7 +861,7 @@ function historyRows() {
   // The last finished burn, in the day card.
   const y = hist.rows.find((x) => x.detail);
   $("dc-last").innerHTML = !y ? `<span class="text-faint">${hist.loading ? "loading…" : "none yet"}</span>`
-    : `<span>${optHTML(y.index)} <span class="text-faint">· ${y.burned === undefined ? "" : `${fmtTokens(y.burned)} tANTO`}</span></span><a href="#history" aria-label="History of burns">Verify ↓</a>`;
+    : `<span>${optHTML(y.index)} <span class="text-faint">· ${y.burned === undefined ? "" : `${fmtTokens(y.burned)} burned${y.reward ? `, ${fmtTokens(y.reward)} paid` : ""}`}</span></span><a href="#history" aria-label="Past pots">Verify ↓</a>`;
   renderHistoryStats();
   lastT = -1; // refill the today row and the projection
 }
@@ -803,9 +870,13 @@ function renderHistoryStats() {
   if (!st) return;
   const done = hist.rows.filter((x) => x.burned !== undefined);
   $("h-days").textContent = hist.indexer === false && !hist.rows.length ? "?" : hist.rows.length.toLocaleString("en");
-  $("h-burned").textContent = done.length ? `${fmtTokens(done.reduce((a, x) => a + x.burned, 0n))} tANTO` : hist.loading ? "…" : "0 tANTO";
-  $("h-treasury").textContent = st.treasury === null ? "—" : `${fmtTokens(st.treasury)} tANTO`;
-  $("h-supply").textContent = st.supply === null ? "—" : `${fmtTokens(st.supply)} tANTO`;
+  // The token supply is the chain's own record of what has burned; the
+  // indexer's list only covers daily burns and can be empty or behind.
+  const genesis = GENESIS_SUPPLY[contractId()] ?? null;
+  $("h-burned").textContent = genesis !== null && st.supply !== null ? `${fmtAnto(genesis - st.supply)} $ANTO`
+    : done.length ? `${fmtTokens(done.reduce((a, x) => a + x.burned, 0n))} $ANTO` : hist.loading ? "…" : "—";
+  $("h-treasury").textContent = st.treasury === null ? "—" : `${fmtTokens(st.treasury)} $ANTO`;
+  $("h-supply").textContent = st.supply === null ? "—" : `${fmtTokens(st.supply)} $ANTO`;
 }
 
 $("history-rows").addEventListener("click", async (e) => {
@@ -940,7 +1011,7 @@ function scentTable() {
       `<td class="num">${rich(a.richness[o])}</td><td class="num${up ? " is-accent" : ""}">${rich(b.richness[o])}</td></tr>`;
   }).join("");
   $("sqrt-note").textContent = state.tokens
-    ? `${state.tokens} tANTO adds √ = ${(preview.weight / 1000).toFixed(1)} to ${BURN_MENU[state.option]}.`
+    ? `${state.tokens} $ANTO adds √ = ${(preview.weight / 1000).toFixed(1)} to ${BURN_MENU[state.option]}.`
     : "4× the sugar, 2× the weight.";
 }
 
@@ -951,7 +1022,7 @@ function update() {
   reset();
   scentTable();
   $("side-with").querySelector(".chamber__title").textContent =
-    state.tokens ? `With your ${state.tokens} tANTO on ${BURN_MENU[state.option]}` : "With your sugar";
+    state.tokens ? `With your ${state.tokens} $ANTO on ${BURN_MENU[state.option]}` : "With your sugar";
   if (st) {
     const max = sugarMax();
     $("stake-btn").disabled = !!st.me && (state.tokens === 0 || max === 0);
@@ -1039,7 +1110,8 @@ $("wait-actions").hidden = true;
 $("run-view").hidden = true;
 $("stake-view").hidden = false;
 $("stake-scent").innerHTML = `<tr><td colspan="4" class="text-sm text-muted">Reading the contract…</td></tr>`;
-$("history-rows").innerHTML = `<tr><td colspan="6" class="text-sm text-muted">Reading the contract…</td></tr>`;
+$("history-rows").innerHTML = `<tr><td colspan="7" class="text-sm text-muted">Reading the contract…</td></tr>`;
+$("pot-rows").innerHTML = `<tr><td colspan="5" class="text-sm text-muted">Reading the contract…</td></tr>`;
 $("you-tint").style.setProperty("--wallet-hue", walletHue(YOU));
 stakeNum.value = stakeRange.value = 0;
 setInterval(() => { if (!refreshing && Date.now() - loadedAt > POLL_MS) refresh(); }, 5000);

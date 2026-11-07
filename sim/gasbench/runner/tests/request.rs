@@ -1,6 +1,6 @@
 //! Recruit the swarm on the product contract in a local NEAR sandbox: one
 //! requested forecast end to end, with the gas of every call. The point is the
-//! crank: each call runs one forecast colony (60 ants, 300 ticks), and all five
+//! crank: each call runs one forecast colony (60 ants, 300 ticks), and all three
 //! must fit well inside 300 TGas. Build the product wasm first:
 //!
 //!   cargo near build non-reproducible-wasm --manifest-path contract/Cargo.toml
@@ -117,7 +117,7 @@ async fn requested_forecast() -> Res<()> {
     // A holder stakes on the request's colony during the agents' window.
     let _ = call(&cranker, &c, "stake", json!({"colony": colony, "option": 2, "amount": (25 * ONE).to_string()})).await?;
 
-    // Wait out the agents' window, then crank five times.
+    // Wait out the agents' window, then crank three times.
     let mut done = None;
     let mut worst = 0f64;
     let mut total = 0f64;
@@ -140,14 +140,14 @@ async fn requested_forecast() -> Res<()> {
         worst = worst.max(g);
         total += g;
         let v: Value = r.json()?;
-        println!("  crank_request          {g:7.2} TGas  ({} of 5)", v["colony_hashes"].as_array().unwrap().len());
+        println!("  crank_request          {g:7.2} TGas  ({} of 3)", v["colony_hashes"].as_array().unwrap().len());
         if v["phase"] == "done" {
             done = Some(v);
             break;
         }
     }
     let v = done.ok_or("request never finished")?;
-    println!("  five cranks            {total:7.2} TGas in total, worst {worst:.2} TGas");
+    println!("  three cranks           {total:7.2} TGas in total, worst {worst:.2} TGas");
 
     let m = &v["market"];
     let odds: Vec<u16> = serde_json::from_value(m["odds"].clone())?;

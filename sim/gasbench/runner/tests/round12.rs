@@ -103,7 +103,7 @@ async fn a_round_of_twelve_markets() -> Res<()> {
         worst = worst.max(g);
         n += 1;
         let v: Value = r.json()?;
-        if n == 1 || n == 30 || n == 60 {
+        if n == 1 || n == 18 || n == 36 {
             println!("  crank_round #{n:<2}        {g:7.2} TGas");
         }
         if v["done"] == true {
@@ -111,7 +111,7 @@ async fn a_round_of_twelve_markets() -> Res<()> {
             break;
         }
     }
-    assert!(done && n as usize == MARKETS * 5, "round finished after {n} cranks");
+    assert!(done && n as usize == MARKETS * 3, "round finished after {n} cranks");
     println!("  {n} cranks               {total:7.2} TGas in total, worst {worst:.2} TGas");
     assert!(worst < 300.0, "a crank must fit the 300 TGas limit");
 

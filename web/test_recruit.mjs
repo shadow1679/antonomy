@@ -1,6 +1,8 @@
 // Offline tests for the Recruit page's logic (Recruit the swarm): node web/test_recruit.mjs
-// REAL is request #0 on antonomy-oracle.testnet, read from the live contract
-// (worlds-2026-winner, one keeper, one forecaster agent, five cranks).
+// REAL is request #0 on antonomy-oracle.testnet (worlds-2026-winner, one keeper,
+// one forecaster agent). Its inputs, seed and payouts are from the live
+// contract; the colony hashes, swarm, market hash and crank rows were recomputed
+// for three colonies (the testnet contract ran five until it was redeployed).
 import assert from "node:assert/strict";
 import { forecastMarket } from "../sim/js/antosim.mjs";
 import {
@@ -77,27 +79,23 @@ const REAL = {
   },
   "seed": "2c6896734b408ba1cb0c0b8ff446b088085c1189afcda29ed3d1c6e05c4aaafb",
   "colony_hashes": [
-    "7cc4d4befe0891823c917236b73fe4885960f63a5c094f7fcea4712f7c9cb990",
-    "38d854ddaab1ae07001687f362dd031bff0151ac6cae511f71112da9597093c4",
-    "f28d09ff95e2a7b41e95361c05d2dfc09f9cf5a43eed8f6f6e3008b9bf9e742d",
-    "6b49702eeaa4e020f333b5d8f2b67a26501609028693ffff00ce6bc843cf97cf",
-    "dc7de1e72411f449d6d3b6629080e339f210d141e1e6f57a9917396d19a68c0e"
+    "72aa20d788ddaeb9632f99d50a3cbe42aaac341196d176eff35a0b88b4019c5b",
+    "0d6966e007d9248b95a88384e1b0dbb9b2c166206e73da1e4ea8b0ef64428bd3",
+    "ebf761afa0ec53f82d23d2ab8cf504184369fc93e1de90602ba0dfa2079afcbc"
   ],
   "crankers": [
-    "cranker.antonomy-oracle.testnet",
-    "cranker.antonomy-oracle.testnet",
     "cranker.antonomy-oracle.testnet",
     "cranker.antonomy-oracle.testnet",
     "cranker.antonomy-oracle.testnet"
   ],
   "swarm": [
-    3342,
-    1600,
-    2104,
-    1819,
-    1135
+    3409,
+    1457,
+    2690,
+    1702,
+    742
   ],
-  "market_hash": "7094b0ea29ea4cc3eb18fc7a550f23e8ecddce2ef4c64f2d99dd78ca1ffaa438",
+  "market_hash": "ae6c24108df6b4ed00d9e8b47dbd842ddf7e57fe7bd55822260968301c2cc987",
   "paid_keepers": [
     [
       "keeper.antonomy-oracle.testnet",
@@ -113,38 +111,31 @@ const REAL = {
   "paid_cranks": [
     [
       "cranker.antonomy-oracle.testnet",
-      "2000000000000000000000000"
+      "3333333333333333333333333"
     ],
     [
       "cranker.antonomy-oracle.testnet",
-      "2000000000000000000000000"
+      "3333333333333333333333333"
     ],
     [
       "cranker.antonomy-oracle.testnet",
-      "2000000000000000000000000"
-    ],
-    [
-      "cranker.antonomy-oracle.testnet",
-      "2000000000000000000000000"
-    ],
-    [
-      "cranker.antonomy-oracle.testnet",
-      "2000000000000000000000000"
+      "3333333333333333333333333"
     ]
   ],
-  "burned": "40000000000000000000000000"
+  "to_treasury": "40000000000000000000000001"
 };
 
-// request_config as the contract returns it (fee 100, 20/30/10, burn the rest).
+// request_config as the contract returns it (fee 100, 20/30/10, the treasury gets the rest).
 const CFG = parseConfig({
   fee: "100000000000000000000000000", keeper_bps: 2000, agent_bps: 3000, crank_bps: 1000,
   odds_window_ms: 600000, forecast_window_ms: 60000, agent_deposit: "10000000000000000000000000",
-  crank_bounty: "2000000000000000000000000",
+  crank_bounty: "3333333333333333333333333",
 });
 const sum = (rows) => rows.reduce((a, r) => a + r.amount, 0n);
 
-assert.deepEqual(feePools(CFG), { keepers: 20n * ONE, agents: 30n * ONE, crank: 10n * ONE, burn: 40n * ONE });
-assert.equal(CFG.crankBounty * BigInt(CRANK_CALLS), feePools(CFG).crank);
+assert.deepEqual(feePools(CFG), { keepers: 20n * ONE, agents: 30n * ONE, crank: 10n * ONE, treasury: 40n * ONE });
+// The crank pool doesn't split evenly in three: the dust goes to the treasury.
+assert.equal(CFG.crankBounty * BigInt(CRANK_CALLS), feePools(CFG).crank - 1n);
 assert.equal(tokens("100000000000000000000000000"), "100");
 assert.equal(tokens(20n * ONE / 3n), "6.66");
 assert.equal(tokens(40n * ONE + 2n), "40");
@@ -152,25 +143,25 @@ assert.equal(requestColony(0), 0x8000);
 assert.equal(REAL.colony, requestColony(REAL.id));
 
 // ---- the finished real request ----
-assert.equal(cranked(REAL), 5);
+assert.equal(cranked(REAL), 3);
 assert.ok(isOver(REAL));
-// It pays out exactly the fee, and the burn row is what the contract burned.
+// It pays out exactly the fee, and the treasury row is what the contract paid it.
 const rows = payoutRows(REAL);
 assert.equal(sum(rows), BigInt(REAL.fee));
 assert.equal(rows.filter((r) => r.role === "cranker").length, CRANK_CALLS);
-assert.equal(rows.find((r) => r.role === "burn").amount, 40n * ONE);
-assert.ok(!rows.some((r) => r.role === "burn" && r.account));
+assert.equal(rows.find((r) => r.role === "treasury").amount, 40n * ONE + 1n);
+assert.ok(!rows.some((r) => r.role === "treasury" && r.account));
 // Inputs for the colonies: no stakes (Community abstains), the agents voted.
 const spec = specOf(REAL);
 assert.deepEqual(spec.weights, [0, 0, 0, 0, 0]);
 assert.deepEqual(spec.agentOdds.odds, [4000, 2000, 1200, 1200, 1600]);
-assert.deepEqual(countedOf(REAL), [true, true, true, false, true]);
-assert.equal(forecastersOf(REAL).length, 5);
+assert.deepEqual(countedOf(REAL), [true, false, true]);
+assert.equal(forecastersOf(REAL).length, 3);
 // The browser re-run matches the chain: every colony hash, the market hash,
 // the swarm belief and both snapshot hashes.
 const v = verifyRequest(REAL);
 assert.ok(v.ok, JSON.stringify(v));
-assert.equal(v.colonies.length, 5);
+assert.equal(v.colonies.length, 3);
 assert.ok(v.colonies.every((c) => c.match));
 assert.equal(v.market.replay, REAL.market_hash);
 assert.ok(v.swarm && v.oddsHash && v.agentsHash);
@@ -183,8 +174,8 @@ assert.deepEqual(ref.swarm, REAL.swarm);
 // Tampering shows: a wrong colony hash, a wrong market hash, a wrong swarm, a wrong agent post.
 const bad = (f) => verifyRequest(f(structuredClone(REAL)));
 const hit = (x) => x.replace(/^./, (c) => (c === "0" ? "1" : "0"));
-const t1 = bad((r) => (r.colony_hashes[2] = hit(r.colony_hashes[2]), r));
-assert.ok(!t1.ok && !t1.colonies[2].match && t1.colonies[0].match);
+const t1 = bad((r) => (r.colony_hashes[1] = hit(r.colony_hashes[1]), r));
+assert.ok(!t1.ok && !t1.colonies[1].match && t1.colonies[0].match);
 assert.ok(!bad((r) => (r.market_hash = hit(r.market_hash), r)).ok);
 assert.ok(!bad((r) => (r.swarm[0] += 1, r.swarm[1] -= 1, r)).ok);
 assert.ok(!bad((r) => (r.agents.posts[0][1] = [3000, 3000, 1200, 1200, 1600], r)).agentsHash);
@@ -202,13 +193,13 @@ staked.stakes = {
 const sref = forecastMarket(hexToBytes(staked.seed), staked.colony, staked.market.odds, staked.market.odds_6h,
   staked.stakes.weights, hexToBytes(staked.stakes.hash), staked.agents.odds, hexToBytes(staked.agents.hash));
 Object.assign(staked, { colony_hashes: sref.colonies.map((c) => c.hash), market_hash: sref.hash, swarm: sref.swarm });
-assert.deepEqual(countedOf(staked), [true, true, true, true, true]);
+assert.deepEqual(countedOf(staked), [true, true, true]);
 assert.deepEqual(stakesOf(staked).wallets, [{ id: "bob.testnet", stakes: [0, 9, 0, 0, 0] }], "other colonies' entries ignored");
 assert.ok(verifyRequest(staked).ok, JSON.stringify(verifyRequest(staked)));
 assert.notEqual(sref.hash, REAL.market_hash);
 // Dropping the stakes (an old contract's view) no longer matches.
 assert.ok(!verifyRequest({ ...staked, stakes: undefined }).ok);
-// Staking rides the agents' window; withdrawals wait for the fifth colony.
+// Staking rides the agents' window; withdrawals wait for the third colony.
 const win = { ...REAL, phase: "forecasting", forecast_by_ms: 1000 };
 assert.ok(stakingOpen(win, 999) && !stakingOpen(win, 1000));
 assert.ok(!stakesLocked(win, 999) && stakesLocked(win, 1000));
@@ -218,7 +209,7 @@ assert.ok(commands("c.testnet", "a.testnet", "m", 3).signs.stake.includes('"colo
 // A request part-way through: the colonies the chain has run are checked.
 const part = structuredClone(REAL);
 Object.assign(part, { phase: "running", colony_hashes: REAL.colony_hashes.slice(0, 2), crankers: REAL.crankers.slice(0, 2),
-  swarm: null, market_hash: null, paid_keepers: [], paid_agents: [], paid_cranks: [], burned: "0" });
+  swarm: null, market_hash: null, paid_keepers: [], paid_agents: [], paid_cranks: [], to_treasury: "0" });
 const vp = verifyRequest(part);
 assert.ok(vp.ok && vp.colonies.length === 2 && vp.market === null);
 assert.deepEqual(payoutRows(part), []);
@@ -232,7 +223,7 @@ assert.equal(verifyRequest(null).ok, false);
 // No agent posted: the zero snapshot hash still checks out and Agents sits out.
 const noAgents = structuredClone(REAL);
 noAgents.agents = { odds: [0, 0, 0, 0, 0], hash: "0".repeat(64), posts: [] };
-assert.deepEqual(countedOf(noAgents), [true, true, true, false, false]);
+assert.deepEqual(countedOf(noAgents), [true, false, false]);
 const vn = verifyRequest(noAgents);
 assert.ok(vn.agentsHash);
 assert.ok(!vn.ok); // the stored hashes were for the agents' map, so the re-run differs
@@ -241,13 +232,13 @@ assert.ok(!vn.ok); // the stored hashes were for the agents' map, so the re-run 
 const keepers = ["keeper.antonomy-oracle.testnet"];
 const T = REAL.created_at_ms;
 const odds = { ...REAL, phase: "odds", market: null, agents: null, seed: null, colony_hashes: [], crankers: [], swarm: null,
-  market_hash: null, forecast_by_ms: null, keepers_posted: [], paid_keepers: [], paid_agents: [], paid_cranks: [], burned: "0" };
+  market_hash: null, forecast_by_ms: null, keepers_posted: [], paid_keepers: [], paid_agents: [], paid_cranks: [], to_treasury: "0" };
 assert.equal(due(odds, T + 1000), null);
 assert.equal(due(odds, T + 1000, keepers), null);
 assert.equal(due({ ...odds, keepers_posted: keepers }, T + 1000, keepers), "finalize_request_odds"); // all keepers posted
 assert.equal(due(odds, odds.odds_by_ms), "finalize_request_odds");                                    // window over
 const fc = { ...REAL, phase: "forecasting", colony_hashes: [], agents: null, seed: null, crankers: [], swarm: null, market_hash: null,
-  paid_keepers: [], paid_agents: [], paid_cranks: [], burned: "0" };
+  paid_keepers: [], paid_agents: [], paid_cranks: [], to_treasury: "0" };
 assert.equal(due(fc, fc.forecast_by_ms - 1), null);
 assert.ok(agentsMayPost(fc, fc.forecast_by_ms - 1));
 assert.ok(!agentsMayPost(fc, fc.forecast_by_ms));
@@ -257,7 +248,7 @@ assert.equal(due(REAL, Infinity), null);
 assert.ok(!agentsMayPost(REAL, 0));
 
 const states = (r, now) => timeline(r, CFG, now).map((s) => s.state);
-assert.equal(timeline(REAL, CFG).length, 4 + 5 + 1);
+assert.equal(timeline(REAL, CFG).length, 4 + 3 + 1);
 assert.ok(states(REAL).every((s) => s === "done"));
 const s1 = states(odds, T);
 assert.deepEqual(s1.slice(0, 3), ["done", "now", ""]);

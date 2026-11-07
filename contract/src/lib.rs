@@ -22,17 +22,21 @@
 //! odds with `post_request_odds`, anyone calls `finalize_request_odds` (no
 //! quorum skips the request and refunds the fee), registered forecaster agents
 //! (`register_agent`, a refundable deposit) post their own odds with
-//! `post_forecast`, and anyone calls `crank_request` five times, one colony per
+//! `post_forecast`, and anyone calls `crank_request` three times, one colony per
 //! call, for the crank bounty. The first crank draws the seed (see Seeds).
 //! The last pays the fee out.
 //! Agents may also post on the round's trending markets once they are
 //! finalized, until the round's publish time; those posts are frozen when
 //! the round lifecycle lands.
 //!
-//! Rewards: anyone moves play tokens into the pool with `fund_rewards`. When
-//! the colony executes a day's burn, 10% of the pool goes to the Burn colony
-//! stakers on the chosen index in that day's snapshot, pro rata to stake.
-//! Forecast colonies never pay. Testnet play token only.
+//! Daily pot: the Burn colony picks a pot size (0.10% to 2.00% of the
+//! treasury). When a day executes, the pot's reward part (0.08% to 0.16%)
+//! goes from the treasury to the Burn colony stakers on the picked size in
+//! that day's snapshot, pro rata to stake, and the rest is burned
+//! (`antotoken::burn`). Burn stakes lock for a day: they can't be withdrawn
+//! until the pot of every day they count for has paid (`day::burn_stake_locked`;
+//! the newest such day per wallet is kept under `burn-lock:<account>`, outside
+//! the `Contract` struct). Forecast colonies never pay. Testnet play token only.
 //!
 //! Seeds (`drand`): every seed commits to a drand quicknet round fixed by
 //! time, the first one published after the inputs close: after the round's
@@ -41,6 +45,13 @@
 //! `drand_signature`; the contract checks it with NEAR's BLS12-381 host
 //! functions and hashes drand's randomness into the seed. The views name the
 //! round (`drand_round`), and the seed events log it with the randomness.
+//!
+//! Randomness as a service (`antotoken::random`): `request_randomness` burns
+//! a small $ANTO fee and commits to the first drand round published after
+//! the call, plus one. Anyone proves that round with `fulfill_randomness`
+//! (same on-chain BLS check as the seeds), and each request on it reads its own
+//! value, sha256(tag, drand randomness, request id, requester, contract), with
+//! `randomness_value`. State lives under its own storage keys.
 //!
 //! Token standards: NEP-141 with `ft_transfer_call` (the receiver's
 //! `ft_on_transfer` returns what it didn't use, and `ft_resolve_transfer`
@@ -57,18 +68,19 @@
 
 use antotoken::{
     agents::{AgentSnapshot, Agents},
-    burn::BurnExecutor,
+    burn::{pot_amounts, BurnExecutor, POT_MENU_BPS, REWARD_MENU_BPS},
     burnrun::BurnRun,
     day,
     ledger::{Ledger, DECIMALS, SYMBOL},
     market::{Market, MarketPost, Registry},
+    random::RandomRequest,
     request::{Phase, Request, RequestConfig, RequestStakes, Requests},
     reward::Rewards,
     round::{RoundRun, CRANKS_PER_MARKET},
     stake::{hash_hex, Snapshot, StakeConfig, Staking},
     Error,
 };
-use antotoken::antosim::{Colony, BURN_TICKS};
+use antotoken::antosim::{Colony, BURN_COLONY, BURN_TICKS};
 
 mod drand;
 use std::collections::BTreeSet;
@@ -101,7 +113,7 @@ pub struct Contract {
     staking: Staking,
     /// Forecast markets of the round, posted by keepers.
     markets: Registry,
-    /// Play-token reward pool for the Burn colony.
+    /// Lifetime rewards from the Burn colony's daily pots.
     rewards: Rewards,
     /// Requested forecasts (Recruit the swarm).
     requests: Requests,
@@ -132,6 +144,21 @@ pub struct Contract {
 /// Where the Burn colony's bytes are kept, apart from the contract state so
 /// a call that only moves tokens doesn't load them.
 const BURN_COLONY_KEY: &[u8] = b"burn-colony";
+/// Prefix of the per-wallet Burn stake lock: the newest day (u64, big-endian)
+/// the wallet's Burn stakes were placed for (`day::stake_day`).
+const BURN_LOCK_PREFIX: &[u8] = b"burn-lock:";
+
+fn burn_lock_key(who: &str) -> Vec<u8> {
+    [BURN_LOCK_PREFIX, who.as_bytes()].concat()
+}
+
+/// The newest day `who`'s Burn stakes were placed for; `None` for a wallet
+/// that hasn't staked on the Burn colony since the lock was added.
+fn burn_lock_of(who: &str) -> Option<u64> {
+    env::storage_read(&burn_lock_key(who)).map(|b| {
+        u64::from_be_bytes(b.try_into().unwrap_or_else(|_| env::panic_str("bad burn lock")))
+    })
+}
 /// A round whose markets were posted but never cranked is abandoned this long
 /// after its publish time, so a stuck round can't block the next one.
 const ROUND_GRACE_MS: u64 = day::DAY_MS;
@@ -178,6 +205,25 @@ pub struct BurnScheduleView {
     /// published after its 12:00 UTC. The call that starts its run passes
     /// this round's signature.
     pub drand_round: Option<u64>,
+}
+
+/// One entry of the daily pot menu at the current treasury balance. Basis
+/// points of the treasury; `burn + reward` is the pot.
+#[near(serializers = [json])]
+pub struct PotEntryView {
+    pub pot_bps: u32,
+    pub reward_bps: u32,
+    pub burn_bps: u32,
+    pub burn: U128,
+    pub reward: U128,
+}
+
+/// A wallet's Burn stake lock. `day` is the newest day its Burn stakes were
+/// placed for; `locked` is whether they can't be withdrawn now.
+#[near(serializers = [json])]
+pub struct BurnLockView {
+    pub day: Option<u64>,
+    pub locked: bool,
 }
 
 /// One market in a keeper's trending list. `raw_hash` is 64 hex chars.
@@ -257,7 +303,7 @@ impl From<&Market> for MarketView {
     }
 }
 
-/// Fee, its split (basis points; the burn gets the rest), the two posting
+/// Fee, its split (basis points; the treasury gets the rest), the two posting
 /// windows and the agent deposit. Sample values until the split is decided.
 #[near(serializers = [json])]
 pub struct RequestConfigView {
@@ -268,7 +314,7 @@ pub struct RequestConfigView {
     pub odds_window_ms: u64,
     pub forecast_window_ms: u64,
     pub agent_deposit: U128,
-    /// Paid to each of the five crank calls.
+    /// Paid to each of the three crank calls.
     pub crank_bounty: U128,
 }
 
@@ -359,7 +405,8 @@ pub struct RequestView {
     pub paid_keepers: Vec<(AccountId, U128)>,
     pub paid_agents: Vec<(AccountId, U128)>,
     pub paid_cranks: Vec<(AccountId, U128)>,
-    pub burned: U128,
+    /// What was left of the fee, dust included: paid to the treasury.
+    pub to_treasury: U128,
 }
 
 #[near(serializers = [json])]
@@ -426,7 +473,7 @@ impl From<&Request> for RequestView {
             paid_keepers: paid(&r.payouts.keepers),
             paid_agents: paid(&r.payouts.agents),
             paid_cranks: paid(&r.payouts.cranks),
-            burned: U128(r.payouts.burned),
+            to_treasury: U128(r.payouts.treasury),
         }
     }
 }
@@ -574,6 +621,67 @@ pub struct Metadata {
 
 fn ok<T>(r: Result<T, Error>) -> T {
     r.unwrap_or_else(|e| env::panic_str(&format!("{e:?}")))
+}
+
+// Randomness as a service lives under its own storage keys, so the
+// `Contract` struct (and a code-only redeploy over live state) is untouched.
+const RANDOM_COUNT_KEY: &[u8] = b"rand-count";
+const RANDOM_FEE_KEY: &[u8] = b"rand-fee";
+/// What a request burns until `set_randomness_fee` says otherwise: 1 $ANTO.
+const DEFAULT_RANDOM_FEE: u128 = antotoken::ledger::ONE;
+
+fn random_request_key(id: u64) -> Vec<u8> {
+    [b"rand-req:".as_slice(), &id.to_be_bytes()].concat()
+}
+
+/// Empty while the round is pending, 32 bytes of drand randomness once proven.
+fn random_round_key(round: u64) -> Vec<u8> {
+    [b"rand-round:".as_slice(), &round.to_be_bytes()].concat()
+}
+
+fn random_count() -> u64 {
+    env::storage_read(RANDOM_COUNT_KEY)
+        .and_then(|v| <[u8; 8]>::try_from(v).ok())
+        .map_or(0, u64::from_be_bytes)
+}
+
+fn random_fee() -> u128 {
+    env::storage_read(RANDOM_FEE_KEY)
+        .and_then(|v| <[u8; 16]>::try_from(v).ok())
+        .map_or(DEFAULT_RANDOM_FEE, u128::from_be_bytes)
+}
+
+fn write_borsh<T: near_sdk::borsh::BorshSerialize>(key: &[u8], value: &T) {
+    env::storage_write(
+        key,
+        &near_sdk::borsh::to_vec(value).unwrap_or_else(|_| env::panic_str("borsh write")),
+    );
+}
+
+fn read_borsh<T: near_sdk::borsh::BorshDeserialize>(key: &[u8]) -> Option<T> {
+    env::storage_read(key).and_then(|b| near_sdk::borsh::from_slice(&b).ok())
+}
+
+#[near(serializers = [json])]
+pub struct RandomnessView {
+    pub id: u64,
+    pub requester: String,
+    /// The drand round the value is drawn from.
+    pub drand_round: u64,
+    pub requested_at_ms: u64,
+    /// "pending" until the round is proven, then "ready".
+    pub status: String,
+    /// drand's randomness for the round (sha256 of its signature), hex.
+    pub randomness: Option<String>,
+    /// sha256("ANTO-RAND-v1", randomness, id, requester, contract), hex.
+    pub value: Option<String>,
+}
+
+#[near(serializers = [json])]
+pub struct RandomnessConfigView {
+    /// $ANTO burned per request.
+    pub fee: U128,
+    pub tag: String,
 }
 
 #[near]
@@ -841,18 +949,32 @@ impl Contract {
             self.staking
                 .stake(&mut self.ledger, now, who.as_str(), colony, option, amount.0)
         });
+        if colony == BURN_COLONY {
+            let d = day::stake_day(now);
+            if burn_lock_of(who.as_str()).is_none_or(|l| l < d) {
+                env::storage_write(&burn_lock_key(who.as_str()), &d.to_be_bytes());
+            }
+        }
         env::log_str(&format!(
             "EVENT stake {who} colony={colony} option={option} amount={}",
             amount.0
         ));
     }
 
-    /// Allowed while paused so a pause can never trap funds. A requested
-    /// forecast's stakes are locked from the end of its agents' window until
-    /// its last colony has run.
+    /// Allowed while paused so a pause can never trap funds; a pause also
+    /// lifts the Burn lock. A requested forecast's stakes are locked from the
+    /// end of its agents' window until its last colony has run. Burn stakes
+    /// are locked until the pot of every day they count for has paid, or
+    /// until the oldest unpaid pot is a day overdue, so a stalled colony
+    /// holds them for two days at most.
     pub fn unstake(&mut self, colony: u16, option: u8, amount: U128) {
         let who = env::predecessor_account_id();
         let now = env::block_timestamp_ms();
+        if colony == BURN_COLONY && !self.paused
+            && day::burn_stake_locked(now, self.burn.last_day(), burn_lock_of(who.as_str()))
+        {
+            ok(Err::<(), _>(Error::Locked));
+        }
         ok(if Requests::id_of(colony).is_some() {
             self.requests.unstake(
                 &mut self.staking,
@@ -922,7 +1044,37 @@ impl Contract {
         }
     }
 
-    /// Raw stake per option. The reward pot is split by raw stake, so this is
+    /// The daily pot menu at the current treasury balance: what each size
+    /// would burn and pay to its stakers if the colony picked it now.
+    pub fn daily_pot(&self) -> Vec<PotEntryView> {
+        let t = self.ledger.ft_balance_of(self.treasury.as_str());
+        (0..POT_MENU_BPS.len())
+            .map(|i| {
+                let p = ok(pot_amounts(t, i));
+                PotEntryView {
+                    pot_bps: POT_MENU_BPS[i],
+                    reward_bps: REWARD_MENU_BPS[i],
+                    burn_bps: POT_MENU_BPS[i] - REWARD_MENU_BPS[i],
+                    burn: U128(p.burn),
+                    reward: U128(p.reward),
+                }
+            })
+            .collect()
+    }
+
+    /// Whether `account_id`'s Burn stakes can be withdrawn now.
+    pub fn burn_lock(&self, account_id: AccountId) -> BurnLockView {
+        let lock = burn_lock_of(account_id.as_str());
+        let now = env::block_timestamp_ms();
+        BurnLockView {
+            day: lock,
+            locked: !self.paused
+                && self.staking.stakes_of(account_id.as_str()).iter().any(|s| s.0 == BURN_COLONY)
+                && day::burn_stake_locked(now, self.burn.last_day(), lock),
+        }
+    }
+
+    /// Raw stake per option. A day's reward is split by raw stake, so this is
     /// what a bot needs to estimate its share while staking is open.
     pub fn stake_totals(&self, colony: u16, n_options: u8) -> Vec<U128> {
         self.staking
@@ -1204,7 +1356,7 @@ impl Contract {
         RequestView::from(r)
     }
 
-    /// Permissionless once the agents' window closed: run the next of the five
+    /// Permissionless once the agents' window closed: run the next of the three
     /// colonies and earn the crank bounty. The first call draws the seed and
     /// must pass the signature of the request's `drand_round`.
     pub fn crank_request(&mut self, request_id: u32, drand_signature: Option<String>) -> RequestView {
@@ -1230,6 +1382,7 @@ impl Contract {
             request_id,
             entropy,
             env::current_account_id().as_str(),
+            self.treasury.as_str(),
         ));
         let r = self.requests.get(request_id).unwrap();
         if c.drew_seed {
@@ -1254,10 +1407,10 @@ impl Contract {
         ));
         if c.done {
             env::log_str(&format!(
-                "EVENT request_done id={request_id} swarm={:?} market_hash={} burned={}",
+                "EVENT request_done id={request_id} swarm={:?} market_hash={} to_treasury={}",
                 r.swarm.as_ref().unwrap(),
                 hash_hex(&r.market_hash.unwrap()),
-                r.payouts.burned
+                r.payouts.treasury
             ));
         }
         RequestView::from(r)
@@ -1446,9 +1599,10 @@ impl Contract {
     }
 
     /// Permissionless from 24:00 UTC of `day`, once the colony has run its
-    /// last tick: burn the menu amount the colony picked, once per day and in
-    /// day order, and pay the day's rewards to the stakers on that index.
-    /// There is no `index` argument and no trusted colony account.
+    /// last tick: run the daily pot the colony picked, once per day and in
+    /// day order: burn its burn part and pay its reward part to the stakers
+    /// on that size. Returns the amount burned. There is no `index` argument
+    /// and no trusted colony account.
     pub fn execute_burn(&mut self, day: u64) -> U128 {
         require!(!self.paused, "paused");
         U128(self.execute_day(day, env::block_timestamp_ms()))
@@ -1456,18 +1610,7 @@ impl Contract {
 
     // ---- rewards ----
 
-    /// Move `amount` of the caller's tokens into the reward pool.
-    pub fn fund_rewards(&mut self, amount: U128) {
-        require!(!self.paused, "paused");
-        let who = env::predecessor_account_id();
-        ok(self.rewards.fund(&mut self.ledger, who.as_str(), amount.0));
-        env::log_str(&format!("EVENT fund_rewards {who} amount={}", amount.0));
-    }
-
-    pub fn reward_pool(&self) -> U128 {
-        U128(self.rewards.pool(&self.ledger))
-    }
-
+    /// Lifetime rewards from the daily pots.
     pub fn rewards_earned(&self, account_id: AccountId) -> U128 {
         U128(self.rewards.earned_by(account_id.as_str()))
     }
@@ -1496,6 +1639,110 @@ impl Contract {
         self.paused
     }
 
+    // ---- randomness as a service ----
+
+    /// Ask for a random value. Burns `randomness_fee` $ANTO from the caller
+    /// (a contract caller needs a balance), commits the request to the first
+    /// drand round published after now plus one for clock skew, and returns the
+    /// request id. Anyone proves that round with `fulfill_randomness`; then
+    /// `randomness_value(id)` holds the request's own 32-byte value. A caller
+    /// that is a contract reads it with a cross-contract view.
+    pub fn request_randomness(&mut self) -> u64 {
+        require!(!self.paused, "paused");
+        let who = env::predecessor_account_id();
+        let now = env::block_timestamp_ms();
+        let fee = random_fee();
+        if fee > 0 {
+            ok(self.ledger.burn(who.as_str(), fee));
+        }
+        let id = random_count();
+        let round = drand::round_after(now) + 1;
+        write_borsh(
+            &random_request_key(id),
+            &RandomRequest {
+                requester: who.to_string(),
+                round,
+                at_ms: now,
+            },
+        );
+        // A round someone already proved keeps its randomness (only possible
+        // in unit tests, where block times come before quicknet's genesis).
+        if env::storage_read(&random_round_key(round)).is_none() {
+            env::storage_write(&random_round_key(round), &[]);
+        }
+        env::storage_write(RANDOM_COUNT_KEY, &(id + 1).to_be_bytes());
+        env::log_str(&format!(
+            "EVENT random_request id={id} {who} drand={round} fee={fee}"
+        ));
+        id
+    }
+
+    /// Permissionless: prove `drand_round` with its quicknet signature (the
+    /// contract checks it) so every request committed to it gets its value.
+    /// Only rounds some request waits for are accepted, so nobody can fill
+    /// the contract's storage with random rounds. Proving a round twice
+    /// returns the stored randomness without checking again. It writes only
+    /// its own storage keys, so it doesn't take `&mut self` and the main
+    /// state isn't written back.
+    pub fn fulfill_randomness(&self, drand_round: u64, drand_signature: Option<String>) -> String {
+        require!(!self.paused, "paused");
+        let key = random_round_key(drand_round);
+        match env::storage_read(&key) {
+            Some(v) if v.len() == 32 => return antotoken::antosim::to_hex(&v),
+            Some(_) => {}
+            None => env::panic_str(&format!("no request waits for drand round {drand_round}")),
+        }
+        let entropy = drand::entropy(drand_round, drand_signature.as_deref());
+        env::storage_write(&key, &entropy);
+        let randomness = hash_hex(&entropy);
+        env::log_str(&format!(
+            "EVENT random_ready drand={drand_round} randomness={randomness} {}",
+            env::predecessor_account_id()
+        ));
+        randomness
+    }
+
+    /// The request's value as hex, or null while its drand round is unproven.
+    /// This is the call a consumer contract makes.
+    pub fn randomness_value(&self, id: u64) -> Option<String> {
+        self.randomness_request(id).and_then(|r| r.value)
+    }
+
+    pub fn randomness_request(&self, id: u64) -> Option<RandomnessView> {
+        let req: RandomRequest = read_borsh(&random_request_key(id))?;
+        let randomness = env::storage_read(&random_round_key(req.round))
+            .and_then(|v| <[u8; 32]>::try_from(v).ok());
+        let me = env::current_account_id();
+        Some(RandomnessView {
+            id,
+            drand_round: req.round,
+            requested_at_ms: req.at_ms,
+            status: if randomness.is_some() { "ready" } else { "pending" }.into(),
+            value: randomness
+                .map(|r| hash_hex(&antotoken::random::value(&r, id, &req.requester, me.as_str()))),
+            randomness: randomness.map(|r| hash_hex(&r)),
+            requester: req.requester,
+        })
+    }
+
+    /// Up to `limit` (at most 50) requests from `from_id` on, oldest first.
+    pub fn randomness_requests(&self, from_id: u64, limit: u64) -> Vec<RandomnessView> {
+        let end = random_count().min(from_id.saturating_add(limit.min(50)));
+        (from_id..end).filter_map(|id| self.randomness_request(id)).collect()
+    }
+
+    /// Requests made so far; ids run from 0 to this minus one.
+    pub fn randomness_count(&self) -> u64 {
+        random_count()
+    }
+
+    pub fn randomness_config(&self) -> RandomnessConfigView {
+        RandomnessConfigView {
+            fee: U128(random_fee()),
+            tag: String::from_utf8_lossy(antotoken::random::TAG).into_owned(),
+        }
+    }
+
     // ---- operations ----
 
     /// Re-times every round `start_round` opens from now on; the round under
@@ -1517,6 +1764,20 @@ impl Contract {
         self.round_cfg
     }
 
+    /// Replaces the keeper allow-list and the quorum (a strict majority of
+    /// `keepers`). Posts of removed keepers stop counting, for the round and
+    /// for requests; the other posts stay. Only the contract account itself
+    /// may call it.
+    pub fn set_keepers(&mut self, keepers: Vec<AccountId>, quorum: u8) {
+        require!(
+            env::predecessor_account_id() == env::current_account_id(),
+            "only the contract account may set the keepers"
+        );
+        let ids: Vec<String> = keepers.into_iter().map(String::from).collect();
+        env::log_str(&format!("EVENT keepers keepers={ids:?} quorum={quorum}"));
+        ok(self.markets.set_keepers(ids, quorum));
+    }
+
     /// Sets what `claim_play_tokens` pays from now on; accounts that already
     /// claimed don't claim again. Only the contract account itself may call it.
     pub fn set_faucet_amount(&mut self, faucet_amount: U128) {
@@ -1527,18 +1788,29 @@ impl Contract {
         self.faucet_amount = faucet_amount.0;
         env::log_str(&format!("EVENT faucet_amount amount={}", faucet_amount.0));
     }
+
+    /// Sets what `request_randomness` burns from now on (0 makes it free).
+    /// Only the contract account itself may call it.
+    pub fn set_randomness_fee(&mut self, fee: U128) {
+        require!(
+            env::predecessor_account_id() == env::current_account_id(),
+            "only the contract account may set the randomness fee"
+        );
+        env::storage_write(RANDOM_FEE_KEY, &fee.0.to_be_bytes());
+        env::log_str(&format!("EVENT randomness_fee fee={}", fee.0));
+    }
 }
 
 impl Contract {
-    /// Burn `day`'s pick and pay its rewards. `burn_run` must be that day's
-    /// finished run and the day must be over.
+    /// Run `day`'s pot: burn the burn part and pay the reward part. `burn_run`
+    /// must be that day's finished run and the day must be over.
     fn execute_day(&mut self, day: u64, now: u64) -> u128 {
         let run = match &self.burn_run {
             Some(r) if r.day == day => r,
             _ => ok(Err(Error::NoBurnRun(day))),
         };
         let index = ok(run.decision(now));
-        let burned = ok(self.burn.execute(
+        let pot = ok(self.burn.execute(
             &mut self.ledger,
             self.treasury.as_str(),
             day,
@@ -1546,16 +1818,23 @@ impl Contract {
         ));
         let snap = ok(self.staking.take_burn_snapshot(day, now));
         env::log_str(&format!(
-            "EVENT burn day={day} index={index} amount={burned} stakes={}",
+            "EVENT burn day={day} index={index} amount={} reward={} stakes={}",
+            pot.burn,
+            pot.reward,
             hash_hex(&snap.hash)
         ));
-        let paid = ok(self
-            .rewards
-            .distribute(&mut self.ledger, day, index as u8, &snap.entries));
+        let paid = ok(self.rewards.distribute(
+            &mut self.ledger,
+            self.treasury.as_str(),
+            day,
+            index as u8,
+            &snap.entries,
+            pot.reward,
+        ));
         for (who, amount) in paid {
             env::log_str(&format!("EVENT reward day={day} {who} amount={amount}"));
         }
-        burned
+        pot.burn
     }
 
     fn trending_market(&self, colony: u16) -> Option<&Market> {
@@ -1831,14 +2110,15 @@ mod tests {
     }
 
     #[test]
-    fn colony_burn_lowers_supply_by_menu_amount() {
+    fn colony_burn_lowers_supply_by_the_pots_burn_part() {
         let mut c = fresh();
         let treasury_before = c.ft_balance_of(acct("treasury.test")).0;
         finished_burn(&mut c, 0, 4);
         // Anyone may execute it: the index is the colony's, not the caller's.
         testing_env!(ctx("anyone.test", END).build());
         let burned = c.execute_burn(0).0;
-        assert_eq!(burned, treasury_before / 50);
+        // The 2.00% pot: 0.16% reward (nobody staked, so it stays), 1.84% burned.
+        assert_eq!(burned, treasury_before * 184 / 10_000);
         assert_eq!(c.ft_total_supply().0, 1_000_000 * ONE - burned);
     }
 
@@ -1880,6 +2160,27 @@ mod tests {
         assert_eq!(c.start_round(), 1);
         let r = c.round_status();
         assert_eq!((r.close_at_ms, r.publish_at_ms), (3_200, 3_500));
+    }
+
+    #[test]
+    fn the_contract_sets_the_keepers() {
+        let mut c = fresh();
+        let (keepers, quorum) = c.keepers();
+        let mut b = ctx("alice.test", 0);
+        b.current_account_id(acct("contract.test"));
+        testing_env!(b.build());
+        assert!(panics(|| c.set_keepers(vec![acct("alice.test")], 1)));
+        let mut b = ctx("contract.test", 0);
+        b.current_account_id(acct("contract.test"));
+        testing_env!(b.build());
+        let mut more = keepers.clone();
+        more.push(acct("k9.test"));
+        more.push(acct("k8.test"));
+        assert!(panics(|| c.set_keepers(more.clone(), 1)));
+        assert_eq!(c.keepers(), (keepers, quorum));
+        c.set_keepers(more.clone(), more.len() as u8 / 2 + 1);
+        assert_eq!(c.keepers().0.len(), more.len());
+        assert_eq!(c.keepers().1, more.len() as u8 / 2 + 1);
     }
 
     #[test]
@@ -1934,13 +2235,10 @@ mod tests {
     }
 
     #[test]
-    fn burn_pays_rewards_to_burn_stakers_on_the_winner() {
+    fn the_daily_pot_burns_part_and_pays_the_stakers_on_the_winner() {
         let mut c = fresh();
         give(&mut c, "bot-follower.test", 100 * ONE);
         give(&mut c, "bot-contrarian.test", 100 * ONE);
-        testing_env!(ctx("treasury.test", 0).build());
-        c.fund_rewards(U128(1_000 * ONE));
-        assert_eq!(c.reward_pool().0, 1_000 * ONE);
 
         testing_env!(ctx("alice.test", 10).build());
         c.stake(0, 2, U128(30 * ONE));
@@ -1952,26 +2250,77 @@ mod tests {
 
         finished_burn(&mut c, 0, 2);
         testing_env!(ctx("anyone.test", END).build());
-        c.execute_burn(0);
-        // Pot is 100: alice 30/40, follower 10/40.
-        assert_eq!(c.rewards_earned(acct("alice.test")).0, 75 * ONE);
-        assert_eq!(c.rewards_earned(acct("bot-follower.test")).0, 25 * ONE);
+        let t = c.ft_balance_of(acct("treasury.test")).0;
+        let supply = c.ft_total_supply().0;
+        let menu = c.daily_pot();
+        assert_eq!(
+            (menu[2].pot_bps, menu[2].reward_bps, menu[2].burn_bps),
+            (50, 12, 38)
+        );
+        let (reward, burn) = (t * 12 / 10_000, t * 50 / 10_000 - t * 12 / 10_000);
+        assert_eq!((menu[2].reward.0, menu[2].burn.0), (reward, burn));
+        assert_eq!(c.execute_burn(0).0, burn);
+        assert_eq!(c.ft_total_supply().0, supply - burn);
+        // The reward part leaves the treasury: alice 30/40, follower 10/40.
+        assert_eq!(c.rewards_earned(acct("alice.test")).0, reward * 3 / 4);
+        assert_eq!(c.rewards_earned(acct("bot-follower.test")).0, reward / 4);
         assert_eq!(c.rewards_earned(acct("bot-contrarian.test")).0, 0);
-        assert_eq!(c.reward_pool().0, 900 * ONE);
-        assert_eq!(c.ft_balance_of(acct("bot-follower.test")).0, 115 * ONE);
+        assert_eq!(c.ft_balance_of(acct("treasury.test")).0, t - burn - reward);
+        assert_eq!(
+            c.ft_balance_of(acct("bot-follower.test")).0,
+            90 * ONE + reward / 4
+        );
         let board = c.reward_leaderboard();
-        assert_eq!(board[0], (acct("alice.test"), U128(75 * ONE)));
+        assert_eq!(board[0], (acct("alice.test"), U128(reward * 3 / 4)));
         assert_eq!(board.len(), 2);
     }
 
     #[test]
-    #[should_panic(expected = "paused")]
-    fn fund_rewards_blocked_while_paused() {
+    fn nobody_on_the_winner_keeps_the_reward_in_the_treasury() {
         let mut c = fresh();
-        testing_env!(ctx("guardian.test", 0).build());
-        c.set_paused(true);
-        testing_env!(ctx("treasury.test", 0).build());
-        c.fund_rewards(U128(ONE));
+        testing_env!(ctx("alice.test", 10).build());
+        c.stake(0, 1, U128(10 * ONE));
+        finished_burn(&mut c, 0, 4);
+        testing_env!(ctx("anyone.test", END).build());
+        let t = c.ft_balance_of(acct("treasury.test")).0;
+        let burn = c.execute_burn(0).0;
+        assert_eq!(burn, t * 184 / 10_000);
+        assert_eq!(c.ft_balance_of(acct("treasury.test")).0, t - burn);
+        assert!(c.reward_leaderboard().is_empty());
+    }
+
+    #[test]
+    fn burn_stakes_lock_until_their_days_pot_pays() {
+        let mut c = fresh();
+        give(&mut c, "bob.test", 100 * ONE);
+        // A morning stake counts for day 0 and is locked at once.
+        testing_env!(ctx("alice.test", 10).build());
+        c.stake(0, 2, U128(10 * ONE));
+        assert_eq!(c.burn_lock(acct("alice.test")).day, Some(0));
+        assert!(c.burn_lock(acct("alice.test")).locked);
+        testing_env!(ctx("alice.test", 20).build());
+        assert!(panics(|| c.unstake(0, 2, U128(ONE))));
+        // Other colonies don't follow the Burn lock.
+        assert!(!c.burn_lock(acct("bob.test")).locked);
+        // Bob stakes after 12:00: locked until day 1's pot.
+        testing_env!(ctx("bob.test", NOON + 1).build());
+        c.stake(0, 3, U128(10 * ONE));
+        assert_eq!(c.burn_lock(acct("bob.test")).day, Some(1));
+
+        finished_burn(&mut c, 0, 2);
+        // After 24:00, still locked until the pot pays.
+        testing_env!(ctx("alice.test", END + 5).build());
+        assert!(panics(|| c.unstake(0, 2, U128(ONE))));
+        c.execute_burn(0);
+        assert!(!c.burn_lock(acct("alice.test")).locked);
+        c.unstake(0, 2, U128(10 * ONE));
+        testing_env!(ctx("bob.test", END + 5).build());
+        assert!(c.burn_lock(acct("bob.test")).locked);
+        assert!(panics(|| c.unstake(0, 3, U128(ONE))));
+        // Day 1's pot never pays: free a day after it was due.
+        testing_env!(ctx("bob.test", 3 * END).build());
+        assert!(!c.burn_lock(acct("bob.test")).locked);
+        c.unstake(0, 3, U128(10 * ONE));
     }
 
     fn market(odds: Vec<u16>) -> MarketPostView {
@@ -2072,8 +2421,6 @@ mod tests {
     fn burn_day_freezes_at_noon_locks_the_run_and_burns_once() {
         let mut c = fresh();
         give(&mut c, "bob.test", 100 * ONE);
-        testing_env!(ctx("treasury.test", 0).build());
-        c.fund_rewards(U128(1_000 * ONE));
         testing_env!(ctx("alice.test", 10).build());
         c.stake(0, 2, U128(10 * ONE));
         let s = c.burn_schedule();
@@ -2099,13 +2446,14 @@ mod tests {
 
         finished_burn(&mut c, 0, 2);
         testing_env!(ctx("anyone.test", END).build());
+        let reward = c.daily_pot()[2].reward.0;
         c.execute_burn(0);
-        assert_eq!(c.rewards_earned(acct("alice.test")).0, 100 * ONE);
+        assert_eq!(c.rewards_earned(acct("alice.test")).0, reward);
         assert_eq!(c.rewards_earned(acct("bob.test")).0, 0);
         assert!(panics(|| {
             c.execute_burn(0);
         }));
-        // Withdrawing is open again after 24:00.
+        // Withdrawing is open again once the day's pot has paid.
         testing_env!(ctx("alice.test", END).build());
         c.unstake(0, 2, U128(10 * ONE));
     }
@@ -2128,13 +2476,14 @@ mod tests {
         give(&mut c, "agent-a.test", 50 * ONE);
         give(&mut c, "agent-b.test", 50 * ONE);
         let supply = c.ft_total_supply().0;
+        let treasury0 = c.ft_balance_of(acct("treasury.test")).0;
 
         testing_env!(ctx("alice.test", 5_000).build());
         let id = c.request_forecast(SLUG.into());
         assert_eq!(id, 0);
         assert_eq!(c.forecast_request_count(), 1);
         assert_eq!(c.ft_balance_of(acct("alice.test")).0, 400 * ONE);
-        assert_eq!(c.request_config().crank_bounty.0, 2 * ONE);
+        assert_eq!(c.request_config().crank_bounty.0, 10 * ONE / 3);
 
         for (k, odds) in [
             ("k1.test", vec![6200, 2800, 1000]),
@@ -2180,13 +2529,13 @@ mod tests {
         testing_env!(ctx("alice.test", close).build());
         assert!(panics(|| c.unstake(colony, 2, U128(ONE))), "locked until done");
         let mut last = None;
-        for i in 0..5 {
+        for i in 0..3 {
             testing_env!(ctx("cranker.test", close + i).random_seed([9; 32]).build());
             last = Some(c.crank_request(id, sig()));
         }
         let r = last.unwrap();
         assert_eq!(r.phase, "done");
-        assert_eq!(r.colony_hashes.len(), 5);
+        assert_eq!(r.colony_hashes.len(), 3);
         assert_eq!(
             r.swarm
                 .as_ref()
@@ -2197,13 +2546,16 @@ mod tests {
             10_000
         );
         assert_eq!(r.agents.as_ref().unwrap().posts.len(), 2);
-        assert_eq!(c.ft_balance_of(acct("cranker.test")).0, 10 * ONE);
+        let bounty = 10 * ONE / 3;
+        let dust = 10 * ONE - 3 * bounty;
+        assert_eq!(c.ft_balance_of(acct("cranker.test")).0, 3 * bounty);
         assert_eq!(c.ft_balance_of(acct("k1.test")).0, 10 * ONE);
         assert_eq!(r.stakes.as_ref().unwrap().entries.len(), 1);
         // Agents 30 over two: 15 each, on top of 40 left after the deposit.
         assert_eq!(c.ft_balance_of(acct("agent-a.test")).0, 55 * ONE);
-        assert_eq!(r.burned.0, 40 * ONE);
-        assert_eq!(c.ft_total_supply().0, supply - 40 * ONE);
+        assert_eq!(r.to_treasury.0, 40 * ONE + dust);
+        assert_eq!(c.ft_balance_of(acct("treasury.test")).0, treasury0 + 40 * ONE + dust);
+        assert_eq!(c.ft_total_supply().0, supply, "the fee's remainder isn't burned");
         assert!(panics(|| {
             c.crank_request(id, sig());
         }));
@@ -2590,7 +2942,126 @@ mod tests {
 
         testing_env!(ctx("anyone.test", END).build());
         let burned = c.execute_burn(0).0;
-        let bps = antotoken::burn::BURN_MENU_BPS[pick] as u128;
-        assert_eq!(burned, treasury * bps / 10_000);
+        assert_eq!(burned, pot_amounts(treasury, pick as usize).unwrap().burn);
+    }
+
+    // ---- randomness as a service ----
+
+    /// Pre-genesis block times commit a request made at any of them to round 2.
+    const R2: (u64, &str, &str) = drand::tests::BEACONS[1];
+
+    fn msg_of(f: impl FnOnce()) -> String {
+        let e = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_err();
+        e.downcast_ref::<String>().cloned().unwrap_or_default()
+    }
+
+    #[test]
+    fn a_request_burns_the_fee_and_waits_for_its_round() {
+        let mut c = fresh();
+        let supply = c.ft_total_supply().0;
+        assert_eq!(c.randomness_config().fee.0, ONE);
+        testing_env!(ctx("alice.test", 5).build());
+        let id = c.request_randomness();
+        assert_eq!(id, 0);
+        assert_eq!(c.ft_balance_of(acct("alice.test")).0, 499 * ONE);
+        assert_eq!(c.ft_total_supply().0, supply - ONE, "the fee is burned");
+        let v = c.randomness_request(0).unwrap();
+        assert_eq!((v.drand_round, v.status.as_str(), v.requester.as_str()), (2, "pending", "alice.test"));
+        assert_eq!((v.value, v.randomness), (None, None));
+        assert_eq!(c.randomness_value(0), None);
+        assert_eq!(c.randomness_value(7), None);
+        assert_eq!(c.randomness_count(), 1);
+    }
+
+    #[test]
+    fn proving_the_round_gives_each_request_its_own_value() {
+        let mut c = fresh();
+        for who in ["alice.test", "alice.test", "bob.test"] {
+            give(&mut c, "bob.test", ONE);
+            testing_env!(ctx(who, 5).build());
+            c.request_randomness();
+        }
+        testing_env!(ctx("anyone.test", 9).build());
+        assert_eq!(c.fulfill_randomness(2, Some(R2.1.into())), R2.2);
+        let me = env::current_account_id();
+        let rand: [u8; 32] = (0..32)
+            .map(|i| u8::from_str_radix(&R2.2[2 * i..2 * i + 2], 16).unwrap())
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+        let mut seen = BTreeSet::new();
+        for (id, who) in [(0, "alice.test"), (1, "alice.test"), (2, "bob.test")] {
+            let v = c.randomness_request(id).unwrap();
+            assert_eq!((v.status.as_str(), v.randomness.as_deref()), ("ready", Some(R2.2)));
+            let want = hash_hex(&antotoken::random::value(&rand, id, who, me.as_str()));
+            assert_eq!(v.value.as_deref(), Some(want.as_str()));
+            assert_eq!(c.randomness_value(id), Some(want.clone()));
+            assert!(seen.insert(want), "every request gets a distinct value");
+        }
+        assert_eq!(c.randomness_requests(1, 10).len(), 2);
+        assert_eq!(c.randomness_requests(0, 2).len(), 2);
+        assert!(c.randomness_requests(3, 10).is_empty());
+        // A second proof is a free read of the stored randomness.
+        assert_eq!(c.fulfill_randomness(2, None), R2.2);
+    }
+
+    #[test]
+    fn only_the_right_signature_for_a_waited_round_is_taken() {
+        let mut c = fresh();
+        testing_env!(ctx("alice.test", 5).build());
+        c.request_randomness();
+        assert!(msg_of(|| {
+            c.fulfill_randomness(3, Some(R2.1.into()));
+        })
+        .contains("no request waits for drand round 3"));
+        assert!(msg_of(|| {
+            c.fulfill_randomness(2, None);
+        })
+        .contains("signature needed"));
+        // Round 1's signature is a real beacon, but not round 2's.
+        assert!(msg_of(|| {
+            c.fulfill_randomness(2, Some(drand::tests::ROUND_1_SIG.into()));
+        })
+        .contains("not drand round 2's signature"));
+        assert_eq!(c.randomness_value(0), None, "failed proofs store nothing");
+    }
+
+    #[test]
+    fn the_fee_must_be_paid_and_can_be_changed_by_the_contract_account() {
+        let mut c = fresh();
+        testing_env!(ctx("nobody.test", 5).build());
+        assert!(msg_of(|| {
+            c.request_randomness();
+        })
+        .contains("InsufficientBalance"));
+        assert_eq!(c.randomness_count(), 0);
+        testing_env!(ctx("alice.test", 5).build());
+        assert!(panics(|| c.set_randomness_fee(U128(0))));
+        testing_env!(ctx("alice.test", 5).current_account_id(acct("alice.test")).build());
+        c.set_randomness_fee(U128(0));
+        assert_eq!(c.randomness_config().fee.0, 0);
+        testing_env!(ctx("nobody.test", 6).build());
+        assert_eq!(c.request_randomness(), 0, "free once the fee is 0");
+        testing_env!(ctx("alice.test", 5).current_account_id(acct("alice.test")).build());
+        c.set_randomness_fee(U128(3 * ONE));
+        testing_env!(ctx("alice.test", 7).build());
+        c.request_randomness();
+        assert_eq!(c.ft_balance_of(acct("alice.test")).0, 497 * ONE);
+    }
+
+    #[test]
+    fn a_pause_stops_requests_and_proofs() {
+        let mut c = fresh();
+        testing_env!(ctx("alice.test", 5).build());
+        c.request_randomness();
+        testing_env!(ctx("guardian.test", 6).build());
+        c.set_paused(true);
+        testing_env!(ctx("alice.test", 7).build());
+        assert!(panics(|| {
+            c.request_randomness();
+        }));
+        assert!(panics(|| {
+            c.fulfill_randomness(2, Some(R2.1.into()));
+        }));
     }
 }

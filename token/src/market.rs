@@ -87,11 +87,13 @@ pub(crate) fn median(mut xs: Vec<u16>) -> u16 {
     xs[(xs.len() - 1) / 2]
 }
 
-/// The odds must give every forecaster a usable map: at least one outcome
-/// above 0 (Follower) and one below 10000 (Contrarian).
+/// The odds must be a usable market: valid for the sim, with at least one
+/// outcome above 0 and one below 10000 (all zeros or all certain is a bad read).
 fn check_odds(odds: &[u16], odds_6h: &[u16]) -> Result<(), Error> {
-    odds_richness(Kind::Follower, odds, odds_6h).map_err(|_| Error::BadMarket)?;
-    odds_richness(Kind::Contrarian, odds, odds_6h).map_err(|_| Error::BadMarket)?;
+    odds_richness(Kind::Momentum, odds, odds_6h).map_err(|_| Error::BadMarket)?;
+    if !odds.iter().any(|&o| o > 0) || !odds.iter().any(|&o| o < 10_000) {
+        return Err(Error::BadMarket);
+    }
     Ok(())
 }
 
@@ -158,21 +160,36 @@ pub(crate) fn accept(
     Ok(markets)
 }
 
+/// Distinct, non-empty, and `quorum` a strict majority, so two different
+/// lists cannot both reach it.
+fn keeper_set(keepers: Vec<AccountId>, quorum: u8) -> Result<BTreeSet<AccountId>, Error> {
+    let n = keepers.len();
+    let set: BTreeSet<AccountId> = keepers.into_iter().collect();
+    if set.len() != n || n == 0 || (quorum as usize) * 2 <= n || quorum as usize > n {
+        return Err(Error::BadKeeperConfig);
+    }
+    Ok(set)
+}
+
 impl Registry {
     pub fn new(keepers: Vec<AccountId>, quorum: u8, close_at: u64) -> Result<Registry, Error> {
-        let n = keepers.len();
-        let keepers: BTreeSet<AccountId> = keepers.into_iter().collect();
-        // Strict majority, so two different lists cannot both reach quorum.
-        if keepers.len() != n || n == 0 || (quorum as usize) * 2 <= n || quorum as usize > n {
-            return Err(Error::BadKeeperConfig);
-        }
         Ok(Registry {
-            keepers,
+            keepers: keeper_set(keepers, quorum)?,
             quorum,
             close_at,
             posts: BTreeMap::new(),
             markets: None,
         })
+    }
+
+    /// Replace the keepers and the quorum, under the same rule as `new`.
+    /// Posts of keepers no longer on the list are dropped; the others stay.
+    pub fn set_keepers(&mut self, keepers: Vec<AccountId>, quorum: u8) -> Result<(), Error> {
+        let keepers = keeper_set(keepers, quorum)?;
+        self.posts.retain(|k, _| keepers.contains(k));
+        self.keepers = keepers;
+        self.quorum = quorum;
+        Ok(())
     }
 
     /// Start the next round: forget the old posts and markets and post until
@@ -276,6 +293,33 @@ mod tests {
             Registry::new(dup, 2, 1).unwrap_err(),
             Error::BadKeeperConfig
         );
+    }
+
+    #[test]
+    fn set_keepers_keeps_the_rule_and_drops_removed_posts() {
+        let mut r = Registry::new(vec!["k1".into()], 1, 100).unwrap();
+        r.post(1, "k1", vec![post("m1", &[6000, 4000], &[5000, 5000])])
+            .unwrap();
+        let three = vec!["k1".into(), "k2".into(), "k3".into()];
+        assert_eq!(
+            r.set_keepers(three.clone(), 1).unwrap_err(),
+            Error::BadKeeperConfig
+        );
+        r.set_keepers(three, 2).unwrap();
+        assert_eq!(r.quorum(), 2);
+        assert!(r.post_of("k1").is_some());
+        // One post no longer makes a quorum.
+        assert_eq!(r.finalize(100).unwrap_err(), Error::NoQuorum);
+
+        let mut r = reg();
+        r.post(1, "k1", vec![post("m1", &[6000, 4000], &[5000, 5000])])
+            .unwrap();
+        r.post(1, "k2", vec![post("m1", &[6000, 4000], &[5000, 5000])])
+            .unwrap();
+        r.set_keepers(vec!["k2".into()], 1).unwrap();
+        assert!(r.post_of("k1").is_none());
+        assert_eq!(r.post(2, "k1", vec![post("m1", &[1, 9999], &[1, 9999])]).unwrap_err(), Error::NotKeeper);
+        assert_eq!(r.finalize(100).unwrap()[0].raw_hashes.len(), 1);
     }
 
     #[test]
@@ -450,6 +494,6 @@ mod tests {
         )
         .unwrap();
         // Same fixture as sim/rust forecast_market_matches_reference.
-        assert_eq!(out.swarm, vec![4149, 3327, 2524]);
+        assert_eq!(out.swarm, vec![4820, 2625, 2555]);
     }
 }

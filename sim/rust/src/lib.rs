@@ -6,14 +6,15 @@
 //! a time so a contract can spread a run over several calls; `run` loops it.
 //!
 //! Inputs besides the seed: per-option richness from a stake snapshot
-//! (`stake_richness`), an odds snapshot (`odds_richness`) or the forecaster
+//! (`stake_richness`; `burn_richness` for the Burn colony, which handicaps the
+//! bigger pots), an odds snapshot (`odds_richness`) or the forecaster
 //! agents' median odds (`agent_richness`), and the two snapshot hashes, which
 //! go into the result hash (`burn_run`, `forecast_run`).
 //!
-//! Forecast colonies: `forecast_market` runs the five forecasters on one
+//! Forecast colonies: `forecast_market` runs the three forecasters on one
 //! market, each on its own map (`colony_seed`), and `market_result` turns their
 //! scores into trail shares, the swarm belief and one market hash. A contract
-//! that runs the five colonies over several calls calls `market_result` at the end.
+//! that runs the three colonies over several calls calls `market_result` at the end.
 //!
 //! Scoring: a source's score is the pheromone within 6 cells of it,
 //! summed at a checkpoint every `SCORE_EVERY` ticks and at the final tick
@@ -62,6 +63,9 @@ pub const VERSION: &[u8] = b"ANTO-SIM-v1";
 const BPS: u64 = 10_000;
 const MOMENTUM_FLOOR: i64 = 200; // 2% floor on the Momentum food weight
 const COMMUNITY_BASE: u64 = 2_500; // flat food weight per outcome, milli sqrt-tokens
+/// Burn colony: per-mille factor on each menu option's food weight, base and
+/// stakes alike, so a bigger daily pot needs more stake to win.
+pub const BURN_HANDICAP: [u64; 5] = [1000, 875, 750, 625, 500];
 const ODDS_TAG: &[u8] = b"ANTO-ODDS-v0";
 
 /// How a forecaster reads the odds snapshot. `Community` reads stakes and
@@ -69,16 +73,12 @@ const ODDS_TAG: &[u8] = b"ANTO-ODDS-v0";
 /// The discriminant is the forecaster slot in `colony_seed`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
-    Follower = 0,
-    Contrarian = 1,
-    Momentum = 2,
-    Community = 3,
-    Agents = 4,
+    Momentum = 0,
+    Community = 1,
+    Agents = 2,
 }
 
-pub const KINDS: [Kind; 5] = [
-    Kind::Follower,
-    Kind::Contrarian,
+pub const KINDS: [Kind; 3] = [
     Kind::Momentum,
     Kind::Community,
     Kind::Agents,
@@ -185,7 +185,7 @@ fn scale_richness(weights: &[u64]) -> Option<Vec<u16>> {
 
 /// Food weights -> Q8 richness proportional to the weight, the richest source
 /// at the band's top (1.3) and a zero weight at 0: the odds-driven colonies
-/// (Follower, Contrarian, Momentum, Agents), so their trail shares track their food.
+/// (Momentum, Agents), so their trail shares track their food.
 fn odds_scale(weights: &[u64]) -> Option<Vec<u16>> {
     let top = *weights.iter().max()?;
     if top == 0 {
@@ -211,13 +211,11 @@ fn check_odds(odds: &[u16], odds_6h: &[u16]) -> Result<(), Error> {
     }
 }
 
-/// Per-option Q8 richness for Follower, Contrarian or Momentum. `odds` and
-/// `odds_6h` are basis points per outcome now and six hours ago.
+/// Per-option Q8 richness for the Momentum colony. `odds` and `odds_6h` are
+/// basis points per outcome now and six hours ago.
 pub fn odds_richness(kind: Kind, odds: &[u16], odds_6h: &[u16]) -> Result<Vec<u16>, Error> {
     check_odds(odds, odds_6h)?;
     let w: Vec<u64> = match kind {
-        Kind::Follower => odds.iter().map(|&o| o as u64).collect(),
-        Kind::Contrarian => odds.iter().map(|&o| (BPS - o as u64) / 4).collect(),
         Kind::Momentum => odds
             .iter()
             .zip(odds_6h)
@@ -228,8 +226,8 @@ pub fn odds_richness(kind: Kind, odds: &[u16], odds_6h: &[u16]) -> Result<Vec<u1
     odds_scale(&w).ok_or(Error::BadOdds)
 }
 
-/// Per-option Q8 richness for the Agents colony: the Follower rule on the
-/// forecaster agents' per-outcome median odds (basis points). All zeros means
+/// Per-option Q8 richness for the Agents colony: the odds themselves as food
+/// weights, on the forecaster agents' per-outcome median odds (basis points). All zeros means
 /// no agent posted, and the map is even.
 pub fn agent_richness(agent_odds: &[u16]) -> Result<Vec<u16>, Error> {
     if !(2..=5).contains(&agent_odds.len()) || agent_odds.iter().any(|&o| o as u64 > BPS) {
@@ -243,7 +241,8 @@ pub fn agent_richness(agent_odds: &[u16]) -> Result<Vec<u16>, Error> {
     odds_scale(&w).ok_or(Error::BadOdds)
 }
 
-/// Per-option Q8 richness from stake weights (Burn and Community colonies):
+/// Per-option Q8 richness from stake weights (the Community colony; the Burn
+/// colony uses `burn_richness`):
 /// per option, the sum over wallets of sqrt(tokens staked) in milli-units.
 /// Every option starts from the same flat base, so with no stakes the food is even.
 pub fn stake_richness(weights: &[u32]) -> Result<Vec<u16>, Error> {
@@ -251,6 +250,21 @@ pub fn stake_richness(weights: &[u32]) -> Result<Vec<u16>, Error> {
         return Err(Error::BadWeights);
     }
     let w: Vec<u64> = weights.iter().map(|&x| COMMUNITY_BASE + x as u64).collect();
+    scale_richness(&w).ok_or(Error::BadWeights)
+}
+
+/// Per-option Q8 richness for the Burn colony: `stake_richness` with each menu
+/// option's food weight (flat base plus stakes) scaled by `BURN_HANDICAP`, so
+/// the bigger daily pots are harder to win however much is staked.
+pub fn burn_richness(weights: &[u32]) -> Result<Vec<u16>, Error> {
+    if weights.len() != BURN_HANDICAP.len() {
+        return Err(Error::BadWeights);
+    }
+    let w: Vec<u64> = weights
+        .iter()
+        .zip(BURN_HANDICAP)
+        .map(|(&x, h)| (COMMUNITY_BASE + x as u64) * h / 1000)
+        .collect();
     scale_richness(&w).ok_or(Error::BadWeights)
 }
 
@@ -863,7 +877,8 @@ pub fn run(
     c.result()
 }
 
-/// Burn colony: five menu options, richness from the Burn colony's stakes.
+/// Burn colony: five menu options, richness from the Burn colony's stakes with
+/// the bigger pots handicapped (`burn_richness`).
 pub fn burn_run(
     seed: &[u8; 32],
     weights: &[u32],
@@ -871,7 +886,7 @@ pub fn burn_run(
     ants: usize,
     ticks: u32,
 ) -> Result<SimResult, Error> {
-    let rich = stake_richness(weights)?;
+    let rich = burn_richness(weights)?;
     let commit = Commit {
         stake_hash,
         odds_hash: [0; 32],
@@ -960,14 +975,14 @@ pub fn trail_shares(r: &SimResult) -> Vec<u16> {
     shares.into_iter().map(|x| x as u16).collect()
 }
 
-/// The five forecasters of one market combined.
+/// The three forecasters of one market combined.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MarketResult {
     pub colony: u16,
     /// One run per kind, in `KINDS` order.
     pub colonies: Vec<SimResult>,
     /// Which runs count in the swarm belief (`voters`), in `KINDS` order.
-    pub counted: [bool; 5],
+    pub counted: [bool; 3],
     /// `trail_shares` of each run, in `KINDS` order.
     pub shares: Vec<Vec<u16>>,
     /// Swarm belief per option, basis points summing to 10000.
@@ -981,31 +996,29 @@ impl MarketResult {
     }
 }
 
-/// Which of the five forecasters (`KINDS` order) count in the swarm belief. A
+/// Which of the three forecasters (`KINDS` order) count in the swarm belief. A
 /// colony with no input abstains: Community when nobody staked on the market,
 /// Agents when no agent posted. It still runs, on an even map, and its hash is
 /// still committed; an even map is not a belief.
-pub fn voters(weights: &[u32], agent_odds: &[u16]) -> [bool; 5] {
+pub fn voters(weights: &[u32], agent_odds: &[u16]) -> [bool; 3] {
     [
-        true,
-        true,
         true,
         weights.iter().any(|&x| x > 0),
         agent_odds.iter().any(|&o| o > 0),
     ]
 }
 
-/// Combine the five forecaster runs (in `KINDS` order) of one market.
+/// Combine the three forecaster runs (in `KINDS` order) of one market.
 /// `counted` comes from `voters`. Swarm belief per option is the floored mean
 /// of the counted colonies' trail shares; the remainder goes to the option
 /// with the largest sum (lowest index on ties).
-/// Market hash = sha256(tag, colony u16, n u8, five colony hashes, swarm u16 each).
+/// Market hash = sha256(tag, colony u16, n u8, three colony hashes, swarm u16 each).
 pub fn market_result(
     colony: u16,
     runs: Vec<SimResult>,
-    counted: [bool; 5],
+    counted: [bool; 3],
 ) -> Result<MarketResult, Error> {
-    if runs.len() != KINDS.len() || !(counted[0] && counted[1] && counted[2]) {
+    if runs.len() != KINDS.len() || !counted[0] {
         return Err(Error::BadMarketRuns);
     }
     let n = runs[0].perm.len();
@@ -1053,7 +1066,7 @@ pub fn market_result(
     })
 }
 
-/// The five forecasters on one market, each on its own map. `colony` is the
+/// The three forecasters on one market, each on its own map. `colony` is the
 /// market's colony id (`market_colony(m)`); `weights` are that colony's stake
 /// weights, one per outcome (zeros when nobody staked); `agent_odds` and
 /// `agent_hash` are the forecaster agents' per-outcome median odds and the
@@ -1148,14 +1161,6 @@ mod tests {
     fn odds_richness_matches_reference() {
         // Values printed by antosim.odds_richness in the Python reference.
         let (o, p) = ([9000, 1000], [8000, 2000]);
-        assert_eq!(
-            odds_richness(Kind::Follower, &o, &p).unwrap(),
-            vec![334, 37]
-        );
-        assert_eq!(
-            odds_richness(Kind::Contrarian, &o, &p).unwrap(),
-            vec![37, 334]
-        );
         assert_eq!(odds_richness(Kind::Momentum, &o, &p).unwrap(), vec![334, 6]);
         assert_eq!(stake_richness(&[0, 0, 0]).unwrap(), vec![334, 334, 334]);
         assert_eq!(
@@ -1166,21 +1171,24 @@ mod tests {
         assert_eq!(agent_richness(&[0, 0, 0]).unwrap(), vec![334, 334, 334]);
         assert_eq!(agent_richness(&[0, 10000]).unwrap(), vec![0, 334]);
         assert_eq!(stake_richness(&[20000, 0]).unwrap(), vec![334, 117]);
+        // Burn colony: the bigger pots start poorer, and stakes scale the same way.
+        assert_eq!(burn_richness(&[0; 5]).unwrap(), vec![334, 303, 273, 242, 212]);
+        assert_eq!(
+            burn_richness(&[0, 0, 0, 0, 10000]).unwrap(),
+            vec![187, 175, 163, 150, 334]
+        );
+        assert_eq!(burn_richness(&[0; 4]), Err(Error::BadWeights));
     }
 
     #[test]
     fn snapshot_inputs_are_validated() {
         let ok = [5000, 5000];
         assert_eq!(
-            odds_richness(Kind::Follower, &[10001, 0], &ok),
+            odds_richness(Kind::Momentum, &[10001, 0], &ok),
             Err(Error::BadOdds)
         );
         assert_eq!(
-            odds_richness(Kind::Follower, &ok, &[5000]),
-            Err(Error::BadOdds)
-        );
-        assert_eq!(
-            odds_richness(Kind::Follower, &[0, 0], &ok),
+            odds_richness(Kind::Momentum, &ok, &[5000]),
             Err(Error::BadOdds)
         );
         assert_eq!(
@@ -1214,13 +1222,13 @@ mod tests {
                 .unwrap()
                 .hash
         };
-        let base = go(Kind::Follower, &odds, [0; 32]);
-        assert_eq!(base, go(Kind::Follower, &odds, [0; 32]));
-        assert_ne!(base, go(Kind::Follower, &odds, [1; 32]));
+        let base = go(Kind::Momentum, &odds, [0; 32]);
+        assert_eq!(base, go(Kind::Momentum, &odds, [0; 32]));
+        assert_ne!(base, go(Kind::Momentum, &odds, [1; 32]));
         // Odds that give the same richness still change the hash.
-        assert_ne!(base, go(Kind::Follower, &[6001, 2999, 1000], [0; 32]));
+        assert_ne!(base, go(Kind::Momentum, &[6001, 2999, 1000], [0; 32]));
         // A different kind on the same snapshot is a different run.
-        assert_ne!(base, go(Kind::Contrarian, &odds, [0; 32]));
+        assert_ne!(base, go(Kind::Community, &odds, [0; 32]));
         // Agents commits the agent-odds hash, not the market odds.
         let agents = |a: &[u16], h: [u8; 32]| {
             forecast_run(
@@ -1279,18 +1287,16 @@ mod tests {
         assert_eq!(
             r.shares,
             vec![
-                vec![4888, 3961, 1151],
-                vec![3355, 2570, 4075],
-                vec![7146, 1674, 1180],
-                vec![1586, 4171, 4243],
-                vec![3767, 4259, 1974]
+                vec![6075, 3379, 546],
+                vec![4264, 1131, 4605],
+                vec![4120, 3366, 2514]
             ]
         );
-        assert_eq!(r.counted, [true; 5]);
-        assert_eq!(r.swarm, vec![4149, 3327, 2524]);
+        assert_eq!(r.counted, [true; 3]);
+        assert_eq!(r.swarm, vec![4820, 2625, 2555]);
         assert_eq!(
             r.hash_hex(),
-            "0022ce64cc5ffcb7bfe85e1f7d003084a99b12e32dc68883e04d7601cfa3e69b"
+            "2cdd81c40d8a8aef20924c0b8af6cbb9f906e3438fc34e84907b2f6f2bbfc260"
         );
     }
 
@@ -1298,8 +1304,8 @@ mod tests {
     fn each_forecaster_gets_its_own_map() {
         let s = seed_from_int(9);
         let seeds: Vec<_> = KINDS.iter().map(|&k| colony_seed(&s, 1, k as u8)).collect();
-        for i in 0..5 {
-            for j in i + 1..5 {
+        for i in 0..3 {
+            for j in i + 1..3 {
                 assert_ne!(seeds[i], seeds[j]);
             }
             assert_ne!(seeds[i], colony_seed(&s, 2, i as u8));
@@ -1329,38 +1335,35 @@ mod tests {
             trail_shares(&mk(vec![0, 0, 0], vec![0, 1, 2], 0)),
             vec![3334, 3333, 3333]
         );
-        let runs = vec![mk(vec![1, 2], vec![0, 1], 1); 5];
-        let all = [true; 5];
+        let runs = vec![mk(vec![1, 2], vec![0, 1], 1); 3];
+        let all = [true; 3];
         let m = market_result(1, runs.clone(), all).unwrap();
         assert_eq!(m.swarm, vec![3333, 6667]);
         assert_eq!(
-            market_result(1, runs[..4].to_vec(), all),
+            market_result(1, runs[..2].to_vec(), all),
             Err(Error::BadMarketRuns)
         );
-        // Abstaining colonies don't count: three 1:2 runs and two 1:1 runs.
+        // Abstaining colonies don't count: one 1:2 run and two 1:1 runs.
         let mut mixed = runs.clone();
-        mixed[3] = mk(vec![1, 1], vec![0, 1], 0);
-        mixed[4] = mk(vec![1, 1], vec![0, 1], 0);
-        let three = [true, true, true, false, false];
+        mixed[1] = mk(vec![1, 1], vec![0, 1], 0);
+        mixed[2] = mk(vec![1, 1], vec![0, 1], 0);
+        let only_momentum = [true, false, false];
         assert_eq!(
-            market_result(1, mixed.clone(), three).unwrap().swarm,
+            market_result(1, mixed.clone(), only_momentum).unwrap().swarm,
             vec![3333, 6667]
         );
         assert_eq!(
             market_result(1, mixed.clone(), all).unwrap().swarm,
-            vec![3999, 6001]
+            vec![4444, 5556]
         );
-        // Follower, Contrarian and Momentum always count.
+        // Momentum always counts.
         assert_eq!(
-            market_result(1, mixed, [false, true, true, true, true]),
+            market_result(1, mixed, [false, true, true]),
             Err(Error::BadMarketRuns)
         );
-        assert_eq!(voters(&[0, 0], &[0, 0]), three);
-        assert_eq!(voters(&[0, 1], &[0, 0]), [true, true, true, true, false]);
-        assert_eq!(
-            voters(&[0, 0], &[3000, 7000]),
-            [true, true, true, false, true]
-        );
+        assert_eq!(voters(&[0, 0], &[0, 0]), only_momentum);
+        assert_eq!(voters(&[0, 1], &[0, 0]), [true, true, false]);
+        assert_eq!(voters(&[0, 0], &[3000, 7000]), [true, false, true]);
     }
 
     /// The spec's rule: scan all 16 headings, lowest index on ties.

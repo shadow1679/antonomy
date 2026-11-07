@@ -41,8 +41,8 @@ def done_request():
         "stakes": {"hash": stake_hash.hex(), "weights": weights,
                    "entries": [["bob.testnet", 0x8000, 2, str(25 * ONE)]]},
         "seed": seed.hex(), "colony_hashes": [c["hash"] for c in res["colonies"]],
-        "crankers": ["c.testnet"] * 5, "swarm": res["swarm"], "market_hash": res["hash"],
-        "paid_keepers": [], "paid_agents": [], "paid_cranks": [], "burned": "0",
+        "crankers": ["c.testnet"] * 3, "swarm": res["swarm"], "market_hash": res["hash"],
+        "paid_keepers": [], "paid_agents": [], "paid_cranks": [], "to_treasury": "0",
     }
 
 
@@ -52,7 +52,7 @@ def open_request(rid, slug, phase, **kw):
            "forecast_by_ms": None, "keepers_posted": [], "market": None, "agents": None, "stakes": None,
            "seed": None,
            "colony_hashes": [], "crankers": [], "swarm": None, "market_hash": None,
-           "paid_keepers": [], "paid_agents": [], "paid_cranks": [], "burned": "0"}
+           "paid_keepers": [], "paid_agents": [], "paid_cranks": [], "to_treasury": "0"}
     out.update(kw)
     return out
 
@@ -116,18 +116,18 @@ class Verify(unittest.TestCase):
         # Community reads the weights; every colony commits the stake hash.
         bad = dict(DONE, stakes=dict(DONE["stakes"], weights=[0, 0, 0]))
         out = r.verify(FakeChain([bad]), 0)
-        self.assertEqual([c["match"] for c in out["colonies"]], [True] * 3 + [False, True])
+        self.assertEqual([c["match"] for c in out["colonies"]], [True, False, True])
         bad = dict(DONE, stakes=dict(DONE["stakes"], hash="00" * 32))
         out = r.verify(FakeChain([bad]), 0)
         self.assertFalse(out["ok"])
-        self.assertEqual([c["match"] for c in out["colonies"]], [False] * 5)
+        self.assertEqual([c["match"] for c in out["colonies"]], [False] * 3)
 
     def test_catches_a_tampered_colony(self):
         bad = dict(DONE, colony_hashes=list(DONE["colony_hashes"]))
-        bad["colony_hashes"][4] = "00" * 32
+        bad["colony_hashes"][2] = "00" * 32
         out = r.verify(FakeChain([bad]), 0)
         self.assertFalse(out["ok"])
-        self.assertEqual([c["match"] for c in out["colonies"]], [True] * 4 + [False])
+        self.assertEqual([c["match"] for c in out["colonies"]], [True] * 2 + [False])
 
     def test_needs_a_finished_request(self):
         chain = FakeChain([DONE, open_request(1, "x", "running")])
@@ -237,10 +237,10 @@ class Crank(unittest.TestCase):
         chain = FakeChain([open_request(0, "a", "running", colony_hashes=[])])
         t, _ = tool(chain, now=0)
 
-        def crank_once(cmd):  # each crank adds a colony; the fifth finishes
+        def crank_once(cmd):  # each crank adds a colony; the third finishes
             q = chain.requests[0]
             q["colony_hashes"].append("00" * 32)
-            if len(q["colony_hashes"]) == 5:
+            if len(q["colony_hashes"]) == 3:
                 chain.requests[0] = dict(DONE, id=0)
             return True
 

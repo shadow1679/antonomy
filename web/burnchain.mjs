@@ -10,12 +10,13 @@
 // execute_burn transactions comes from an indexer (nearblocks testnet API,
 // history only, labelled as such on the page); each row's details are then read
 // from the contract itself at the block just before that transaction ran, on an
-// archival RPC (burn_run, burn_snapshot, the treasury balance). A row therefore
-// carries the day's real seed and stake snapshot, and the page re-runs it.
+// archival RPC (burn_run, burn_snapshot, the treasury balance and the supply,
+// and the same two just after it, which give what it burned and paid). A row
+// therefore carries the day's real seed and stake snapshot, and the page re-runs it.
 
 import { view, wallet, contractId, ensureTokens, RPCS, yocto } from "./chain.mjs";
 import {
-  BURN_COLONY, N_OPTIONS, burnAmount, hexToBytes, snapshotWeights, snapshotHash, snapshotWallets,
+  BURN_COLONY, N_OPTIONS, hexToBytes, snapshotWeights, snapshotHash, snapshotWallets,
   weightsFromSqrtYocto, shownTick, dayOf, dayRunAt,
 } from "./burn.mjs";
 import { burnColony, rememberBurnDay, knownBurnDay } from "./round.mjs";
@@ -55,7 +56,7 @@ export async function loadBurn({ account = wallet.accountId, read = view, skew =
   const errors = [];
   const soft = async (name, p, dflt = null) => { try { return await p; } catch (e) { errors.push(`${name}: ${e.message ?? e}`); return dflt; } };
   const schedule = await read("burn_schedule");
-  const [run, last, totals, sw, cfg, treasury, supply, pool] = await Promise.all([
+  const [run, last, totals, sw, cfg, treasury, supply, pot, board] = await Promise.all([
     soft("burn_run", read("burn_run")),
     soft("last_burn_day", read("last_burn_day")),
     soft("stake_totals", read("stake_totals", { colony: BURN_COLONY, n_options: N_OPTIONS })),
@@ -63,7 +64,8 @@ export async function loadBurn({ account = wallet.accountId, read = view, skew =
     soft("stake_config", read("stake_config")),
     soft("treasury", read("ft_balance_of", { account_id: treasuryId() })),
     soft("ft_total_supply", read("ft_total_supply")),
-    soft("reward_pool", read("reward_pool")),
+    soft("daily_pot", read("daily_pot")),
+    soft("reward_leaderboard", read("reward_leaderboard")),
   ]);
   const executed = (d) => last !== null && d <= last; // the contract forgets executed days' snapshots
   const today = schedule.day;
@@ -89,12 +91,13 @@ export async function loadBurn({ account = wallet.accountId, read = view, skew =
 
   let me = null;
   if (account) {
-    const [balance, claimed, staked, mine, earned] = await Promise.all([
+    const [balance, claimed, staked, mine, earned, lock] = await Promise.all([
       soft("ft_balance_of", read("ft_balance_of", { account_id: account })),
       soft("has_claimed", read("has_claimed", { account_id: account }), false),
       soft("staked_by", read("staked_by", { account_id: account })),
       soft("stakes_of", read("stakes_of", { account_id: account }), []),
       soft("rewards_earned", read("rewards_earned", { account_id: account })),
+      soft("burn_lock", read("burn_lock", { account_id: account })),
     ]);
     const stakes = new Array(N_OPTIONS).fill(0n);
     for (const [c, o, v] of mine) if (c === BURN_COLONY && o < N_OPTIONS) stakes[o] += BigInt(v);
@@ -103,6 +106,8 @@ export async function loadBurn({ account = wallet.accountId, read = view, skew =
       balance: balance === null ? null : BigInt(balance),
       staked: staked === null ? null : BigInt(staked),
       earned: earned === null ? null : BigInt(earned),
+      // { day, locked }: Burn stakes stay locked until `day`'s pot has paid.
+      lock: lock ?? null,
     };
   }
   return {
@@ -112,7 +117,10 @@ export async function loadBurn({ account = wallet.accountId, read = view, skew =
     cap: cfg ? BigInt(cfg.cap_per_wallet) : null,
     treasury: treasury === null ? null : BigInt(treasury),
     supply: supply === null ? null : BigInt(supply),
-    pool: pool === null ? null : BigInt(pool),
+    // The daily pot menu at today's treasury: [{ pot_bps, reward_bps, burn_bps, burn, reward }].
+    pot: pot ? pot.map((p) => ({ ...p, burn: BigInt(p.burn), reward: BigInt(p.reward) })) : null,
+    // Lifetime rewards, highest first: [[account, yocto bigint]].
+    board: board ? board.map(([a, e]) => [a, BigInt(e)]) : null,
     snaps, me, errors,
   };
 }
@@ -146,6 +154,7 @@ export function runSpec(run, snap, { withAnts = true } = {}) {
     throw new Error("The stake snapshot does not match the run's stake hash.");
   }
   return burnColony(hexToBytes(run.seed), {
+    day: run.day,
     weights: snapshotWeights(snap.entries),
     stakeHash: hexToBytes(run.stake_hash),
     wallets: withAnts ? snapshotWallets(snap.entries) : [],
@@ -210,8 +219,8 @@ export const unstakeSugar = (option, tokens) =>
   wallet.call("unstake", { colony: BURN_COLONY, option, amount: typeof tokens === "bigint" ? tokens.toString() : yocto(tokens) }, { gasTgas: 60 });
 // One crank steps at most 1,500 ticks (about 190 TGas of the 300 allowed).
 export const crankBurn = () => wallet.call("crank_burn", {}, { gasTgas: 300 });
-// Sends the day's burn once the colony has run its last tick. It also pays the
-// day's rewards, so give it room.
+// Runs the day's pot once the colony has run its last tick: burns its burn part
+// and pays its reward part to the stakers on the picked size, so give it room.
 export const executeBurn = (day) => wallet.call("execute_burn", { day }, { gasTgas: 200 });
 
 // ---- history ----
@@ -250,8 +259,11 @@ export async function indexerBurns({ fetchFn = globalThis.fetch, limit = 40, con
     let day;
     try { day = Number(JSON.parse(a?.args ?? "{}").day); } catch { continue; }
     if (!Number.isSafeInteger(day)) continue;
+    // The receipt's block is where the burn ran; failing that, the transaction's,
+    // and the burn ran a block or two later.
+    const receipt = t.receipt_block?.block_height != null;
     const height = t.receipt_block?.block_height ?? t.block?.block_height;
-    rows.push({ day, tx: t.transaction_hash, signer: t.predecessor_account_id ?? null, height: height ?? null, ms: Math.floor(Number(BigInt(t.block_timestamp ?? 0) / 1_000_000n)) });
+    rows.push({ day, tx: t.transaction_hash, signer: t.predecessor_account_id ?? null, height: height ?? null, receipt, ms: Math.floor(Number(BigInt(t.block_timestamp ?? 0) / 1_000_000n)) });
   }
   // One row per day (a later retry is the one that landed), newest first.
   const byDay = new Map();
@@ -259,20 +271,23 @@ export async function indexerBurns({ fetchFn = globalThis.fetch, limit = 40, con
   return [...byDay.values()].sort((a, b) => b.day - a.day);
 }
 
-const HIST_KEY = "antonomy:burn-rows:v1";
+const HIST_KEY = "antonomy:burn-rows:v2";
 const histStore = () => (typeof window === "undefined" ? null : window.localStorage);
 function cachedRows() { try { return JSON.parse(histStore()?.getItem(HIST_KEY) ?? "{}"); } catch { return {}; } }
 function cacheRow(tx, row) {
   try { histStore()?.setItem(HIST_KEY, JSON.stringify({ ...cachedRows(), [tx]: row })); } catch { /* storage full or blocked */ }
 }
-const AMOUNTS = ["before", "burned", "after"];
+const AMOUNTS = ["before", "burned", "reward", "after"];
 const jsonRow = (r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, AMOUNTS.includes(k) ? String(v) : v]));
 const fromJsonRow = (r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, AMOUNTS.includes(k) ? BigInt(v) : v]));
 
 // One history row's chain facts, read as of the block before its burn ran:
-// the run (seed, stake hash, pick, result hash), the treasury it burned from
-// and the stake snapshot. Cached after the first read. Resolves to
-// { day, tx, ms, index, before, burned, after, seed, stakeHash, hash, scores, perm, entries }
+// the run (seed, stake hash, pick, result hash), the treasury and supply it
+// started from and the stake snapshot; then the treasury and supply at the
+// burn's block. The supply's fall is what it burned, and the rest of the
+// treasury's fall is what it paid the stakers, under whichever rules that day
+// ran. Cached after the first read. Resolves to
+// { day, tx, ms, index, before, burned, reward, after, seed, stakeHash, hash, scores, perm, entries }
 // or, if the archive can't be read, the indexer facts alone (`detail: false`).
 export async function burnRow(x, { opts = {}, read = viewAt } = {}) {
   const hit = cachedRows()[x.tx];
@@ -280,16 +295,19 @@ export async function burnRow(x, { opts = {}, read = viewAt } = {}) {
   const base = { day: x.day, tx: x.tx, ms: x.ms, signer: x.signer, detail: false };
   if (!x.height) return base;
   try {
-    const h = x.height - 1;
-    const [run, snap, bal] = await Promise.all([
+    const h = x.height - 1, hAfter = x.receipt === false ? x.height + 2 : x.height;
+    const [run, snap, bal, supply, balAfter, supplyAfter] = await Promise.all([
       read(h, "burn_run", {}, opts),
       read(h, "burn_snapshot", { day: x.day }, opts),
       read(h, "ft_balance_of", { account_id: treasuryId() }, opts),
+      read(h, "ft_total_supply", {}, opts),
+      read(hAfter, "ft_balance_of", { account_id: treasuryId() }, opts),
+      read(hAfter, "ft_total_supply", {}, opts),
     ]);
     if (!run || run.day !== x.day || !run.done) return base;
-    const before = BigInt(bal), burned = burnAmount(before, run.winner_option);
+    const before = BigInt(bal), after = BigInt(balAfter), burned = BigInt(supply) - BigInt(supplyAfter);
     const row = {
-      ...base, detail: true, index: run.winner_option, before, burned, after: before - burned,
+      ...base, detail: true, index: run.winner_option, before, burned, reward: before - after - burned, after,
       seed: run.seed, stakeHash: run.stake_hash, hash: run.result_hash, scores: run.scores, perm: run.perm,
       entries: snapshotHash(snap.entries) === run.stake_hash ? snap.entries : null,
     };

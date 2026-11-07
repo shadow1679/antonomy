@@ -85,15 +85,15 @@ const mk = (agentPosts) => marketForecasters(seedFromInt(7), 0x8000, {
   agentOdds: { odds: [5000, 5000], hash: new Uint8Array(32), posts: agentPosts },
 }, "r0");
 const fs = mk(posts.slice(0, 2)), bare = mk(undefined);
-assert.equal(fs[4].stakers.kind, "agent");
-assert.equal(bare[4].stakers, null);
-assert.equal(fs[3].stakers, null, "Community has no stakes here");
+assert.equal(fs[2].stakers.kind, "agent");
+assert.equal(bare[2].stakers, null);
+assert.equal(fs[1].stakers, null, "Community has no stakes here");
 const run = (f) => { const c = f.make(); while (c.step()); return c.result().hash; };
-assert.equal(run(fs[4]), run(bare[4]));
+assert.equal(run(fs[2]), run(bare[2]));
 
 // The roster and the follow card show what the agent posted.
 const legend = stakerLegendHTML(ag, ["Yes", "No"]);
-assert.ok(legend.includes("a.testnet") && legend.includes("60.0%") && !legend.includes("tANTO"));
+assert.ok(legend.includes("a.testnet") && legend.includes("60.0%") && !legend.includes("$ANTO"));
 const card = followHTML({ a: 0, col: { t: 0 }, trips: [], labels: ["Yes", "No"], stakers: ag });
 assert.ok(card.includes("agent ant · a.testnet") && card.includes("No Brier history yet"));
 

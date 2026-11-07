@@ -49,7 +49,7 @@ import { chain, view, wallet, yocto, ensureTokens, ONE, ZERO_HASH } from "./chai
 import { createAutoCrank } from "./autocrank.mjs";
 import { TripTracker } from "./autopsy.mjs";
 import { $, esc, pad4, hms, hashHTML, installCopy, liveShares, shareBars, topbar, footer, stakerRoster, beliefBoard, whatHTML, wireMapPick, followHTML } from "./ui.mjs";
-import { REPLAY_TPS, pct, utc, wait, fmtT, sumBig, bigJSON, deltaCls, gl, marketHref, liveHref, stepsHTML, clockOf, finished, sigOf, makeVerifier, marketState, colonyCache } from "./lv.mjs";
+import { LIVE_TPS, pct, utc, wait, fmtT, sumBig, bigJSON, deltaCls, gl, marketHref, liveHref, stepsHTML, clockOf, finished, sigOf, makeVerifier, marketState, colonyCache } from "./lv.mjs";
 
 $("topbar").outerHTML = topbar("live", `<span class="chip chip--live" id="live-chip">live</span>`);
 $("footer").outerHTML = footer();
@@ -58,7 +58,8 @@ $("back").href = liveHref("#forecasts");
 
 const replayHref = (rd, key) => `replay.html?round=${rd.id}&colony=${key}`;
 
-// Skip drawing the stage while it is off screen; the colonies still step.
+// Skip drawing the stage (or the idle colonies) while it is off screen; the
+// colonies still step.
 const io = new IntersectionObserver((es) => {
   for (const e of es) if (mk && e.target === mk.stageEl) { mk.visible = e.isIntersecting; if (mk.visible) mk.busy = true; }
 });
@@ -124,8 +125,8 @@ addEventListener("popstate", () => { pin = null; if (round) { show(resolve()); h
 
 // ---- the market ----
 
-const ABSTAIN = { 3: "Nobody staked on this market, so Community has no input and sits out of the swarm belief.",
-  4: "No forecaster agent posted, so Agents has no input and sits out of the swarm belief." };
+const ABSTAIN = { [COMMUNITY]: "Nobody staked on this market, so Community has no input and sits out of the swarm belief.",
+  [AGENTS]: "No forecaster agent posted, so Agents has no input and sits out of the swarm belief." };
 
 function keepersHTML(m) {
   if (!m.rawHashes.length) return `<p class="text-sm text-muted" style="margin: 0">No keeper list accepted yet.</p>`;
@@ -142,40 +143,50 @@ function timelineHTML(now = Date.now()) {
     [utc(round.closeMs), "Staking closes", "Stakes on this market freeze into the Community colony's input.", left(round.closeMs)],
     [utc(round.publishMs), "Agents' window ends", "Forecaster agents post odds until then; Agents follows their median.", left(round.publishMs)],
     ["", "First crank draws the seed", "Anyone may crank. The block's random seed becomes the round seed.", ""],
-    ["", "Five colonies run on-chain", "One colony per call, then the swarm belief and market hash are final.", ""],
+    ["", "Three colonies run on-chain", "One colony per call, then the swarm belief and market hash are final.", ""],
   ];
   return steps.map(([t, title, text, l], i) => `<li data-state="${st(i)}"><span class="lv-timeline__at">${t}</span>
     <div class="lv-timeline__body"><b>${gl(`${st(i) === "past" ? "✓ " : st(i) === "now" ? "◌ " : ""}${title}`)}${l}</b><p>${text}</p></div></li>`).join("");
 }
 
-// What each forecaster will read, for a market that has not run yet.
-function kindsHTML(m) {
+// What each forecaster will read, for a market that has not run yet:
+// [text, state], state "out" when it would sit out as things stand.
+function kindReads(m) {
   const t = m.stakes ? sumBig(m.stakes) : null;
   const posts = agentSnap?.colony === m.colony ? agentSnap.posts : [];
-  const input = [
-    ["the keepers' odds", ""], ["the keepers' odds", ""], ["odds now against 6 hours ago", ""],
-    t ? [`${fmtT(t)} tANTO staked so far`, ""] : ["no stakes yet: would sit out", "out"],
-    posts.length ? [`${posts.length} agent post${posts.length === 1 ? "" : "s"}`, ""] : [round.phase === "posting" ? "agents post after staking closes" : "no posts yet: would sit out", posts.length || round.phase === "posting" ? "" : "out"],
+  return [
+    ["odds now against 6 hours ago", ""],
+    t ? [`${fmtT(t)} $ANTO staked so far`, ""] : ["no stakes yet: would sit out", "out"],
+    posts.length ? [`${posts.length} agent post${posts.length === 1 ? "" : "s"}`, ""]
+      : round.phase === "posting" ? ["agents post after staking closes", ""] : ["no posts yet: would sit out", "out"],
   ];
-  return KIND_NAMES.map((name, k) => `<li><b>${name}</b><span>${KIND_BLURB[k]}</span><small data-state="${input[k][1]}">reads ${input[k][0]}</small></li>`).join("");
 }
+const readsHTML = ([text, state]) => `<span class="lv-pick__reads"${state ? ` data-state="${state}"` : ""}>reads ${text}</span>`;
 
+// Before the seed: the three colonies idling where their maps will be (the
+// same tiles the stage uses once the seed exists), then when each step happens.
 const planHTML = (m) => `
-  <div class="lv-plan">
+  <div class="lv-stage lv-stage--idle">
+    <div class="lv-stage__head"><h2 class="lv-h3" id="kd-title">The three colonies</h2>
+      <span class="text-sm text-muted">scouts idle until the seed</span>${whatHTML("forecasters", "More")}</div>
+    <ul class="lv-picks lv-picks--idle" aria-labelledby="kd-title">${KIND_NAMES.map((name, k) => `
+      <li class="lv-pick">
+        <canvas width="216" height="144" data-idle aria-hidden="true"></canvas>
+        <span class="lv-pick__name">${name}</span>
+        <span class="lv-pick__blurb">${KIND_BLURB[k]}</span>
+        <span data-r="reads-${k}">${readsHTML(kindReads(m)[k])}</span>
+      </li>`).join("")}
+    </ul>
+    <p class="lv-stage__note">No map exists before the seed. The first crank after ${utc(round.publishMs)} draws it, and each colony then forages on its own map, inside the contract.</p>
     <section class="lv-panel" aria-labelledby="tl-title">
       <div class="lv-panel__head"><h2 class="lv-h3" id="tl-title">What happens next</h2></div>
       <ol class="lv-timeline" data-r="timeline">${timelineHTML()}</ol>
-    </section>
-    <section class="lv-panel" aria-labelledby="kd-title">
-      <div class="lv-panel__head"><h2 class="lv-h3" id="kd-title">The five colonies</h2>${whatHTML("forecasters", "More")}</div>
-      <ul class="lv-kinds" data-r="kinds">${kindsHTML(m)}</ul>
-      <p class="lv-panel__foot">There is no map before the seed exists. Each colony then runs on its own map, inside the contract.</p>
     </section>
   </div>`;
 
 const stageHTML = (m, sel) => `
   <div class="lv-stage">
-    <div class="lv-picks" role="tablist" aria-label="The five colonies">${m.forecasters.map((f, k) => `
+    <div class="lv-picks" role="tablist" aria-label="The three colonies">${m.forecasters.map((f, k) => `
       <button type="button" role="tab" class="lv-pick" data-k="${k}" aria-selected="${k === sel}" tabindex="${k === sel ? 0 : -1}" aria-controls="stage-map">
         <canvas width="216" height="144" aria-hidden="true"></canvas>
         <span class="lv-pick__name">${f.name}</span>
@@ -220,7 +231,7 @@ const checksHTML = (m) => `
       </table></div>
     </section>
     <section class="lv-panel" aria-labelledby="bf-title">
-      <div class="lv-panel__head"><h2 class="lv-h3" id="bf-title">By colony, %</h2>${whatHTML("forecasters", "The five forecasters")}</div>
+      <div class="lv-panel__head"><h2 class="lv-h3" id="bf-title">By colony, %</h2>${whatHTML("forecasters", "The three forecasters")}</div>
       <div class="table-wrap"><table class="table">
         <caption class="visually-hidden">Each colony's trail share per outcome, the swarm belief and its gap to the market. Forecast, not advice.</caption>
         <thead><tr><th scope="col">Outcome</th><th scope="col" class="num">Market</th>
@@ -251,7 +262,7 @@ function marketHTML(it, sel) {
   const prevK = list[idx - 1]?.m.key, nextK = list[idx + 1]?.m.key;
   const nk = m.rawHashes.length;
   const beliefNote = m.swarm ? `Market hash ${hashHTML(m.marketHash, "market hash")} ${whatHTML("market-hash", "What's this?")}`
-    : run ? "The swarm belief appears once all five colonies are cranked."
+    : run ? "The swarm belief appears once all three colonies are cranked."
     : "Posted on-chain by the keepers. The colonies run after the agents' window.";
   const step = (k, label) => (k ? `<a class="btn btn--sm btn--ghost" href="${marketHref(k)}" data-nav="${k}">${label}</a>`
     : `<span class="btn btn--sm btn--ghost" aria-disabled="true">${label}</span>`);
@@ -329,7 +340,16 @@ function setupMarket() {
   const { it, root, q } = mk, { m } = it;
   if (m.swarm) beliefBoard(q("belief"), m.outcomes, m.odds)(m.swarm);
   else shareBars(q("belief"), m.outcomes)(m.odds.map((x) => x / 100));
-  if (!m.forecasters) return;
+  if (!m.forecasters) {
+    mk.idles = [...root.querySelectorAll("canvas[data-idle]")].map((cv, k) => {
+      const th = new ColonyThumb(cv, { glyphs: GLYPHS });
+      th.drawIdle(k);
+      return th;
+    });
+    mk.stageEl = root.querySelector(".lv-picks");
+    io.observe(mk.stageEl);
+    return;
+  }
   verifyOf(m);
   const cs = m.forecasters.map((f) => colonyFor(f, m.run.seed));
   mk.cols = cs.map((c) => c.col);
@@ -360,7 +380,8 @@ function setupMarket() {
     const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
     if (!d) return;
     e.preventDefault();
-    select((mk.sel + d + 5) % 5);
+    const nk = mk.it.m.forecasters.length;
+    select((mk.sel + d + nk) % nk);
     picks.children[mk.sel].focus();
   });
   root.addEventListener("click", (e) => {
@@ -462,18 +483,18 @@ function paintChecks() {
 }
 
 function paintKinds() {
-  const el = mk?.q("kinds");
-  if (el) el.innerHTML = kindsHTML(mk.it.m);
+  if (!mk?.idles) return;
+  kindReads(mk.it.m).forEach((r, k) => { mk.q(`reads-${k}`).innerHTML = readsHTML(r); });
 }
 
-// Every frame: replay the market's cranked colonies at REPLAY_TPS.
+// Every frame: replay the market's cranked colonies at LIVE_TPS.
 function stepMarket(perf) {
   if (!mk?.cols) return;
   const now = performance.now(), { cols, it } = mk;
   let running = false, changed = false;
   cols.forEach((col, k) => {
     if (!it.m.forecasters[k].cranked) { mk.fracs[k] = 1; return; }
-    const exact = Math.min(col.ticks, ((now - mk.starts[k]) / 1000) * REPLAY_TPS), target = Math.floor(exact);
+    const exact = Math.min(col.ticks, ((now - mk.starts[k]) / 1000) * LIVE_TPS), target = Math.floor(exact);
     const fx = target - col.t <= 2;
     while (col.t < target) {
       col.step();
@@ -493,6 +514,14 @@ function stepMarket(perf) {
     mk.thumbs.forEach((th, k) => th.draw(mk.fracs[k] ?? 1));
     mk.busy = mk.views[mk.sel].draw(mk.fracs[mk.sel] ?? 1, perf);
   }
+}
+
+// Every frame before the seed: the colonies' idle scouts, while on screen.
+const stillMotion = matchMedia("(prefers-reduced-motion: reduce)");
+function stepIdle() {
+  if (!mk?.idles || !mk.visible || stillMotion.matches) return;
+  const t = performance.now() / 1000;
+  mk.idles.forEach((th, k) => th.drawIdle(k, t));
 }
 
 // ---- round bar: the round of the market shown ----
@@ -608,18 +637,18 @@ function stakeBody(m, a, mine, open) {
   if (a?.error) return `<p class="lv-act__text">Could not read your account: ${esc(a.error)}</p>`;
   const cap = cfg?.cap ?? 0n, left = cap > a.staked ? cap - a.staked : 0n;
   return `<dl class="kv">
-      <dt>Balance</dt><dd class="num">${fmtT(a.bal)} tANTO${a.claimed ? "" : ` <span class="text-faint">+ ${faucetText()} on first stake</span>`}</dd>
-      <dt>Staked</dt><dd class="num">${fmtT(a.staked)} of ${fmtT(cap)} tANTO this round</dd>
+      <dt>Balance</dt><dd class="num">${fmtT(a.bal)} $ANTO${a.claimed ? "" : ` <span class="text-faint">+ ${faucetText()} on first stake</span>`}</dd>
+      <dt>Staked</dt><dd class="num">${fmtT(a.staked)} of ${fmtT(cap)} $ANTO this round</dd>
     </dl>
     ${open ? `<div class="lv-act__form">
       <div class="field"><label class="field__label" for="st-opt">Outcome</label>
         <select class="input" id="st-opt">${m.outcomes.map((o, i) => `<option value="${i}">${GLYPHS[i]} ${esc(o)}</option>`).join("")}</select></div>
-      <div class="field"><label class="field__label" for="st-amt">tANTO</label>
+      <div class="field"><label class="field__label" for="st-amt">$ANTO</label>
         <input class="input num" id="st-amt" type="number" min="1" max="${Number(left / ONE)}" step="1" value="${Math.min(10, Number(left / ONE) || 1)}"></div>
       <button class="btn btn--primary" type="button" data-act="stake"${left === 0n ? " disabled" : ""}>Stake on this market</button>
     </div>` : `<p class="lv-act__text">Staking closed at ${utc(round.closeMs)}.</p>`}
     ${mine.length ? `<ul class="lv-act__mine" aria-label="Your stakes on this market">${mine.map((s) => `<li>
-      <span class="opt" data-opt="${s.option}">${esc(m.outcomes[s.option] ?? "?")}</span><span class="num">${fmtT(s.amount)} tANTO</span>
+      <span class="opt" data-opt="${s.option}">${esc(m.outcomes[s.option] ?? "?")}</span><span class="num">${fmtT(s.amount)} $ANTO</span>
       ${open ? `<button class="btn btn--sm btn--ghost" type="button" data-act="unstake" data-opt="${s.option}" data-amt="${s.amount}">Unstake</button>` : ""}</li>`).join("")}</ul>
       <p class="lv-note" data-r="share"></p>` : ""}`;
 }
@@ -629,7 +658,7 @@ function postBody(m, a, posts, mineP) {
   const list = posts.length ? `<ul class="lv-posts" aria-label="Posted so far">${posts.map(([id, o]) => `<li><code>${esc(id)}</code> <span class="num">${o.map(pct).join(" / ")}%</span></li>`).join("")}</ul>` : "";
   if (!acct) return intro + connectHTML("post odds") + list;
   if (a?.error) return `<p class="lv-act__text">Could not read your account: ${esc(a.error)}</p>`;
-  if (!a.isAgent) return intro + `<p class="lv-act__text">Registering locks a refundable deposit of <b class="num">${fmtT(cfg?.deposit ?? 0n)} tANTO</b>.</p>
+  if (!a.isAgent) return intro + `<p class="lv-act__text">Registering locks a refundable deposit of <b class="num">${fmtT(cfg?.deposit ?? 0n)} $ANTO</b>.</p>
     <button class="btn btn--sm" type="button" data-act="register">Register as an agent</button>` + list;
   if (round.phase !== "agents") return `<p class="lv-act__text">You are a registered agent. ${round.phase === "posting" ? `The window opens when staking closes at ${utc(round.closeMs)}.` : "This round's window is closed."}${mineP ? ` Your post: <span class="num">${mineP.map(pct).join(" / ")}%</span>.` : ""}</p>` + list;
   const start = mineP ?? m.odds;
@@ -746,7 +775,7 @@ async function loadCfg() {
 }
 
 function frame(perf) {
-  if (round) stepMarket(perf);
+  if (round) { stepMarket(perf); stepIdle(); }
   requestAnimationFrame(frame);
 }
 

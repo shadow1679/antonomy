@@ -6,7 +6,7 @@ import { agentSnapshot } from "./agents.mjs";
 const hx = (h) => Uint8Array.from(h.match(/../g), (x) => parseInt(x, 16));
 
 // One crosscheck-style market; `salt` changes the seed so two rounds differ.
-export function cannedRound(id, { cranked = 5, salt = String(id) } = {}) {
+export function cannedRound(id, { cranked = 3, salt = String(id) } = {}) {
   const seedHex = toHex(sha256(new TextEncoder().encode(`canned-seed-${salt}`)));
   const stakeHash = toHex(sha256(new TextEncoder().encode(`canned-stakes-${salt}`)));
   const mv = {
@@ -20,10 +20,10 @@ export function cannedRound(id, { cranked = 5, salt = String(id) } = {}) {
   const agents = { odds: sn.odds, hash: toHex(sn.hash), posts: posts.map((p) => [p.id, p.odds]) };
   const t = forecastMarket(hx(seedHex), 1, mv.odds, mv.odds_6h, weights, hx(stakeHash), agents.odds, sn.hash);
   const run = {
-    round: id, seed: seedHex, stake_hash: stakeHash, done: cranked === 5,
+    round: id, seed: seedHex, stake_hash: stakeHash, done: cranked === 3,
     markets: [{ colony: 1, weights, agents, colony_hashes: t.colonies.map((c) => c.hash).slice(0, cranked),
-      crankers: ["c.testnet", "c.testnet", "d.testnet", "d.testnet", "c.testnet"].slice(0, cranked),
-      swarm: cranked === 5 ? t.swarm : null, market_hash: cranked === 5 ? t.hash : null }],
+      crankers: ["c.testnet", "d.testnet", "c.testnet"].slice(0, cranked),
+      swarm: cranked === 3 ? t.swarm : null, market_hash: cranked === 3 ? t.hash : null }],
   };
   return { mv, run, truth: t };
 }

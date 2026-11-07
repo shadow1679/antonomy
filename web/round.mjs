@@ -10,7 +10,7 @@
 // executes after the final tick. Sugar dropped after 12:00 counts for
 // tomorrow's colony.
 
-import { DAY_MS, STAKING_MS, hexToBytes, snapshotWeights, snapshotWallets } from "./burn.mjs";
+import { DAY_MS, STAKING_MS, hexToBytes, snapshotWeights, snapshotWallets, burnRichnessFor } from "./burn.mjs";
 import {
   Colony, sha256, colonySeed, stakeRichness, oddsRichness, oddsSnapshotHash,
   agentRichness, voters, BURN_COLONY, KINDS, COMMUNITY, AGENTS, N_ANTS, BURN_TICKS, FORECAST_ANTS, FORECAST_TICKS,
@@ -19,11 +19,9 @@ import { walletWeights, stakerAnts, agentAnts } from "./ds/staker-ants.mjs";
 
 export const GLYPHS = ["▲", "■", "◆", "●", "★"];
 export const BURN_MENU = ["0.10%", "0.25%", "0.50%", "1.00%", "2.00%"];
-export const KIND_NAMES = ["Follower", "Contrarian", "Momentum", "Community", "Agents"];
+export const KIND_NAMES = ["Momentum", "Community", "Agents"];
 // One line per tile; the Docs page has the long version.
 export const KIND_BLURB = [
-  "Backs the favourite.",
-  "Backs the underdog.",
   "Follows the 6-hour move.",
   "Follows $ANTO stakes.",
   "Follows AI agents' odds.",
@@ -71,7 +69,7 @@ export const knownBurnDays = () => [...known.keys()].sort((a, b) => a - b);
 // sqrt-tokens per option), `stakeHash` (32 bytes) and `wallets` (for the staker
 // ants, which are cosmetic). make() returns a fresh Colony at tick 0 and is
 // what must reproduce the contract's result hash.
-export function burnColony(daySeed, { weights = new Array(5).fill(0), stakeHash = ZERO32, wallets = [] } = {}) {
+export function burnColony(daySeed, { day = Infinity, weights = new Array(5).fill(0), stakeHash = ZERO32, wallets = [] } = {}) {
   const seed = daySeed ? colonySeed(daySeed, BURN_COLONY) : null;
   return {
     key: "burn",
@@ -86,7 +84,7 @@ export function burnColony(daySeed, { weights = new Array(5).fill(0), stakeHash 
     stakers: stakerAnts(wallets, N_ANTS),
     make: () => {
       if (!seed) throw new Error("This day's seed isn't known to this browser yet: open the Burn page while the day runs, or after the first crank_burn.");
-      return new Colony(seed, 5, stakeRichness(weights), N_ANTS, BURN_TICKS, stakeHash);
+      return new Colony(seed, 5, burnRichnessFor(day, weights), N_ANTS, BURN_TICKS, stakeHash);
     },
   };
 }
@@ -108,7 +106,7 @@ export function burnDay(day) {
     winner: k?.winner ?? null,   // the chain's pick, once this browser has seen the finished run
     hash: k?.hash ?? null,       // the chain's result hash, likewise
     burn: burnColony(seed, k ? {
-      weights: snapshotWeights(k.entries), stakeHash: hexToBytes(k.stakeHash), wallets: snapshotWallets(k.entries),
+      day, weights: snapshotWeights(k.entries), stakeHash: hexToBytes(k.stakeHash), wallets: snapshotWallets(k.entries),
     } : undefined),
   };
 }
