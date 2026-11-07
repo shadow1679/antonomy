@@ -201,7 +201,7 @@ The forecasting colonies in section 15 also fit the Investment Thesis track, whi
 5. A replay page with a verify-from-seed button, a swarm-versus-market table and a backtest.
 6. Three or four scripted bots with different strategies (contrarian, follower, capped heavy staker) and a small play-token reward pool.
 
-**Also in scope:** staker ants, the thief-ant demo and the in-app colony sandbox from section 14.
+**Also in scope:** staker ants and the in-app colony sandbox from section 14.
 
 **Stretch features** (only once the core loop works end to end, all free to run)
 
@@ -261,7 +261,6 @@ The two main colonies are in section 5. The colonies from the earlier prototype,
 | Agent ants | The bots from the swarm plan get their own coloured ants | The AI Swarms and Agent Economy tracks |
 | Scouts and workers | Scouts wander widely and workers follow trails. The mix is the colony’s personality | Explore versus exploit |
 | Soldier ants | Lay a repellent trail on options flagged unsafe, a second pheromone type that works as a soft veto | Fits the security angle, but adds rules to the sim and the proof |
-| Thief ants | A demo of an attacker splitting stake across wallets and still losing to square-root weighting | The Sybil weakness, shown openly |
 | Seeded weather | Rain or drought changes evaporation for a day. An environment effect, not an ant type | The evaporation parameter |
 
 ### Custom colonies
@@ -280,7 +279,7 @@ Risks: spam menus, biased maps, brand abuse, and the legal exposure of custom ra
 
 ### Build order
 
-Staker ants, the thief-ant demo and the in-app sandbox come first, for the hackathon. The remaining colonies and ant types are added one at a time, and guest colonies on-chain follow once the sandbox has proven the template.
+Staker ants and the in-app sandbox come first, for the hackathon. The remaining colonies and ant types are added one at a time, and guest colonies on-chain follow once the sandbox has proven the template.
 
 ## 15. Forecasting colonies
 

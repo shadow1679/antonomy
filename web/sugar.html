@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Antonomy · drop sugar</title>
+<link rel="stylesheet" href="app.css">
+<style>
+  .scent-table th, .scent-table td { padding-inline: var(--space-2); }
+</style>
+</head>
+<body>
+<div id="topbar"></div>
+
+<main>
+  <div class="page-head container">
+    <p class="eyebrow">Drop sugar · preview in your browser, nothing is staked</p>
+    <h1>Drop sugar on a burn size.</h1>
+    <p class="lede">Holders steer the Burn colony by dropping sugar on an option: the more sugar, the stronger its scent, and the more food the ants find there. Pick an option and an amount to see the same round twice, once without your sugar and once with it. Same seed, same map, same ants. Only the scent differs.</p>
+    <div class="notice notice--info" style="margin-top: var(--space-4)"><div><span class="notice__title">Preview only</span><p>This page sends nothing. On testnet, sugar is a stake in the contract, and staking closes before the drand round is published. Other holders here are fixtures, and the per-wallet cap is a sample value.</p></div></div>
+  </div>
+
+  <section class="page-section" aria-labelledby="form-title">
+    <div class="container split">
+      <form class="chamber stack" id="form" novalidate>
+        <div class="chamber__header" style="margin: 0">
+          <h2 class="chamber__title" id="form-title">Drop sugar</h2>
+          <span class="chip" id="round-chip">round …</span>
+        </div>
+        <fieldset class="option-cards" id="options" style="border: 0; padding: 0; margin-inline: 0; min-width: 0">
+          <legend class="field__label" style="margin-bottom: var(--space-2)">Option to back</legend>
+        </fieldset>
+        <div class="stake field">
+          <label class="field__label" for="stake-num">Sugar</label>
+          <div class="stake__row">
+            <input class="range" type="range" id="stake-range" min="0" step="1" aria-label="Sugar amount">
+            <div class="input-group"><input class="input num" type="number" id="stake-num" min="0" step="1"><span class="input-group__suffix">tANTO</span></div>
+          </div>
+          <dl class="stake__readout">
+            <div><dt>Sugar</dt><dd class="num" id="r-stake">0</dd></div>
+            <div><dt>Weight √</dt><dd class="num is-accent" id="r-weight">0.0</dd></div>
+            <div><dt>Cap used</dt><dd class="num" id="r-cap">0%</dd></div>
+          </dl>
+          <span class="field__hint" id="cap-hint"></span>
+        </div>
+        <div class="cluster">
+          <button class="btn btn--primary" type="submit" id="drop">Drop sugar</button>
+          <button class="btn btn--ghost" type="button" id="skip" disabled>Skip to the end</button>
+        </div>
+      </form>
+
+      <div class="chamber">
+        <div class="chamber__header">
+          <h3 class="chamber__title">Scent</h3>
+          <span class="eyebrow">food richness per option</span>
+        </div>
+        <div class="table-wrap">
+          <table class="table scent-table">
+            <thead><tr><th scope="col">Option</th><th scope="col" class="num">Weight</th><th scope="col" class="num">+ sugar</th><th scope="col" class="num">Scent</th><th scope="col" class="num">+ sugar</th></tr></thead>
+            <tbody id="scent"></tbody>
+          </table>
+        </div>
+        <p class="text-xs text-faint" style="margin: var(--space-3) 0 0">Weight is the sum of √(tokens) over holders, in sqrt-tokens. Scent is the food on that source, 0.70 to 1.30, with the strongest option scaled to 1.30.</p>
+        <p class="text-xs text-faint" style="margin: var(--space-2) 0 0" id="sqrt-note"></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="page-section" aria-labelledby="runs-title">
+    <div class="container">
+      <div class="section-head">
+        <h2 id="runs-title">Same round, with and without</h2>
+        <span class="chip" id="run-chip">ready</span>
+      </div>
+      <div class="forecasters">
+        <div class="chamber forecaster" id="side-without">
+          <div class="chamber__header"><h3 class="chamber__title">Without your sugar</h3><span class="eyebrow" data-r="share-tick">tick 0</span></div>
+          <div class="sim-frame">
+            <canvas width="720" height="480" aria-label="Burn colony without your sugar"></canvas>
+            <div class="sim-frame__hud"><span class="sim-frame__tick">tick <strong data-r="tick">0000</strong>/0800</span><span class="sim-frame__tick" data-r="leader">no trail yet</span></div>
+          </div>
+          <ul class="share-bars share-bars--compact" data-r="bars"></ul>
+          <div data-r="result"></div>
+        </div>
+        <div class="chamber forecaster" id="side-with">
+          <div class="chamber__header"><h3 class="chamber__title">With your sugar</h3><span class="eyebrow" data-r="share-tick">tick 0</span></div>
+          <div class="sim-frame">
+            <canvas width="720" height="480" aria-label="Burn colony with your sugar"></canvas>
+            <div class="sim-frame__hud"><span class="sim-frame__tick">tick <strong data-r="tick">0000</strong>/0800</span><span class="sim-frame__tick" data-r="leader">no trail yet</span></div>
+          </div>
+          <ul class="share-bars share-bars--compact" data-r="bars"></ul>
+          <div data-r="result"></div>
+        </div>
+      </div>
+      <div class="chamber" role="status" aria-live="polite" id="verdict" style="margin-top: var(--space-4)"><p class="text-sm text-muted" style="margin: 0">Drop some sugar to run both colonies.</p></div>
+      <p class="text-xs text-faint" style="margin-top: var(--space-4)">Sugar tilts the food, not the outcome: the map, the ants and the seed still decide, and one seed is one draw. The colony only ever picks an index from the burn menu, hard-capped at 2%. Your ants are tinted as <span class="wallet" style="--wallet-hue: 0">you.testnet</span> in the with-sugar colony.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="page-foot">
+  <div class="container"><p class="text-xs text-faint">Antonomy · NEAR testnet only · sim ANTO-SIM-v1 · preview runs in your browser and stakes nothing.</p></div>
+</footer>
+
+<script type="module">
+import { trailShares } from "../sim/js/antosim.mjs";
+import { ColonyView } from "./ds/colony-view.mjs";
+import { demoRound, GLYPHS, BURN_MENU } from "./round.mjs";
+import { sugarPreview, SUGAR_CAP, N_OPTIONS } from "./sugar.mjs";
+import { $, esc, pad4, hashHTML, installCopy, liveShares, shareBars, leaderHTML, topbar } from "./ui.mjs";
+
+$("topbar").outerHTML = topbar("sugar");
+installCopy();
+
+const TPS = 48; // ticks per second while a preview runs
+const round = demoRound();
+$("round-chip").textContent = `round ${round.id.toLocaleString("en")}`;
+
+// ---- Form ----
+const state = { option: 2, tokens: 0 };
+const stakeNum = $("stake-num"), stakeRange = $("stake-range");
+stakeNum.max = stakeRange.max = SUGAR_CAP;
+$("cap-hint").textContent = `One budget across all colonies. Weight is the square root of the stake, and each wallet is capped at ${SUGAR_CAP} tANTO (sample value).`;
+
+$("options").insertAdjacentHTML("beforeend", BURN_MENU.map((label, o) =>
+  `<label class="option-card" data-opt="${o}"><input type="radio" name="burn" value="${o}"${o === state.option ? " checked" : ""}>` +
+  `<span class="opt text-xs">option ${o}</span><span class="option-card__value">${label}</span>` +
+  `<span class="option-card__meta">${o === N_OPTIONS - 1 ? "cap: 2% max" : "of treasury"}</span></label>`).join(""));
+
+// ---- Two colonies, one per side ----
+function makeSide(root) {
+  const r = (k) => root.querySelector(`[data-r="${k}"]`);
+  const view = new ColonyView(root.querySelector("canvas"), { labels: BURN_MENU, glyphs: GLYPHS });
+  view.selected = -1;
+  return { root, r, view, bars: shareBars(r("bars"), BURN_MENU), col: null, result: null, busy: true };
+}
+const sides = { without: makeSide($("side-without")), with: makeSide($("side-with")) };
+let preview, running = false, acc = 0, lastNow = 0, raf = 0;
+
+function panels(s) {
+  const { col, r } = s, done = col.t === col.ticks;
+  const { pct, lead } = liveShares(col);
+  r("tick").textContent = pad4(col.t);
+  r("share-tick").textContent = `tick ${col.t}`;
+  r("leader").innerHTML = leaderHTML(BURN_MENU, lead, done);
+  if (done) {
+    s.result = col.result();
+    const o = s.result.winner_option;
+    s.bars(trailShares(s.result).map((x) => x / 100), o);
+    r("result").innerHTML = `<p class="text-sm" style="margin: 0 0 var(--space-2)">Picked <span class="opt" data-opt="${o}">${esc(BURN_MENU[o])}</span> of the treasury.</p>` +
+      `<dl class="kv text-xs"><dt>Result hash</dt><dd>${hashHTML(s.result.hash, "result hash")}</dd></dl>`;
+  } else {
+    s.bars(pct);
+  }
+}
+
+function verdict() {
+  const a = sides.without.result, b = sides.with.result;
+  const oa = a.winner_option, ob = b.winner_option;
+  const sa = trailShares(a)[state.option] / 100, sb = trailShares(b)[state.option] / 100;
+  const you = `<span class="opt" data-opt="${state.option}">${esc(BURN_MENU[state.option])}</span>`;
+  const head = oa === ob
+    ? `Same pick: <span class="opt" data-opt="${ob}">${esc(BURN_MENU[ob])}</span>. Your sugar didn't change the decree on this seed.`
+    : `Your sugar changed the pick, from <span class="opt" data-opt="${oa}">${esc(BURN_MENU[oa])}</span> to <span class="opt" data-opt="${ob}">${esc(BURN_MENU[ob])}</span>.`;
+  const d = sb - sa;
+  $("verdict").innerHTML = `<p style="margin: 0 0 var(--space-2)">${head}</p>` +
+    `<p class="text-sm text-muted" style="margin: 0">Trail share on ${you}: ${sa.toFixed(1)}% without, ${sb.toFixed(1)}% with (${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)} points). ` +
+    `The two result hashes differ because the stakes differ.</p>`;
+}
+
+// Both sides back at tick 0 for the current choice.
+function reset() {
+  running = false;
+  acc = 0;
+  preview = sugarPreview(round.seed, state.option, state.tokens);
+  for (const k of ["without", "with"]) {
+    const s = sides[k], p = preview[k];
+    s.col = p.make();
+    s.result = null;
+    s.view.setStakers(p.stakers);
+    s.view.attach(s.col);
+    s.r("result").innerHTML = "";
+    panels(s);
+    s.busy = true;
+  }
+  $("verdict").innerHTML = `<p class="text-sm text-muted" style="margin: 0">${state.tokens ? "Drop the sugar to run both colonies." : "Choose an amount above 0 to compare."}</p>`;
+  $("run-chip").textContent = "ready";
+  $("skip").disabled = true;
+  $("drop").disabled = state.tokens === 0;
+  kick();
+}
+
+function scentTable() {
+  const { without: a, with: b } = preview;
+  const w = (x) => (x / 1000).toFixed(1), rich = (x) => (x / 256).toFixed(2);
+  $("scent").innerHTML = BURN_MENU.map((label, o) => {
+    const up = b.richness[o] !== a.richness[o];
+    return `<tr><th scope="row"><span class="opt" data-opt="${o}">${esc(label)}</span></th>` +
+      `<td class="num">${w(a.weights[o])}</td><td class="num${b.weights[o] !== a.weights[o] ? " is-accent" : ""}">${w(b.weights[o])}</td>` +
+      `<td class="num">${rich(a.richness[o])}</td><td class="num${up ? " is-accent" : ""}">${rich(b.richness[o])}</td></tr>`;
+  }).join("");
+  $("sqrt-note").textContent = state.tokens
+    ? `${state.tokens} tANTO adds √ = ${(preview.weight / 1000).toFixed(1)} to ${BURN_MENU[state.option]}. Four times the sugar would only double that, so a whale gains much less than a crowd.`
+    : "Square-root weighting: four times the sugar only doubles its weight, so a whale gains much less than a crowd.";
+}
+
+function update() {
+  $("r-stake").textContent = state.tokens.toLocaleString("en");
+  $("r-weight").textContent = (Math.floor(Math.sqrt(state.tokens * 1e6)) / 1000).toFixed(1);
+  $("r-cap").textContent = `${Math.round((state.tokens / SUGAR_CAP) * 100)}%`;
+  stakeRange.style.setProperty("--progress", (state.tokens / SUGAR_CAP) * 100);
+  reset();
+  scentTable();
+  const l = $("side-with").querySelector(".chamber__title");
+  l.textContent = state.tokens ? `With your ${state.tokens} tANTO on ${BURN_MENU[state.option]}` : "With your sugar";
+}
+
+function setTokens(v) {
+  const n = Math.min(SUGAR_CAP, Math.max(0, Math.round(+v) || 0));
+  stakeNum.value = stakeRange.value = state.tokens = n;
+  update();
+}
+
+$("options").addEventListener("change", (e) => { state.option = +e.target.value; update(); });
+stakeRange.addEventListener("input", (e) => setTokens(e.target.value));
+stakeNum.addEventListener("change", (e) => setTokens(e.target.value));
+
+// ---- Run ----
+$("form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (!state.tokens) return;
+  reset();
+  running = true;
+  $("run-chip").textContent = "running";
+  $("skip").disabled = false;
+  kick();
+});
+
+$("skip").addEventListener("click", () => {
+  for (const s of Object.values(sides)) { while (s.col.t < s.col.ticks) { s.col.step(); s.view.afterStep(false); } panels(s); s.busy = true; }
+  finish();
+  kick();
+});
+
+function finish() {
+  running = false;
+  $("run-chip").textContent = "done";
+  $("skip").disabled = true;
+  verdict();
+}
+
+function frame(now) {
+  raf = 0;
+  const list = Object.values(sides);
+  let keep = false;
+  if (running) {
+    acc += (Math.min(100, now - lastNow) / 1000) * TPS;
+    const n = Math.floor(acc);
+    acc -= n;
+    for (const s of list) {
+      let stepped = false;
+      for (let i = 0; i < n && s.col.t < s.col.ticks; i++) { s.col.step(); s.view.afterStep(n <= 2); stepped = true; }
+      if (stepped) panels(s);
+    }
+    if (list.every((s) => s.col.t === s.col.ticks)) finish();
+  }
+  lastNow = now;
+  for (const s of list) {
+    if (running || s.busy) s.busy = s.view.draw(running ? acc : 1, now);
+    keep ||= running || s.busy;
+  }
+  if (keep) raf = requestAnimationFrame(frame);
+}
+function kick() {
+  if (raf) return;
+  lastNow = performance.now();
+  raf = requestAnimationFrame(frame);
+}
+
+setTokens(0);
+document.fonts.ready.then(() => { for (const s of Object.values(sides)) s.busy = true; kick(); });
+</script>
+</body>
+</html>

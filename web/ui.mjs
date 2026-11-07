@@ -231,7 +231,7 @@ export class Player {
   }
 }
 
-// Shared header. `page` is "live", "sandbox" or "replay".
+// Shared header. `page` is "live", "sandbox", "sugar" or "replay".
 export function topbar(page, end = "") {
   const link = (href, key, label) =>
     `<a href="${href}"${key === page ? ' aria-current="page"' : ""}>${label}</a>`;
@@ -240,6 +240,7 @@ export function topbar(page, end = "") {
     <nav class="nav" aria-label="Pages">
       ${link("index.html", "live", "Live colonies")}
       ${link("sandbox.html", "sandbox", "Sandbox")}
+      ${link("sugar.html", "sugar", "Drop sugar")}
       ${link("replay.html", "replay", "Replay &amp; verify")}
     </nav>
     <div class="topbar__end" id="topbar-end">${end}</div>

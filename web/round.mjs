@@ -30,7 +30,7 @@ const ZERO32 = new Uint8Array(32);
 // Stakes are fixture wallets (whole tokens per option). The weights the sim
 // reads are derived from them the way Staking::sim_weights does (milli
 // sqrt-tokens per option), so the staker ants and the food richness agree.
-const BURN_WALLETS = [
+export const BURN_WALLETS = [
   { id: "alice.testnet", stakes: [0, 4, 0, 0, 0] },
   { id: "bob.testnet", stakes: [0, 4, 0, 0, 0] },
   { id: "carol.testnet", stakes: [0, 0, 9, 0, 0] },

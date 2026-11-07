@@ -28,7 +28,7 @@ Already started pre-window: the integer reference sim in Python (`sim/python/ant
 | 7. Forecast colonies | 7 to 10 | Keeper posts Polymarket snapshots, median across keepers, four forecasters per market, start with one market and grow to a few | Phases 3, 5 |
 | 8. Live and replay pages | 8 to 11 | Main page shows every colony of the round live (Burn plus all forecasters) from contract state; secondary replay page with verify-from-seed and backtest. Both already run on a demo clock, so this phase swaps fixtures for contract reads | Phase 3, contract events |
 | 9. Bots and rewards | 10 to 11 | Three or four rule-based bots, play-token reward pool, keeper script on free CI | Phases 5, 6 |
-| 10. Also in scope | 11 to 12 | Staker ants, thief-ant demo (the in-app sandbox is already built) | Phases 6, 8 |
+| 10. Also in scope | 11 to 12 | Staker ants (the in-app sandbox is already built) | Phases 6, 8 |
 | 11. Stretch | 12 to 13 | Pick from: drop sugar, smell-o-vision, check the receipts, ant autopsy, recruit an ant, panic button | Core loop works end to end |
 | 12. Submission | 13 to 14 | README for AI judges, X demo post, final live-rules check, submit | everything above |
 
@@ -44,10 +44,9 @@ Already started pre-window: the integer reference sim in Python (`sim/python/ant
 Cut from the top of this list first.
 
 1. Stretch features
-2. Thief-ant demo
-3. Staker ants
-4. Forecast colonies beyond one or two markets. Run only the Follower and Momentum colonies on more markets, and the other two on the top three.
-5. Bots beyond two strategies
+2. Staker ants
+3. Forecast colonies beyond one or two markets. Run only the Follower and Momentum colonies on more markets, and the other two on the top three.
+4. Bots beyond two strategies
 
 Never cut: the deterministic sim, the capped Burn colony, staking, the live colonies page, and replay with hash verification.
 

@@ -17,7 +17,6 @@ Source: `Ant Colony Oracle Design Document.md` (sections 5, 13, 14, 15). Status 
 | 6b | **Replay page** | A secondary page (`web/replay.html`), opened from any live colony. Pick a round and colony, scrub it tick by tick, and verify from seed: the browser re-runs it and compares the hash with the on-chain one. A backtest is still to come. | All | Page built; on-chain hash comparison waits for contract events |
 | 7 | **Scripted bots and reward pool** | Three or four rule-based bots (contrarian, follower, capped heavy staker) join every round and earn from a small play-token reward pool. | AI Swarms, Agent Economy | Pool in `token/reward.rs` and the contract (`fund_rewards`; `execute_burn` pays 10% of the pool to Burn stakers on the chosen index, pro rata to stake). Three bots in `bots/swarm.py` (follower, contrarian, heavy staker on the 2.00% burn). Not yet run on testnet; a fourth bot is not built |
 | 8 | **Staker ants** | Each wallet's stake spawns ants tinted in that wallet's colour, so square-root weighting and caps are visible on the map. | Memecoins With Mechanics | Built as a view layer (`web/ds/staker-ants.mjs`): 3 ants per sqrt-token, largest-remainder split, hue from sha256(account id), legend on the Live and Replay pages. The tint is cosmetic and the sim still reads only the summed weight per option. Wallets are fixtures until the contract serves per-wallet stakes |
-| 9 | **Thief-ant demo** | Shows an attacker splitting stake across wallets and still losing to square-root weighting. States the Sybil weakness openly. | Memecoins With Mechanics | Planned |
 | 10 | **In-app colony sandbox** | Anyone names a colony, writes 2 to 5 options, picks a personality and runs it in the browser, with a shareable link (`web/sandbox.html`). No chain involved. | AI Swarms | Built. Personalities reuse sim v1 richness rules: Wild (seed richness), Even, Follower and Contrarian (read per-option weights as odds) |
 
 ## Stretch features
@@ -32,6 +31,8 @@ Only after the core loop works end to end. All are free to run.
 | Ant autopsy | AI Swarms | Scrub a run tick by tick and follow one ant | Fixed update order, bit-exact replay |
 | Recruit an ant | AI Swarms, Agent Economy | Starter script so any agent joins a round with its own strategy | Bot interface, per-wallet caps, reward accounting |
 | Panic button | All | One account can freeze the colony | Pause method and kill switch |
+
+**Drop sugar** is built as a browser preview (`web/sugar.html`, logic in `web/sugar.mjs`, test with `node web/test_sugar.mjs`): pick a burn size and an amount, and the page runs the current round's Burn colony twice, with and without your stake, on the same seed and map. It shows the weight, the food richness (scent) per option, the trail shares and both result hashes. It stakes nothing. Other holders are fixtures and the per-wallet cap is a sample value. It still needs wiring to the contract's `stake` call and the real stake snapshot hash, which the JS sim doesn't compute yet (it passes a zero hash, like the live page).
 
 ## Sim inputs (feature 4)
 
