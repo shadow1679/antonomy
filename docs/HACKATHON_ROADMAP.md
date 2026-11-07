@@ -26,9 +26,9 @@ Already started pre-window: the integer reference sim in Python (`sim/python/ant
 | 5. Burn contract and token | 4 to 7 | NEP-141 token, drand commit, request lifecycle, burn menu capped at 2%, permissionless advance with bounty, deadline default, pause | Phase 3 |
 | 6. Pheromone staking | 6 to 8 | Stake locking, square-root weighting, per-wallet caps, snapshot hash feeding the seed, staking closes before the round is published | Phase 5 |
 | 7. Forecast colonies | 7 to 10 | Keeper posts Polymarket snapshots, median across keepers, four forecasters per market, start with one market and grow to a few | Phases 3, 5 |
-| 8. Replay page | 8 to 11 | Static page running the same integer code, verify-from-seed button, swarm-versus-market table, backtest | Phase 3, contract events |
+| 8. Live and replay pages | 8 to 11 | Main page shows every colony of the round live (Burn plus all forecasters) from contract state; secondary replay page with verify-from-seed and backtest. Both already run on a demo clock, so this phase swaps fixtures for contract reads | Phase 3, contract events |
 | 9. Bots and rewards | 10 to 11 | Three or four rule-based bots, play-token reward pool, keeper script on free CI | Phases 5, 6 |
-| 10. Also in scope | 11 to 12 | Staker ants, thief-ant demo, in-app sandbox | Phases 6, 8 |
+| 10. Also in scope | 11 to 12 | Staker ants, thief-ant demo (the in-app sandbox is already built) | Phases 6, 8 |
 | 11. Stretch | 12 to 13 | Pick from: drop sugar, smell-o-vision, check the receipts, ant autopsy, recruit an ant, panic button | Core loop works end to end |
 | 12. Submission | 13 to 14 | README for AI judges, X demo post, final live-rules check, submit | everything above |
 
@@ -36,7 +36,7 @@ Already started pre-window: the integer reference sim in Python (`sim/python/ant
 
 1. **Day 2:** gas numbers known. If a full run doesn't fit in a reasonable number of calls, shrink ants, ticks or grid. Forecast colonies can drop to about 60 ants and 300 ticks.
 2. **End of phase 3:** cross-language hash agreement. Nothing on-chain is trusted before this.
-3. **End of phase 8:** the core loop works end to end: stake → seed → on-chain run → replay → hash match. Only then start stretch features.
+3. **End of phase 8:** the core loop works end to end: stake → seed → on-chain run → live page → replay → hash match. Only then start stretch features.
 4. **Day 13:** feature freeze. Only README, demo and bug fixes after this.
 
 ## If time runs short (cut order)
@@ -44,13 +44,12 @@ Already started pre-window: the integer reference sim in Python (`sim/python/ant
 Cut from the top of this list first.
 
 1. Stretch features
-2. In-app sandbox
-3. Thief-ant demo
-4. Staker ants
-5. Forecast colonies beyond one or two markets. Run only the Follower and Momentum colonies on more markets, and the other two on the top three.
-6. Bots beyond two strategies
+2. Thief-ant demo
+3. Staker ants
+4. Forecast colonies beyond one or two markets. Run only the Follower and Momentum colonies on more markets, and the other two on the top three.
+5. Bots beyond two strategies
 
-Never cut: the deterministic sim, the capped Burn colony, staking, and the replay page with hash verification.
+Never cut: the deterministic sim, the capped Burn colony, staking, the live colonies page, and replay with hash verification.
 
 ## Risks to the schedule
 

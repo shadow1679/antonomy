@@ -1,0 +1,33 @@
+/* Page layout for the app pages (Live, Sandbox, Replay). Components come from
+   ds/antonomy.css; this file only arranges them. */
+@import url("ds/antonomy.css");
+
+.topbar { position: sticky; top: 0; z-index: 10; background: rgb(20 16 12 / 0.85); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
+.topbar .container { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-5); min-height: 60px; padding-block: var(--space-2); }
+.brand { font-family: var(--font-display); font-size: var(--text-lg); font-weight: 650; font-variation-settings: "opsz" 48, "SOFT" 100; letter-spacing: -0.01em; color: var(--text); text-decoration: none; }
+.brand span { color: var(--accent); }
+.nav { display: flex; gap: var(--space-4); font-size: var(--text-sm); }
+.nav a { color: var(--text-muted); text-decoration: none; padding-block: var(--space-1); border-bottom: 2px solid transparent; }
+.nav a:hover { color: var(--text); }
+.nav a[aria-current="page"] { color: var(--text); border-bottom-color: var(--accent); }
+.topbar__end { margin-left: auto; }
+
+.page-head { padding-block: var(--space-6) var(--space-5); }
+.page-head h1 { font-size: var(--text-2xl); }
+.page-head .lede { color: var(--text-muted); max-width: 70ch; margin-top: var(--space-2); }
+.page-section { padding-block: var(--space-5) var(--space-6); border-top: 1px solid var(--border); }
+.section-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-3); margin-bottom: var(--space-4); }
+.section-head h2 { font-size: var(--text-xl); }
+.section-head .spacer { margin-left: auto; }
+
+/* Main view next to a side column; the side column drops below on narrow screens. */
+.split { display: grid; gap: var(--space-5); grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr); align-items: start; }
+@media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+
+/* Four forecasters of one market. */
+.forecasters { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
+.forecaster { display: flex; flex-direction: column; gap: var(--space-3); }
+.forecaster .chamber__header { margin-bottom: 0; }
+.forecaster p { margin: 0; }
+
+.page-foot { padding-block: var(--space-6); border-top: 1px solid var(--border); }

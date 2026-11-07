@@ -13,11 +13,12 @@ Source: `Ant Colony Oracle Design Document.md` (sections 5, 13, 14, 15). Status 
 | 3 | **Pheromone staking** | Holders lock tokens to lay pheromone on an option. Influence grows with the square root of the stake, with per-wallet caps. Staking closes before the randomness round is published. | Memecoins With Mechanics | Logic done in `token/`; read by the sim through `sim_weights` |
 | 4 | **Deterministic integer sim (Rust)** | The same seed, stake snapshot and odds snapshot always give the same result. Supports 2 to 5 outcomes. | All | Done in `sim/` (Python, JS, Rust agree; see below) |
 | 5 | **Forecast colonies** | For each trending Polymarket market, four colonies (Follower, Contrarian, Momentum, Community) read a keeper-posted odds snapshot. The average of their trail shares is the swarm prediction, shown next to the market odds. | Investment Thesis | Sim, keeper registry and keeper script done (see below); on-chain run waits for the round lifecycle |
-| 6 | **Replay page** | A verify-from-seed button re-runs the round in the browser and compares the hash with the on-chain one. It also has a swarm-versus-market table and a backtest. | All | Planned |
+| 6 | **Live colonies (main page)** | The landing page (`web/index.html`) shows every colony of the current round running at once: the Burn colony and the four forecasters of each trending market, with live trail shares and the swarm-versus-market table. Every viewer sees the same tick. | All | Page built on a demo clock with fixture snapshots; switches to contract reads once rounds run on testnet |
+| 6b | **Replay page** | A secondary page (`web/replay.html`), opened from any live colony. Pick a round and colony, scrub it tick by tick, and verify from seed: the browser re-runs it and compares the hash with the on-chain one. A backtest is still to come. | All | Page built; on-chain hash comparison waits for contract events |
 | 7 | **Scripted bots and reward pool** | Three or four rule-based bots (contrarian, follower, capped heavy staker) join every round and earn from a small play-token reward pool. | AI Swarms, Agent Economy | Planned |
 | 8 | **Staker ants** | Each wallet's stake spawns ants tinted in that wallet's colour, so square-root weighting and caps are visible on the map. | Memecoins With Mechanics | Planned |
 | 9 | **Thief-ant demo** | Shows an attacker splitting stake across wallets and still losing to square-root weighting. States the Sybil weakness openly. | Memecoins With Mechanics | Planned |
-| 10 | **In-app colony sandbox** | Anyone names a colony, writes five options, picks a personality and runs it in the browser, with a shareable seed link. No chain involved. | AI Swarms | Planned |
+| 10 | **In-app colony sandbox** | Anyone names a colony, writes 2 to 5 options, picks a personality and runs it in the browser, with a shareable link (`web/sandbox.html`). No chain involved. | AI Swarms | Built. Personalities reuse sim v1 richness rules: Wild (seed richness), Even, Follower and Contrarian (read per-option weights as odds) |
 
 ## Stretch features
 
@@ -53,7 +54,7 @@ The result hash also commits the stake snapshot hash and a hash of the odds snap
 - Advancing the run is permissionless, with a small bounty for the caller.
 - If no result arrives before the deadline, the contract runs the default action or skips the round.
 - A multisig behind a timelock can pause the colony or override a result, and every use is logged.
-- Events record seed, template, winner and hash so the replay page can rebuild any run.
+- Events record seed, template, winner and hash so the live and replay pages can rebuild any run.
 
 ## Forecast colonies in detail
 

@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Antonomy · replay and verify</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="topbar"></div>
+
+<main>
+  <div class="page-head container">
+    <p class="eyebrow">Replay &amp; verify</p>
+    <h1>Re-run any colony from its seed.</h1>
+    <p class="lede">Your browser runs the same integer code as the contract, tick by tick. Scrub through the run, follow an ant, then compare the result hash with the one the contract stored. A single changed bit in the seed or the snapshots gives a different hash.</p>
+  </div>
+
+  <section class="page-section">
+    <div class="container">
+      <form class="cluster" id="pick" style="margin-bottom: var(--space-5)">
+        <label class="field__label" for="round-in">Round</label>
+        <input class="input num" id="round-in" type="number" min="0" step="1" style="width: 11rem">
+        <label class="field__label" for="colony-in">Colony</label>
+        <select class="input" id="colony-in" style="width: auto"></select>
+        <button class="btn btn--sm" type="submit">Load</button>
+      </form>
+
+      <div class="split">
+        <div id="player"></div>
+        <div class="stack">
+          <div class="chamber verify-panel">
+            <div class="chamber__header" style="margin: 0">
+              <h3 class="chamber__title">Verify from seed</h3>
+              <span class="eyebrow" id="v-colony"></span>
+            </div>
+            <dl class="kv text-sm">
+              <dt>Round seed</dt><dd id="v-round-seed"></dd>
+              <dt>Colony seed</dt><dd id="v-colony-seed"></dd>
+              <dt>Replayed hash</dt><dd id="v-hash">not run yet</dd>
+            </dl>
+            <div class="field">
+              <label class="field__label" for="expected">Hash stored on-chain</label>
+              <input class="input" id="expected" placeholder="64 hex characters" spellcheck="false" autocomplete="off" aria-describedby="expected-hint">
+              <span class="field__hint" id="expected-hint">There is no contract yet. Paste a hash from the Live page or from <code>crosscheck.py</code> to compare.</span>
+            </div>
+            <div class="verify-panel__result">
+              <span class="verify-badge" data-state="idle" id="badge" role="status" aria-live="polite">Not verified</span>
+              <button class="btn btn--primary" type="button" id="verify">Verify from seed</button>
+            </div>
+          </div>
+
+          <div class="chamber">
+            <div class="chamber__header">
+              <h3 class="chamber__title">Trail share</h3>
+              <span class="eyebrow" id="share-tick">tick 0</span>
+            </div>
+            <ul class="share-bars" id="bars"></ul>
+            <p class="text-xs text-faint" id="forecast-note" style="margin: var(--space-3) 0 0" hidden><span class="tag-forecast">Forecast · not advice</span> One of four forecasters on this market. Swarm belief is their average and is shown on the Live page.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="page-foot">
+  <div class="container"><p class="text-xs text-faint">Antonomy · NEAR testnet only · sim ANTO-SIM-v1</p></div>
+</footer>
+
+<script type="module">
+import { toHex } from "../sim/js/antosim.mjs";
+import { roundById, demoRound } from "./round.mjs";
+import { $, esc, hashHTML, installCopy, liveShares, shareBars, Player, topbar } from "./ui.mjs";
+
+$("topbar").outerHTML = topbar("replay");
+installCopy();
+
+const q = new URLSearchParams(location.search);
+let round, spec, bars;
+
+const player = new Player($("player"), {
+  onTick(col) {
+    const { pct, lead } = liveShares(col);
+    bars(pct, col.t === col.ticks ? lead : -1);
+    $("share-tick").textContent = `tick ${col.t}`;
+  },
+});
+
+const label = (s) => (s.market ? `${s.market} · ${s.name}` : s.name);
+const cleanHex = (v) => v.trim().toLowerCase().replace(/^0x/, "");
+
+function load(id, key) {
+  round = roundById(id);
+  spec = round.all.find((s) => s.key === key) ?? round.burn;
+  $("round-in").value = id;
+  $("colony-in").innerHTML = round.all.map((s) =>
+    `<option value="${s.key}"${s === spec ? " selected" : ""}>${esc(label(s))}</option>`).join("");
+  $("v-colony").textContent = `${spec.ants} ants · ${spec.ticks} ticks`;
+  $("v-round-seed").innerHTML = hashHTML(toHex(round.seed), "round seed");
+  $("v-colony-seed").innerHTML = hashHTML(toHex(spec.seed), "colony seed");
+  $("v-hash").textContent = "not run yet";
+  $("forecast-note").hidden = spec.key === "burn";
+  bars = shareBars($("bars"), spec.labels);
+  setBadge("idle", "Not verified");
+  player.load(spec.make, spec.labels);
+  history.replaceState(null, "", `?round=${id}&colony=${spec.key}`);
+}
+
+function setBadge(state, text) { $("badge").dataset.state = state; $("badge").textContent = text; }
+
+$("pick").addEventListener("submit", (e) => {
+  e.preventDefault();
+  load(Math.max(0, Math.floor(+$("round-in").value || 0)), $("colony-in").value);
+});
+$("colony-in").addEventListener("change", () => $("pick").requestSubmit());
+
+$("expected").addEventListener("input", (e) => {
+  const v = cleanHex(e.target.value);
+  e.target.setAttribute("aria-invalid", v && !/^[0-9a-f]{64}$/.test(v) ? "true" : "false");
+});
+
+$("verify").addEventListener("click", (e) => {
+  const btn = e.currentTarget;
+  btn.classList.add("is-loading");
+  setBadge("pending", `Replaying ${spec.ticks} ticks`);
+  // Let the pending state paint before the synchronous replay.
+  setTimeout(() => {
+    const t0 = performance.now();
+    const col = spec.make();
+    while (col.step());
+    const r = col.result();
+    const ms = Math.round(performance.now() - t0);
+    btn.classList.remove("is-loading");
+    $("v-hash").innerHTML = hashHTML(r.hash, "replayed hash");
+    const want = cleanHex($("expected").value);
+    if (!want) setBadge("idle", `Replayed in ${ms} ms · nothing to compare`);
+    else if (want === r.hash) setBadge("match", `Hash match · ${ms} ms`);
+    else setBadge("mismatch", "Hash mismatch");
+  }, 60);
+});
+
+load(q.has("round") ? Math.max(0, Math.floor(+q.get("round") || 0)) : demoRound().id, q.get("colony") ?? "burn");
+</script>
+</body>
+</html>

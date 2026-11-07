@@ -61,7 +61,7 @@ Options under colour-blindness simulation (Machado 2009 at full severity, then p
 | Verification | `.hash`, `__value`, `__copy` (`.is-copied`), `.kv`, `.verify-badge[data-state=idle\|pending\|match\|mismatch]`, `.verify-panel` | Put `role="status" aria-live="polite"` on the live badge |
 | Sim | `.sim-frame` (72:48), `__hud` (`--bottom`), `__tick`, `.playback`, `.scrubber`, `.seg` | JS sets `--progress` (0 to 100) on range inputs for the WebKit fill |
 | Sim canvas | `ColonyView` in `colony-view.mjs` | `attach(colony)`, call `afterStep(fx)` after each `step()`, then `draw(frac, now)`. `draw` returns true while effects still need frames. `mode` is `"nest"` or `"cells"` |
-| Results | `.share-bars` with `.share-bar[data-opt]` (`--share`, `.is-winner`) | |
+| Results | `.share-bars` (`--compact` for small cards) with `.share-bar[data-opt]` (`--share`, `.is-winner`) | |
 | Ant autopsy | `.inspector`, `.compass` (`--heading` 0 to 15, 0 = east, clockwise on screen), `.ant-state[data-state]` | |
 | Forms | `.field`, `__label`, `__hint`, `__error`, `.input` (`aria-invalid`), `.input-group`, `.range` | |
 | Staking | `.stake`, `__row`, `__readout` | Shows stake, √ weight and cap used |

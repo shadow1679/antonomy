@@ -14,6 +14,8 @@ Commands:
 - Keeper: `python3 -I keeper/trending.py [--count N] [--save-raw DIR]` (live Polymarket read). Offline tests: `python3 -I keeper/test_trending.py`.
 - Rust unit tests: `cargo test --release --manifest-path sim/rust/Cargo.toml`. One Rust colony: `sim/rust/target/release/dump <first_seed> <count>`.
 
+Web app pages (no build step, serve the repo root and open `/web/`): `web/index.html` is the **main page: every colony of the current round live** (Burn plus each market's four forecasters, swarm-versus-market table); `web/replay.html` is secondary (pick round and colony, scrub, verify from seed); `web/sandbox.html` is the in-browser colony sandbox (2 to 5 options, Wild/Even/Follower/Contrarian, share link in the URL fragment). Decided 2026-10-26: replay is not the landing page. `web/round.mjs` supplies a round's colonies; with no contract yet it runs a demo clock (round = floor(now / 150 s), seed = sha256("seed-<round>"), fixture stakes and odds), and that is the seam to swap for contract reads. `web/ui.mjs` holds the shared player and helpers, `web/app.css` the page layout.
+
 UI uses the design system in `web/ds/` (plain CSS, dark only; see `docs/DESIGN_SYSTEM.md` for its rules: amber is reserved, options always show their glyph, forecasts carry `.tag-forecast`). Preview with `python3 -I -m http.server -d .` from the repo root and open `/web/ds/showcase.html`. The showcase imports `sim/js/antosim.mjs` directly, so the server must serve the repo root. The sim canvas is drawn by `web/ds/colony-view.mjs`, which only reads `Colony` state. Keep it that way: drawing must never call the sim RNG or change state.
 
 Any change to sim behaviour must change Python and JS together and keep the crosscheck passing. The version string `ANTO-SIM-v1` is part of the hash, so bump it when the algorithm changes.
@@ -36,14 +38,14 @@ Everything in sections 9 and 14 (raffles, treasury mix, custom colonies, extra a
 
 ## Constraints that shape any implementation
 
-- **Determinism is the product.** The Rust (on-chain), JavaScript (replay page) and Python (reference) implementations must produce identical result hashes across at least 10,000 seeds. Production code uses integer or fixed-point arithmetic only, with an integer PRNG, 16 or 32 discrete headings from a lookup table, no float, sin, cos or atan2, a fixed ant update order and a fixed tie-break (lowest index).
+- **Determinism is the product.** The Rust (on-chain), JavaScript (live and replay pages) and Python (reference) implementations must produce identical result hashes across at least 10,000 seeds. Production code uses integer or fixed-point arithmetic only, with an integer PRNG, 16 or 32 discrete headings from a lookup table, no float, sin, cos or atan2, a fixed ant update order and a fixed tie-break (lowest index).
 - **Gas bounds the design.** Use lazy evaporation (store the last-touched tick per cell and decay on read), so cost scales with ants and not with grid size. The per-transaction limit is 300 TGas. Ticks per call are unmeasured and must be measured on testnet first (day 2 of the build). Shrink ants, ticks or grid if a run doesn't fit.
 - **Simulation parameters are immutable contract constants.** Prototype values: 72×48 grid, 150 ants, 800 ticks, 0.8% evaporation per tick, pheromone cap 20, score = pheromone within 6 cells of each source. Forecast colonies may shrink to about 60 ants and 300 ticks.
 - **The colony chooses an index, never an amount.** Every action maps to a preset menu entry with a hard cap in the contract.
 - **Seed → per-colony maps.** Each colony's map derives from the seed plus the colony's index. The seed also picks the map template and shuffles which option sits on which food source.
 - **Fairness tests are required.** Each map template and each colony type needs at least 1,000 seeds. Every option must win close to its fair share, and none above about 30% for five options. The prototype's 100-seed test is only a smoke test.
 - **Stakes.** One wallet budget across all colonies, square-root weighting, per-wallet caps. Staking closes before the drand round is published. The stake snapshot hash and the odds snapshot are both inputs to the sim, so the result is a pure function of seed, stakes and odds.
-- **Forecast data trust.** Several keepers post independently and the contract takes the per-outcome median. Each snapshot stores a hash of the raw API response. The replay page can't call outside APIs and reads snapshots from the chain.
+- **Forecast data trust.** Several keepers post independently and the contract takes the per-outcome median. Each snapshot stores a hash of the raw API response. The web pages can't call outside APIs and read snapshots from the chain.
 - **Safety and liveness.** Advancing is permissionless with a small bounty. A deadline triggers the default action or a skipped round. A multisig behind a timelock can pause or override, and every use is logged.
 
 ## Product rules to preserve

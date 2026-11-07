@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Antonomy · live colonies</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="topbar"></div>
+
+<main>
+  <div class="page-head container">
+    <p class="eyebrow">Round <span id="round-id">…</span> · <span id="round-phase">running</span></p>
+    <h1>Every colony, live.</h1>
+    <p class="lede">All of this round's colonies run at once from one public seed: the Burn colony that picks today's burn, and four forecaster colonies on each trending market. Every viewer sees the same ticks, because the ants carry no randomness of their own. Open any colony in Replay to check its hash.</p>
+    <dl class="kv text-sm" style="margin-top: var(--space-4)">
+      <dt>Round seed</dt><dd id="round-seed">…</dd>
+      <dt>Colonies stop</dt><dd><span class="num" id="round-close">…</span></dd>
+      <dt>Next round</dt><dd><span class="num" id="round-next">…</span></dd>
+    </dl>
+    <div class="notice notice--info" style="margin-top: var(--space-4)"><div><span class="notice__title">Demo clock, no contract yet</span><p>Until the contract runs rounds on testnet, the round number comes from the clock and the seed is sha256("seed-&lt;round&gt;"). Stakes and odds are fixtures. The colonies, maps and hashes are the real sim.</p></div></div>
+  </div>
+
+  <section class="page-section" id="burn" aria-labelledby="burn-title">
+    <div class="container">
+      <div class="section-head">
+        <h2 id="burn-title">Burn colony</h2>
+        <span class="chip">picks today's burn · hard cap 2%</span>
+        <a class="btn btn--sm spacer" id="burn-replay" href="replay.html">Replay &amp; verify</a>
+      </div>
+      <div class="split">
+        <div class="sim-frame">
+          <canvas id="burn-canvas" width="1440" height="960" aria-label="Burn colony map, live"></canvas>
+          <div class="sim-frame__hud">
+            <span class="sim-frame__tick">tick <strong data-r="tick">0000</strong>/0800</span>
+            <span class="sim-frame__tick" data-r="leader">no trail yet</span>
+          </div>
+        </div>
+        <div class="stack">
+          <div class="chamber">
+            <div class="chamber__header">
+              <h3 class="chamber__title">Trail share</h3>
+              <span class="eyebrow" data-r="share-tick">tick 0</span>
+            </div>
+            <ul class="share-bars" data-r="bars"></ul>
+            <p class="text-xs text-faint" style="margin: var(--space-3) 0 0">Share of pheromone inside each scoring ring. Food richness follows the square root of holder stakes on each option. The strongest trail at tick 800 wins.</p>
+          </div>
+          <div class="chamber" role="status" aria-live="polite" data-r="result"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="page-section" id="forecasts" aria-labelledby="fc-title">
+    <div class="container">
+      <div class="section-head">
+        <h2 id="fc-title">Forecast colonies</h2>
+        <span class="tag-forecast">Forecast · not advice</span>
+      </div>
+      <p class="text-sm text-muted" style="max-width: 72ch; margin-bottom: var(--space-5)">Each trending market gets four colonies, each on its own map. They read the same keeper-posted odds four different ways. Swarm belief is the average of their trail shares. It isn't calibrated as a probability yet, and nobody is paid for being right.</p>
+      <div class="stack" style="--stack-gap: var(--space-7)" id="markets"></div>
+    </div>
+  </section>
+</main>
+
+<footer class="page-foot">
+  <div class="container"><p class="text-xs text-faint">Antonomy · NEAR testnet only · sim ANTO-SIM-v1 · forecasts are not advice and link to no trading venue.</p></div>
+</footer>
+
+<script type="module">
+import { trailShares, marketResult, toHex } from "../sim/js/antosim.mjs";
+import { ColonyView } from "./ds/colony-view.mjs";
+import { demoRound, roundProgress, GLYPHS, KIND_BLURB } from "./round.mjs";
+import { $, esc, pad4, hashHTML, installCopy, liveShares, shareBars, leaderHTML, topbar } from "./ui.mjs";
+
+$("topbar").outerHTML = topbar("live", `<span class="chip chip--live" id="live-chip">live</span>`);
+installCopy();
+
+const pct = (b) => (b / 100).toFixed(1);
+const clock = (ms) => {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+};
+const replayHref = (round, key) => `replay.html?round=${round.id}&colony=${key}`;
+const PENDING = `<p class="text-sm text-muted" style="margin: 0">The pick appears at tick 800.</p>`;
+
+// Skip drawing colonies that are off screen; they still step.
+const io = new IntersectionObserver((es) => {
+  for (const e of es) {
+    const t = e.target._tile;
+    t.visible = e.isIntersecting;
+    if (t.visible) t.busy = true; // catch up on frames missed while hidden
+  }
+});
+
+// A tile is one colony on screen: its Colony, its view and its readouts.
+// Views only read the colony; the round clock decides every tick.
+function tile(spec, root, canvas) {
+  const r = (k) => root.querySelector(`[data-r="${k}"]`);
+  const view = new ColonyView(canvas, { labels: spec.labels, glyphs: GLYPHS });
+  view.selected = -1; // no followed ant on the overview; Replay has that
+  const col = spec.make();
+  view.attach(col);
+  const t = { spec, col, view, r, bars: shareBars(r("bars"), spec.labels), visible: true, busy: true, lastT: -1, result: null };
+  canvas._tile = t;
+  io.observe(canvas);
+  return t;
+}
+
+let round, tiles, markets;
+
+function build() {
+  round = demoRound();
+  io.disconnect();
+  const id = round.id.toLocaleString("en");
+  $("round-id").textContent = id;
+  $("round-seed").innerHTML = hashHTML(toHex(round.seed), "round seed");
+  $("live-chip").textContent = `live · round ${id}`;
+  $("burn-replay").href = replayHref(round, "burn");
+
+  const burnRoot = $("burn");
+  burnRoot.querySelector('[data-r="result"]').innerHTML = PENDING;
+  tiles = [tile(round.burn, burnRoot, $("burn-canvas"))];
+
+  $("markets").innerHTML = round.markets.map((m) => `
+    <article class="stack" style="--stack-gap: var(--space-4)" data-market="${m.index}">
+      <div class="section-head" style="margin: 0">
+        <h3>${esc(m.title)}</h3>
+        <span class="text-xs text-faint">Polymarket odds, median of keeper snapshots · ${m.outcomes.length} outcomes</span>
+      </div>
+      <div class="forecasters">
+        ${m.forecasters.map((f) => `
+          <div class="chamber forecaster" data-key="${f.key}">
+            <div class="chamber__header">
+              <h4 class="chamber__title">${f.name}</h4>
+              <a class="text-xs" href="${replayHref(round, f.key)}">replay</a>
+            </div>
+            <div class="sim-frame">
+              <canvas width="720" height="480" aria-label="${f.name} colony map for ${esc(m.title)}, live"></canvas>
+              <div class="sim-frame__hud"><span class="sim-frame__tick">tick <strong data-r="tick">0000</strong>/0300</span></div>
+            </div>
+            <ul class="share-bars share-bars--compact" data-r="bars"></ul>
+            <p class="text-xs text-faint">${KIND_BLURB[f.kind]}</p>
+          </div>`).join("")}
+      </div>
+      <div class="table-wrap">
+        <table class="table">
+          <caption><span class="tag-forecast">Forecast · not advice</span>&nbsp; Swarm versus market. Live shares while the colonies run, exact basis points once all four finish.</caption>
+          <thead><tr>
+            <th scope="col">Outcome</th><th scope="col" class="num">Market</th>
+            ${m.forecasters.map((f) => `<th scope="col" class="num">${f.name}</th>`).join("")}
+            <th scope="col" class="num">Swarm belief</th><th scope="col" class="num">Δ vs market</th>
+          </tr></thead>
+          <tbody data-r="rows"></tbody>
+        </table>
+      </div>
+      <p class="text-xs text-faint" data-r="market-hash">Market hash after the final tick.</p>
+    </article>`).join("");
+
+  markets = round.markets.map((m) => {
+    const root = document.querySelector(`[data-market="${m.index}"]`);
+    const ts = m.forecasters.map((f) => {
+      const card = root.querySelector(`[data-key="${f.key}"]`);
+      return tile(f, card, card.querySelector("canvas"));
+    });
+    tiles.push(...ts);
+    return { m, root, tiles: ts, done: false };
+  });
+}
+
+function burnPanels(t) {
+  const { col, r } = t, done = col.t === col.ticks;
+  const { pct: p, lead } = liveShares(col);
+  r("tick").textContent = pad4(col.t);
+  r("share-tick").textContent = `tick ${col.t}`;
+  r("leader").innerHTML = leaderHTML(t.spec.labels, lead, done);
+  t.bars(p, done ? lead : -1);
+  if (done && !t.result) {
+    t.result = col.result();
+    const o = t.result.winner_option;
+    r("result").innerHTML = `
+      <div class="chamber__header"><h3 class="chamber__title">Today's pick</h3><span class="chip">tick 800 · final</span></div>
+      <p style="margin: 0 0 var(--space-3)">The colony picked <span class="opt" data-opt="${o}">${t.spec.labels[o]}</span> of the treasury.</p>
+      <dl class="kv text-sm"><dt>Result hash</dt><dd>${hashHTML(t.result.hash, "Burn result hash")}</dd></dl>
+      <p class="text-xs text-faint" style="margin: var(--space-3) 0 0">Not executed: there is no contract yet. On testnet the contract burns this menu entry, capped at 2%.</p>`;
+  }
+}
+
+function forecasterPanels(t) {
+  const { col, r } = t;
+  r("tick").textContent = pad4(col.t);
+  if (col.t === col.ticks) {
+    if (!t.result) t.result = col.result();
+    t.bars(trailShares(t.result).map((x) => x / 100), t.result.winner_option);
+  } else {
+    t.bars(liveShares(col).pct);
+  }
+}
+
+function marketPanels(mk) {
+  const { m, root, tiles: ts } = mk;
+  let cols, swarm;
+  if (ts.every((t) => t.result)) {
+    const res = marketResult(m.colony, ts.map((t) => t.result));
+    cols = res.colonies.map((c) => c.shares);
+    swarm = res.swarm;
+    if (!mk.done) {
+      mk.done = true;
+      root.querySelector('[data-r="market-hash"]').innerHTML = `Market hash ${hashHTML(res.hash, "market hash")} · commits the four colony hashes and the swarm belief.`;
+    }
+  } else {
+    cols = ts.map((t) => liveShares(t.col).pct.map((x) => Math.round(x * 100)));
+    swarm = m.outcomes.map((_, o) => Math.round(cols.reduce((a, c) => a + c[o], 0) / cols.length));
+  }
+  root.querySelector('[data-r="rows"]').innerHTML = m.outcomes.map((label, o) => {
+    const d = swarm[o] - m.odds[o];
+    const cls = d > 0 ? "delta--up" : d < 0 ? "delta--down" : "delta--flat";
+    return `<tr><th scope="row"><span class="opt" data-opt="${o}">${esc(label)}</span></th><td class="num">${pct(m.odds[o])}</td>` +
+      cols.map((c) => `<td class="num">${pct(c[o])}</td>`).join("") +
+      `<td class="num col-swarm">${pct(swarm[o])}</td><td class="num"><span class="delta ${cls}">${pct(Math.abs(d))}</span></td></tr>`;
+  }).join("");
+}
+
+let lastSec = -1;
+function header(now) {
+  const sec = Math.floor(now / 1000);
+  if (sec === lastSec) return;
+  lastSec = sec;
+  const running = now < round.runEndMs;
+  $("round-phase").textContent = running ? "colonies running" : "result";
+  $("round-close").textContent = running ? `in ${clock(round.runEndMs - now)}` : "stopped";
+  $("round-next").textContent = `in ${clock(round.nextMs - now)}`;
+}
+
+function frame(perf) {
+  const now = Date.now();
+  if (now >= round.nextMs) build();
+  header(now);
+  const p = roundProgress(round, now);
+  let marketsDirty = false;
+  for (const t of tiles) {
+    const { col, view, spec } = t;
+    const exact = p * spec.ticks, target = Math.floor(exact);
+    // Effects only when stepping in real time, not when catching up.
+    const fx = target - col.t <= 2;
+    while (col.t < target) { col.step(); view.afterStep(fx); }
+    if (col.t !== t.lastT) {
+      t.lastT = col.t;
+      t.busy = true;
+      if (spec.key === "burn") burnPanels(t); else { forecasterPanels(t); marketsDirty = true; }
+    }
+    // Between ticks the ants glide from the last tick toward the next one.
+    // A finished colony only redraws while its win effects play.
+    const running = col.t < col.ticks;
+    if (t.visible && (running || t.busy)) t.busy = view.draw(running ? exact - target : 1, perf);
+  }
+  if (marketsDirty) for (const mk of markets) marketPanels(mk);
+  requestAnimationFrame(frame);
+}
+
+build();
+requestAnimationFrame(frame);
+// Pile labels are canvas text, so redraw once the web font arrives.
+document.fonts.ready.then(() => { for (const t of tiles) t.busy = true; });
+</script>
+</body>
+</html>

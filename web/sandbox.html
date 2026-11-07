@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Antonomy · colony sandbox</title>
+<link rel="stylesheet" href="app.css">
+<style>
+  .opt-list { display: grid; gap: var(--space-3); }
+  .opt-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-2); align-items: center; }
+  .opt-row .range { grid-column: 2; }
+  .opt-row__weight { grid-column: 3; min-width: 4ch; text-align: right; font-size: var(--text-xs); color: var(--text-faint); }
+  .no-weights .opt-row .range, .no-weights .opt-row__weight { display: none; }
+</style>
+</head>
+<body>
+<div id="topbar"></div>
+
+<main>
+  <div class="page-head container">
+    <p class="eyebrow">Colony sandbox · runs in your browser, no chain</p>
+    <h1>Hatch your own colony.</h1>
+    <p class="lede">Name a colony, write two to five options, pick how it reads your weights, and let the ants decide. The run is the same integer sim as the live colonies. Share the link and anyone gets the same ants, the same trails and the same hash.</p>
+  </div>
+
+  <section class="page-section">
+    <div class="container split">
+      <div class="stack">
+        <h2 id="colony-title" style="font-size: var(--text-xl)">Untitled colony</h2>
+        <div id="player"></div>
+      </div>
+
+      <div class="stack">
+        <form class="chamber stack" id="form" novalidate>
+          <div class="field">
+            <label class="field__label" for="name">Colony name</label>
+            <input class="input" id="name" maxlength="40" placeholder="Where do we eat tonight?" autocomplete="off">
+          </div>
+
+          <fieldset class="field" style="border: 0; padding: 0; margin-inline: 0; min-width: 0">
+            <legend class="field__label">Personality</legend>
+            <div class="seg" role="group" aria-label="Personality" id="personality">
+              <button type="button" data-p="wild" aria-pressed="true">Wild</button>
+              <button type="button" data-p="even" aria-pressed="false">Even</button>
+              <button type="button" data-p="follower" aria-pressed="false">Follower</button>
+              <button type="button" data-p="contrarian" aria-pressed="false">Contrarian</button>
+            </div>
+            <span class="field__hint" id="p-hint"></span>
+          </fieldset>
+
+          <fieldset class="field" style="border: 0; padding: 0; margin-inline: 0; min-width: 0">
+            <legend class="field__label">Options</legend>
+            <div class="opt-list" id="opts"></div>
+            <div class="cluster" style="margin-top: var(--space-2)">
+              <button class="btn btn--sm btn--ghost" type="button" id="add">+ Add option</button>
+              <span class="field__hint">2 to 5 options, up to 20 characters each.</span>
+            </div>
+            <span class="field__error" id="opts-err" hidden></span>
+          </fieldset>
+
+          <div class="field">
+            <label class="field__label" for="phrase">Seed phrase</label>
+            <div class="cluster" style="--cluster-gap: var(--space-2)">
+              <input class="input" id="phrase" maxlength="64" spellcheck="false" autocomplete="off" style="flex: 1; min-width: 10rem">
+              <button class="btn btn--sm" type="button" id="reroll">New seed</button>
+            </div>
+            <span class="field__hint">Seed = sha256 of this phrase. Same phrase, same colony.</span>
+          </div>
+
+          <div class="cluster">
+            <button class="btn btn--primary" type="submit">Hatch colony</button>
+            <button class="btn btn--sm" type="button" id="share">Copy share link</button>
+            <span class="text-xs text-faint" id="share-msg" role="status" aria-live="polite"></span>
+          </div>
+        </form>
+
+        <div class="chamber">
+          <div class="chamber__header">
+            <h3 class="chamber__title">Trail share</h3>
+            <span class="eyebrow" id="share-tick">tick 0</span>
+          </div>
+          <ul class="share-bars" id="bars"></ul>
+          <dl class="kv text-sm" style="margin-top: var(--space-4)">
+            <dt>Seed</dt><dd id="seed-out"></dd>
+            <dt>Result hash</dt><dd id="hash-out">at tick 800</dd>
+          </dl>
+        </div>
+        <p class="text-xs text-faint">Sandbox colonies are just for fun. They never touch the chain, the treasury or a token, and the result is not advice.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="page-foot">
+  <div class="container"><p class="text-xs text-faint">Antonomy · sandbox runs ANTO-SIM-v1 in your browser</p></div>
+</footer>
+
+<script type="module">
+import { Colony, sha256, toHex, oddsRichness, oddsSnapshotHash, stakeRichness, FOLLOWER, CONTRARIAN, N_ANTS, TICKS } from "../sim/js/antosim.mjs";
+import { GLYPHS } from "./round.mjs";
+import { $, hashHTML, installCopy, liveShares, shareBars, Player, topbar } from "./ui.mjs";
+
+$("topbar").outerHTML = topbar("sandbox");
+installCopy();
+
+const enc = new TextEncoder();
+const ZERO32 = new Uint8Array(32);
+const MAX_LABEL = 20;
+const HINTS = {
+  wild: "The seed decides how rich each food pile is. Pure chance.",
+  even: "Every pile is equally rich. Only the map and the ants decide.",
+  follower: "Higher weight, richer pile. The colony leans toward your favourite.",
+  contrarian: "Lower weight, richer pile. The colony leans toward the underdog.",
+};
+const WORDS = ["moss", "clay", "slate", "heather", "sand", "loam", "root", "crumb", "trail", "mound", "leaf", "twig"];
+const randomPhrase = () => {
+  const w = () => WORDS[Math.floor(Math.random() * WORDS.length)];
+  return `${w()}-${w()}-${Math.floor(Math.random() * 1000)}`;
+};
+
+let personality = "wild";
+let bars, current;
+
+// ---- Form ----
+function optRow(label = "", weight = 50) {
+  const div = document.createElement("div");
+  div.className = "opt-row";
+  div.innerHTML = `
+    <span class="opt" aria-hidden="true"></span>
+    <input class="input" maxlength="${MAX_LABEL}" spellcheck="false" autocomplete="off">
+    <button class="btn btn--icon btn--sm btn--ghost" type="button" aria-label="Remove option">✕</button>
+    <input class="range" type="range" min="0" max="100" step="1">
+    <span class="opt-row__weight num"></span>`;
+  const [text, range] = div.querySelectorAll("input");
+  text.value = label;
+  range.value = weight;
+  const showW = () => {
+    div.querySelector(".opt-row__weight").textContent = range.value;
+    range.style.setProperty("--progress", range.value);
+  };
+  range.addEventListener("input", showW);
+  showW();
+  div.querySelector("button").addEventListener("click", () => { div.remove(); renumber(); });
+  $("opts").append(div);
+  renumber();
+}
+
+// Keep each row's colour and glyph in step with its position.
+function renumber() {
+  const rows = [...$("opts").children];
+  rows.forEach((r, o) => {
+    r.dataset.opt = o;
+    r.querySelector(".opt").dataset.opt = o;
+    r.querySelector("input").setAttribute("aria-label", `Option ${o + 1} (${GLYPHS[o]}) label`);
+    r.querySelector(".range").setAttribute("aria-label", `Option ${o + 1} (${GLYPHS[o]}) weight`);
+    r.querySelector("button").disabled = rows.length <= 2;
+  });
+  $("add").disabled = rows.length >= 5;
+}
+
+function setPersonality(p) {
+  personality = HINTS[p] ? p : "wild";
+  for (const b of $("personality").children) b.setAttribute("aria-pressed", String(b.dataset.p === personality));
+  $("p-hint").textContent = HINTS[personality];
+  $("opts").classList.toggle("no-weights", personality === "wild" || personality === "even");
+}
+
+function readForm() {
+  const rows = [...$("opts").children];
+  return {
+    name: $("name").value.trim(),
+    options: rows.map((r) => r.querySelector("input").value.trim()),
+    weights: rows.map((r) => +r.querySelector(".range").value),
+    personality,
+    phrase: $("phrase").value,
+  };
+}
+
+function writeForm(s) {
+  $("name").value = s.name;
+  $("opts").innerHTML = "";
+  s.options.forEach((o, i) => optRow(o, s.weights[i] ?? 50));
+  setPersonality(s.personality);
+  $("phrase").value = s.phrase;
+}
+
+// ---- Colony from a setup ----
+// Follower and Contrarian read the weights as odds (0 to 100 → basis points),
+// so the hash commits them through the odds snapshot hash.
+function colonyMaker(s) {
+  const seed = sha256(enc.encode(`ANTO-SANDBOX-v0:${s.phrase}`));
+  const n = s.options.length;
+  if (s.personality === "wild") return { seed, make: () => new Colony(seed, n) };
+  if (s.personality === "even") {
+    const rich = stakeRichness(new Array(n).fill(0));
+    return { seed, make: () => new Colony(seed, n, rich) };
+  }
+  const odds = s.weights.map((w) => w * 100);
+  const kind = s.personality === "follower" ? FOLLOWER : CONTRARIAN;
+  const rich = oddsRichness(kind, odds, odds); // throws if no option gets any food
+  const oddsHash = oddsSnapshotHash(odds, odds);
+  return { seed, make: () => new Colony(seed, n, rich, N_ANTS, TICKS, ZERO32, oddsHash) };
+}
+
+function validate(s) {
+  if (s.options.length < 2 || s.options.length > 5) return "Use 2 to 5 options.";
+  if (s.options.some((o) => !o)) return "Every option needs a label.";
+  if (new Set(s.options.map((o) => o.toLowerCase())).size !== s.options.length) return "Option labels must differ.";
+  if (!s.phrase) return "Enter a seed phrase.";
+  if (s.personality === "follower" && s.weights.every((w) => w === 0)) return "Follower needs at least one weight above 0.";
+  if (s.personality === "contrarian" && s.weights.every((w) => w === 100)) return "Contrarian needs at least one weight below 100.";
+  return "";
+}
+
+// ---- Share link: the whole setup lives in the URL fragment ----
+function toFragment(s) {
+  const p = new URLSearchParams();
+  p.set("n", s.name);
+  for (const o of s.options) p.append("o", o);
+  if (s.personality === "follower" || s.personality === "contrarian") for (const w of s.weights) p.append("w", w);
+  p.set("p", s.personality);
+  p.set("s", s.phrase);
+  return p.toString();
+}
+
+function fromFragment(hash) {
+  const p = new URLSearchParams(hash.replace(/^#/, ""));
+  const options = p.getAll("o").slice(0, 5).map((o) => o.slice(0, MAX_LABEL));
+  if (options.length < 2) return null;
+  const weights = p.getAll("w").map((w) => Math.min(100, Math.max(0, Math.round(+w) || 0)));
+  return {
+    name: (p.get("n") ?? "").slice(0, 40),
+    options,
+    weights,
+    personality: p.get("p") ?? "wild",
+    phrase: (p.get("s") ?? "").slice(0, 64),
+  };
+}
+
+// ---- Run ----
+const player = new Player($("player"), {
+  onTick(col) {
+    const { pct, lead } = liveShares(col);
+    bars(pct, col.t === col.ticks ? lead : -1);
+    $("share-tick").textContent = `tick ${col.t}`;
+  },
+  onDone(col) { $("hash-out").innerHTML = hashHTML(col.result().hash, "result hash"); },
+});
+
+function hatch(s, autoplay) {
+  const err = validate(s);
+  $("opts-err").hidden = !err;
+  $("opts-err").textContent = err;
+  if (err) return;
+  const made = colonyMaker(s);
+  current = s;
+  const title = s.name || "Untitled colony";
+  $("colony-title").textContent = title;
+  document.title = `${title} · Antonomy sandbox`;
+  $("seed-out").innerHTML = hashHTML(toHex(made.seed), "seed");
+  $("hash-out").textContent = "at tick 800";
+  bars = shareBars($("bars"), s.options);
+  player.load(made.make, s.options);
+  history.replaceState(null, "", `#${toFragment(s)}`);
+  if (autoplay) player.play();
+}
+
+$("form").addEventListener("submit", (e) => { e.preventDefault(); hatch(readForm(), true); });
+$("add").addEventListener("click", () => { optRow(); $("opts").lastElementChild.querySelector("input").focus(); });
+$("reroll").addEventListener("click", () => { $("phrase").value = randomPhrase(); });
+for (const b of $("personality").children) b.addEventListener("click", () => setPersonality(b.dataset.p));
+$("share").addEventListener("click", async () => {
+  if (!current) return;
+  const url = `${location.origin}${location.pathname}#${toFragment(current)}`;
+  try {
+    await navigator.clipboard.writeText(url);
+    $("share-msg").textContent = "✓ Link copied";
+  } catch {
+    $("share-msg").textContent = "Copy failed. The link is in the address bar.";
+  }
+  setTimeout(() => { $("share-msg").textContent = ""; }, 2000);
+});
+
+const shared = fromFragment(location.hash);
+writeForm(shared ?? {
+  name: "Where do we eat tonight?",
+  options: ["Pizza", "Ramen", "Tacos", "Curry", "Salad"],
+  weights: [50, 50, 50, 50, 50],
+  personality: "wild",
+  phrase: randomPhrase(),
+});
+hatch(readForm(), Boolean(shared)); // a shared link plays straight away
+</script>
+</body>
+</html>

@@ -729,7 +729,7 @@ export class ColonyView {
   // Fading dots along the selected ant's last few ticks.
   drawTrail() {
     const { ctx, S } = this, a = this.selected, n = this.histLen, t = this.col.t;
-    if (n < 2) return;
+    if (n < 2 || a < 0) return;
     ctx.fillStyle = css(this.c.bone);
     for (let k = n - 1; k >= 1; k--) {
       const slot = (((t - k) % TRAIL) + TRAIL) % TRAIL;
@@ -825,6 +825,7 @@ export class ColonyView {
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(hx, hy, 1.2 * S, 0, TAU); ctx.stroke();
     }
+    if (this.selected < 0) return; // -1: no ant followed
     const [x, y] = this.pos(this.selected, frac);
     ctx.strokeStyle = css(this.c.bone, 0.95);
     ctx.lineWidth = 3;
