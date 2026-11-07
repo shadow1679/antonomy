@@ -62,7 +62,7 @@ Options under colour-blindness simulation (Machado 2009 at full severity, then p
 | Sim | `.sim-frame` (72:48), `__hud` (`--bottom`), `__tick`, `.playback`, `.scrubber`, `.seg` | JS sets `--progress` (0 to 100) on range inputs for the WebKit fill |
 | Sim canvas | `ColonyView` in `colony-view.mjs` | `attach(colony)`, call `afterStep(fx)` after each `step()`, then `draw(frac, now)`. `draw` returns true while effects still need frames. `mode` is `"nest"` or `"cells"` |
 | Results | `.share-bars` (`--compact` for small cards) with `.share-bar[data-opt]` (`--share`, `.is-winner`) | |
-| Ant autopsy | `.inspector`, `.compass` (`--heading` 0 to 15, 0 = east, clockwise on screen), `.ant-state[data-state]` | |
+| Ant autopsy | `.inspector`, `.compass` (`--heading` 0 to 15, 0 = east, clockwise on screen), `.ant-state[data-state]`, `.trip-log` (`li.is-current`, `li.is-future`, tick buttons) | Trip data comes from `web/autopsy.mjs` |
 | Forms | `.field`, `__label`, `__hint`, `__error`, `.input` (`aria-invalid`), `.input-group`, `.range` | |
 | Staking | `.stake`, `__row`, `__readout` | Shows stake, √ weight and cap used |
 | Menus | `.option-cards` with `.option-card[data-opt]` and a radio | Selection comes from `:has(input:checked)` |

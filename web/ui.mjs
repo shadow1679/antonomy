@@ -74,9 +74,10 @@ const TWEEN_MS = 90;                    // single-step animation
 
 // Canvas, HUD and playback controls for one colony, built inside `host`.
 // load(make, labels) starts a colony at tick 0; onTick(col) runs after the
-// tick changes, and onDone(col) once the final tick has run.
+// tick changes, onDone(col) once the final tick has run, and onSelect(a) when
+// a click on the map (or select()) picks the ant to follow.
 export class Player {
-  constructor(host, { onTick = () => {}, onDone = () => {} } = {}) {
+  constructor(host, { onTick = () => {}, onDone = () => {}, onSelect = () => {} } = {}) {
     host.innerHTML = `
       <div class="stack" style="--stack-gap: var(--space-3)">
         <div class="sim-frame">
@@ -111,6 +112,7 @@ export class Player {
     this.view = new ColonyView(this.cv, { labels: [], glyphs: GLYPHS });
     this.onTick = onTick;
     this.onDone = onDone;
+    this.onSelect = onSelect;
     this.playing = false;
     this.speed = 4;
     this.raf = 0; this.lastNow = 0; this.acc = 0; this.tweenEnd = 0;
@@ -126,6 +128,7 @@ export class Player {
     this.view.setStakers(stakers);
     this.col = make();
     this.view.attach(this.col);
+    if (this.view.selected >= this.col.ants) this.view.selected = 0;
     this.el.scrubber.max = this.col.ticks;
     this.el.ticks.textContent = pad4(this.col.ticks);
     this.render();
@@ -138,6 +141,21 @@ export class Player {
   }
 
   get done() { return this.col.t === this.col.ticks; }
+
+  // Pause and show tick t.
+  seek(t) {
+    this.stop();
+    this.goTo(Math.max(0, Math.min(this.col.ticks, t)));
+    this.render();
+  }
+
+  // Follow ant a (clamped to the colony's ants).
+  select(a) {
+    const view = this.view;
+    view.selected = Math.max(0, Math.min(this.col.ants - 1, a));
+    if (!this.raf) view.draw(1);
+    this.onSelect(view.selected);
+  }
 
   panels() {
     const { col, el, view } = this;
@@ -224,10 +242,7 @@ export class Player {
       if (hover !== view.hover) { view.hover = hover; if (!this.raf) view.draw(1); }
     });
     cv.addEventListener("mouseleave", () => { view.hover = -1; if (!this.raf) view.draw(1); });
-    cv.addEventListener("click", (e) => {
-      view.selected = view.nearest(...toCells(e))[0];
-      if (!this.raf) view.draw(1);
-    });
+    cv.addEventListener("click", (e) => this.select(view.nearest(...toCells(e))[0]));
   }
 }
 

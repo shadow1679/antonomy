@@ -533,6 +533,43 @@
 .ant-state::before { content: "→"; color: var(--info); }
 .ant-state[data-state="returning"]::before { content: "←"; color: var(--accent); }
 
+/* Trip log: one row per trip the followed ant makes. The tick cells are
+   buttons that seek the replay. .is-current marks the trip under way,
+   .is-future the trips the replay hasn't reached yet. */
+.trip-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  max-height: 15rem;
+  overflow-y: auto;
+  font-size: var(--text-xs);
+}
+.trip-log li {
+  display: grid;
+  grid-template-columns: 3ch minmax(4.5rem, max-content) 1fr 1fr 6ch;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+}
+.trip-log li.is-current { background: var(--surface-raised); color: var(--text); }
+.trip-log li.is-future { color: var(--text-faint); }
+.trip-log button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.trip-log button:hover { color: var(--text); }
+
 /* ======================================================================
    Form fields
    ====================================================================== */

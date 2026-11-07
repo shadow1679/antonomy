@@ -59,6 +59,31 @@
             <div id="stakers" style="margin-top: var(--space-3)"></div>
             <p class="text-xs text-faint" id="forecast-note" style="margin: var(--space-3) 0 0" hidden><span class="tag-forecast">Forecast · not advice</span> One of four forecasters on this market. Swarm belief is their average and is shown on the Live page.</p>
           </div>
+
+          <div class="chamber" id="autopsy">
+            <div class="chamber__header">
+              <h3 class="chamber__title">Ant autopsy</h3>
+              <div class="cluster" style="--cluster-gap: var(--space-2)">
+                <button class="btn btn--icon btn--sm btn--ghost" type="button" id="ant-prev" aria-label="Previous ant">‹</button>
+                <label class="eyebrow" for="ant-in">ant #</label>
+                <input class="input num" id="ant-in" type="number" min="0" step="1" style="width: 5.5rem; min-height: 32px">
+                <button class="btn btn--icon btn--sm btn--ghost" type="button" id="ant-next" aria-label="Next ant">›</button>
+              </div>
+            </div>
+            <div class="inspector">
+              <div class="compass" id="compass" role="img" aria-label="Heading"><span class="compass__needle"></span></div>
+              <dl class="kv text-sm">
+                <dt>State</dt><dd><span class="ant-state" id="ant-state"></span></dd>
+                <dt>Cell</dt><dd class="num" id="ant-cell"></dd>
+                <dt>Heading</dt><dd class="num" id="ant-heading"></dd>
+                <dt>Deposit</dt><dd class="num" id="ant-deposit"></dd>
+                <dt>Scent here</dt><dd class="num" id="ant-scent"></dd>
+              </dl>
+            </div>
+            <p class="text-sm" id="ant-summary" style="margin: var(--space-4) 0 var(--space-2)"></p>
+            <ol class="trip-log" id="trips" aria-label="Trips of the followed ant"></ol>
+            <p class="text-xs text-faint" style="margin: var(--space-3) 0 0">Click an ant on the map or pick its number. Each row is one trip: the pile, the tick it took food (↑) and the tick it got home (⌂), each a link into the replay, and its deposit. Deposit is the pheromone it lays per step on the way home. It starts higher for richer piles and fades by 1/32 each step. Scent is the pheromone on its cell now (cap 5120). Ants move in a fixed order from one seeded RNG, so this ant does the same thing on every replay.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -70,28 +95,81 @@
 </footer>
 
 <script type="module">
-import { toHex } from "../sim/js/antosim.mjs";
+import { toHex, W, CAP } from "../sim/js/antosim.mjs";
 import { roundById, demoRound } from "./round.mjs";
-import { $, esc, hashHTML, installCopy, liveShares, shareBars, Player, topbar, stakerLegendHTML } from "./ui.mjs";
+import { antLives, tripAt, deliveredBy } from "./autopsy.mjs";
+import { $, esc, hashHTML, installCopy, liveShares, shareBars, Player, topbar, stakerLegendHTML, pad4 } from "./ui.mjs";
 
 $("topbar").outerHTML = topbar("replay");
 installCopy();
 
 const q = new URLSearchParams(location.search);
-let round, spec, bars;
+let round, spec, bars, lives = [];
 
 const player = new Player($("player"), {
   onTick(col) {
     const { pct, lead } = liveShares(col);
     bars(pct, col.t === col.ticks ? lead : -1);
     $("share-tick").textContent = `tick ${col.t}`;
+    autopsy(col);
+  },
+  onSelect(a) {
+    $("ant-in").value = a;
+    tripRows();
+    autopsy(player.col);
+    syncUrl();
   },
 });
+
+const optHTML = (o) => `<span class="opt" data-opt="${o}">${esc(spec.labels[o])}</span>`;
+
+// Ant autopsy: the followed ant's state at this tick, read from the colony.
+function autopsy(col) {
+  const a = player.view.selected, trips = lives[a] ?? [];
+  const k = tripAt(trips, col.t);
+  const st = $("ant-state");
+  st.dataset.state = k >= 0 ? "returning" : "searching";
+  st.innerHTML = k >= 0 ? `returning from ${optHTML(trips[k].opt)}` : "searching";
+  $("ant-cell").textContent = `(${col.ax[a] >> 8}, ${col.ay[a] >> 8})`;
+  $("ant-heading").textContent = `${col.ah[a]} / 16`;
+  $("ant-deposit").textContent = col.returning[a] ? String(col.strength[a]) : "—";
+  $("ant-scent").textContent = `${col.cell((col.ay[a] >> 8) * W + (col.ax[a] >> 8))} / ${CAP}`;
+  const compass = $("compass");
+  compass.style.setProperty("--heading", col.ah[a]);
+  compass.setAttribute("aria-label", `Heading ${col.ah[a]} of 16`);
+  const got = deliveredBy(trips, col.t, spec.labels.length), home = got.reduce((s, v) => s + v, 0);
+  $("ant-summary").innerHTML = home
+    ? `By tick ${col.t}: ${home} crumb${home === 1 ? "" : "s"} home · ` +
+      got.map((v, o) => (v ? `${optHTML(o)} ×${v}` : "")).filter(Boolean).join(" · ")
+    : `By tick ${col.t}: no crumbs home yet.`;
+  [...$("trips").children].forEach((li, j) => {
+    if (!trips[j]) return;
+    li.classList.toggle("is-current", j === k);
+    li.classList.toggle("is-future", trips[j].pick > col.t);
+  });
+}
+
+// One row per trip in the whole run, with ticks that seek the replay.
+function tripRows() {
+  const trips = lives[player.view.selected] ?? [];
+  const tick = (t, mark, what) =>
+    `<button type="button" data-t="${t}" aria-label="Go to tick ${t}, ${what}">${mark} t${pad4(t)}</button>`;
+  $("trips").innerHTML = trips.length
+    ? trips.map((x, j) => `<li><span class="num">${j + 1}</span>${optHTML(x.opt)}` +
+        tick(x.pick, "↑", "took food") +
+        (x.home === null ? `<span>still out</span>` : tick(x.home, "⌂", "home")) +
+        `<span class="num" title="deposit">${x.deposit}</span></li>`).join("")
+    : `<li><span style="grid-column: 1 / -1">This ant never found food in ${spec.ticks} ticks.</span></li>`;
+}
+
+function syncUrl() {
+  history.replaceState(null, "", `?round=${round.id}&colony=${spec.key}&ant=${player.view.selected}`);
+}
 
 const label = (s) => (s.market ? `${s.market} · ${s.name}` : s.name);
 const cleanHex = (v) => v.trim().toLowerCase().replace(/^0x/, "");
 
-function load(id, key) {
+function load(id, key, ant = player.view.selected) {
   round = roundById(id);
   spec = round.all.find((s) => s.key === key) ?? round.burn;
   $("round-in").value = id;
@@ -104,9 +182,11 @@ function load(id, key) {
   $("forecast-note").hidden = spec.key === "burn";
   bars = shareBars($("bars"), spec.labels);
   setBadge("idle", "Not verified");
+  lives = antLives(spec.make);
+  $("ant-in").max = spec.ants - 1;
   player.load(spec.make, spec.labels, spec.stakers);
   $("stakers").innerHTML = stakerLegendHTML(spec.stakers);
-  history.replaceState(null, "", `?round=${id}&colony=${spec.key}`);
+  player.select(ant);
 }
 
 function setBadge(state, text) { $("badge").dataset.state = state; $("badge").textContent = text; }
@@ -116,6 +196,14 @@ $("pick").addEventListener("submit", (e) => {
   load(Math.max(0, Math.floor(+$("round-in").value || 0)), $("colony-in").value);
 });
 $("colony-in").addEventListener("change", () => $("pick").requestSubmit());
+
+$("ant-prev").addEventListener("click", () => player.select((player.view.selected + spec.ants - 1) % spec.ants));
+$("ant-next").addEventListener("click", () => player.select((player.view.selected + 1) % spec.ants));
+$("ant-in").addEventListener("change", (e) => player.select(Math.floor(+e.target.value || 0)));
+$("trips").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-t]");
+  if (b) player.seek(+b.dataset.t);
+});
 
 $("expected").addEventListener("input", (e) => {
   const v = cleanHex(e.target.value);
@@ -142,7 +230,8 @@ $("verify").addEventListener("click", (e) => {
   }, 60);
 });
 
-load(q.has("round") ? Math.max(0, Math.floor(+q.get("round") || 0)) : demoRound().id, q.get("colony") ?? "burn");
+load(q.has("round") ? Math.max(0, Math.floor(+q.get("round") || 0)) : demoRound().id, q.get("colony") ?? "burn",
+  q.has("ant") ? Math.max(0, Math.floor(+q.get("ant") || 0)) : undefined);
 </script>
 </body>
 </html>
