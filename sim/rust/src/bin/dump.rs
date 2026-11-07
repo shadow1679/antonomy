@@ -6,7 +6,7 @@
 // whole forecast markets (hs with agent posts, hy without).
 // crosscheck.py compares these with the Python reference.
 use antosim::{
-    burn_run, forecast_market, forecast_run, market_colony, run, seed_from_int, sha256, Kind,
+    burn_run, forecast_market, forecast_market_full, forecast_market_weighted, forecast_run, forecast_run_ext, market_colony, run, seed_from_int, sha256, Kind,
     BURN_TICKS, FORECAST_ANTS, FORECAST_TICKS, N_ANTS, TICKS,
 };
 
@@ -16,6 +16,9 @@ const ODDS: [u16; 3] = [6200, 2800, 1000];
 const ODDS_6H: [u16; 3] = [5500, 3300, 1200];
 const MARKET_WEIGHTS: [u32; 3] = [3000, 0, 12000];
 const BINARY_ODDS: [u16; 2] = [9000, 1000];
+const COLONY_WEIGHTS: [u16; 3] = [400, 1700, 900];
+const ODDS_1H: [u16; 3] = [6400, 2600, 1000];
+const ODDS_24H: [u16; 3] = [4000, 4300, 1700];
 const AGENT_ODDS: [u16; 3] = [4500, 4000, 1500];
 
 fn main() {
@@ -72,7 +75,7 @@ fn main() {
             .hash_hex()
         };
         println!(
-            "{{\"i\":{},\"h5\":\"{}\",\"h2\":\"{}\",\"h3\":\"{}\",\"w5\":{},\"hb\":\"{}\",\"hm\":\"{}\",\"hk\":\"{}\",\"ha\":\"{}\",\"hs\":\"{}\",\"hy\":\"{}\"}}",
+            "{{\"i\":{},\"h5\":\"{}\",\"h2\":\"{}\",\"h3\":\"{}\",\"w5\":{},\"hb\":\"{}\",\"hm\":\"{}\",\"hk\":\"{}\",\"ha\":\"{}\",\"hs\":\"{}\",\"hy\":\"{}\",\"hw\":\"{}\",\"hx\":\"{}\",\"hz\":\"{}\"}}",
             i,
             a.hash_hex(),
             b.hash_hex(),
@@ -83,7 +86,53 @@ fn main() {
             small(Kind::Community),
             small(Kind::Agents),
             market(0, &ODDS, &ODDS_6H, &MARKET_WEIGHTS, stake_hash, &AGENT_ODDS, agent_hash),
-            market(1, &BINARY_ODDS, &BINARY_ODDS, &[0, 0], [0; 32], &[0, 0], [0; 32])
+            market(1, &BINARY_ODDS, &BINARY_ODDS, &[0, 0], [0; 32], &[0, 0], [0; 32]),
+            forecast_market_weighted(
+                &seed,
+                market_colony(2),
+                &ODDS,
+                &ODDS_6H,
+                &MARKET_WEIGHTS,
+                stake_hash,
+                &AGENT_ODDS,
+                agent_hash,
+                FORECAST_ANTS,
+                FORECAST_TICKS,
+                COLONY_WEIGHTS,
+            )
+            .unwrap()
+            .hash_hex(),
+            forecast_run_ext(
+                &seed,
+                Kind::Momentum,
+                &ODDS,
+                &ODDS_6H,
+                Some((&ODDS_1H, &ODDS_24H)),
+                &MARKET_WEIGHTS,
+                stake_hash,
+                &AGENT_ODDS,
+                agent_hash,
+                60,
+                300,
+            )
+            .unwrap()
+            .hash_hex(),
+            forecast_market_full(
+                &seed,
+                market_colony(3),
+                &ODDS,
+                &ODDS_6H,
+                Some((&ODDS_1H, &ODDS_24H)),
+                &MARKET_WEIGHTS,
+                stake_hash,
+                &AGENT_ODDS,
+                agent_hash,
+                FORECAST_ANTS,
+                FORECAST_TICKS,
+                COLONY_WEIGHTS,
+            )
+            .unwrap()
+            .hash_hex()
         );
     }
 }

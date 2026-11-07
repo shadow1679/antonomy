@@ -67,6 +67,12 @@ const COMMUNITY_BASE: u64 = 2_500; // flat food weight per outcome, milli sqrt-t
 /// stakes alike, so a bigger daily pot needs more stake to win.
 pub const BURN_HANDICAP: [u64; 5] = [1000, 875, 750, 625, 500];
 const ODDS_TAG: &[u8] = b"ANTO-ODDS-v0";
+/// The odds snapshot with the 1-hour and 24-hour windows too.
+const ODDS_EXT_TAG: &[u8] = b"ANTO-ODDS-v1";
+
+/// The odds 1 hour and 24 hours ago, per outcome (docs/FORECAST_QUALITY.md
+/// §5). Markets posted without them keep the six-hour formula and hash.
+pub type OddsExt<'a> = Option<(&'a [u16], &'a [u16])>;
 
 /// How a forecaster reads the odds snapshot. `Community` reads stakes and
 /// `Agents` reads the forecaster agents' median odds instead.
@@ -211,16 +217,56 @@ fn check_odds(odds: &[u16], odds_6h: &[u16]) -> Result<(), Error> {
     }
 }
 
+fn check_ext(odds: &[u16], ext: OddsExt) -> Result<(), Error> {
+    match ext {
+        Some((a, b)) => check_odds(odds, a).and(check_odds(odds, b)),
+        None => Ok(()),
+    }
+}
+
+/// Momentum's food weight per outcome. Six hours only: p + 2·Δ6h. With the
+/// 1-hour and 24-hour windows: move = floor((Δ1h + 2·Δ6h + Δ24h) / 2),
+/// halved (floor) when Δ1h and Δ24h point opposite ways (a reversal), then
+/// scaled by 10000 / (10000 + 4·chop) (floor), where chop is how far the
+/// path wandered beyond its net 24-hour change: max − min of the four
+/// prices, less |Δ24h|. Food = p + move. Both floored at `MOMENTUM_FLOOR`.
+/// With all three past prices equal it is the six-hour formula.
+pub fn momentum_food(odds: &[u16], odds_6h: &[u16], ext: OddsExt) -> Vec<u64> {
+    (0..odds.len())
+        .map(|i| {
+            let (o, p6) = (odds[i] as i64, odds_6h[i] as i64);
+            let food = match ext {
+                None => o + 2 * (o - p6),
+                Some((o1, o24)) => {
+                    let (p1, p24) = (o1[i] as i64, o24[i] as i64);
+                    let (d1, d6, d24) = (o - p1, o - p6, o - p24);
+                    let mut mv = (d1 + 2 * d6 + d24).div_euclid(2);
+                    if d1 * d24 < 0 {
+                        mv = mv.div_euclid(2);
+                    }
+                    let hi = o.max(p1).max(p6).max(p24);
+                    let lo = o.min(p1).min(p6).min(p24);
+                    let chop = hi - lo - d24.abs();
+                    o + (mv * 10_000).div_euclid(10_000 + 4 * chop)
+                }
+            };
+            food.max(MOMENTUM_FLOOR) as u64
+        })
+        .collect()
+}
+
 /// Per-option Q8 richness for the Momentum colony. `odds` and `odds_6h` are
 /// basis points per outcome now and six hours ago.
 pub fn odds_richness(kind: Kind, odds: &[u16], odds_6h: &[u16]) -> Result<Vec<u16>, Error> {
+    odds_richness_ext(kind, odds, odds_6h, None)
+}
+
+/// `odds_richness` with the 1-hour and 24-hour windows (`momentum_food`).
+pub fn odds_richness_ext(kind: Kind, odds: &[u16], odds_6h: &[u16], ext: OddsExt) -> Result<Vec<u16>, Error> {
     check_odds(odds, odds_6h)?;
-    let w: Vec<u64> = match kind {
-        Kind::Momentum => odds
-            .iter()
-            .zip(odds_6h)
-            .map(|(&o, &p)| (o as i64 + 2 * (o as i64 - p as i64)).max(MOMENTUM_FLOOR) as u64)
-            .collect(),
+    check_ext(odds, ext)?;
+    let w = match kind {
+        Kind::Momentum => momentum_food(odds, odds_6h, ext),
         Kind::Community | Kind::Agents => return Err(Error::BadOdds),
     };
     odds_scale(&w).ok_or(Error::BadOdds)
@@ -270,10 +316,19 @@ pub fn burn_richness(weights: &[u32]) -> Result<Vec<u16>, Error> {
 
 /// Hash of the odds snapshot: the second input commitment in the result hash.
 pub fn odds_snapshot_hash(odds: &[u16], odds_6h: &[u16]) -> Result<[u8; 32], Error> {
+    odds_snapshot_hash_ext(odds, odds_6h, None)
+}
+
+/// sha256("ANTO-ODDS-v0", n u8, odds, odds_6h), or with the 1-hour and
+/// 24-hour windows sha256("ANTO-ODDS-v1", n u8, odds, odds_6h, odds_1h,
+/// odds_24h), every value u16.
+pub fn odds_snapshot_hash_ext(odds: &[u16], odds_6h: &[u16], ext: OddsExt) -> Result<[u8; 32], Error> {
     check_odds(odds, odds_6h)?;
-    let mut buf = ODDS_TAG.to_vec();
+    check_ext(odds, ext)?;
+    let mut buf = if ext.is_some() { ODDS_EXT_TAG } else { ODDS_TAG }.to_vec();
     buf.push(odds.len() as u8);
-    for o in odds.iter().chain(odds_6h) {
+    let (a, b) = ext.unwrap_or((&[], &[]));
+    for o in odds.iter().chain(odds_6h).chain(a).chain(b) {
         buf.extend_from_slice(&o.to_be_bytes());
     }
     Ok(sha256(&buf))
@@ -914,7 +969,29 @@ pub fn forecast_run(
     ants: usize,
     ticks: u32,
 ) -> Result<SimResult, Error> {
-    let mut odds_hash = odds_snapshot_hash(odds, odds_6h)?;
+    forecast_run_ext(
+        seed, kind, odds, odds_6h, None, weights, stake_hash, agent_odds, agent_hash, ants, ticks,
+    )
+}
+
+/// `forecast_run` with the odds 1 hour and 24 hours ago, when the keepers
+/// posted them: Momentum's food (`momentum_food`) and the odds snapshot hash
+/// every colony commits use them.
+#[allow(clippy::too_many_arguments)]
+pub fn forecast_run_ext(
+    seed: &[u8; 32],
+    kind: Kind,
+    odds: &[u16],
+    odds_6h: &[u16],
+    ext: OddsExt,
+    weights: &[u32],
+    stake_hash: [u8; 32],
+    agent_odds: &[u16],
+    agent_hash: [u8; 32],
+    ants: usize,
+    ticks: u32,
+) -> Result<SimResult, Error> {
+    let mut odds_hash = odds_snapshot_hash_ext(odds, odds_6h, ext)?;
     let rich = match kind {
         Kind::Community => {
             if weights.len() != odds.len() {
@@ -929,7 +1006,7 @@ pub fn forecast_run(
             odds_hash = agent_hash;
             agent_richness(agent_odds)?
         }
-        _ => odds_richness(kind, odds, odds_6h)?,
+        _ => odds_richness_ext(kind, odds, odds_6h, ext)?,
     };
     let commit = Commit {
         stake_hash,
@@ -1008,17 +1085,36 @@ pub fn voters(weights: &[u32], agent_odds: &[u16]) -> [bool; 3] {
     ]
 }
 
-/// Combine the three forecaster runs (in `KINDS` order) of one market.
-/// `counted` comes from `voters`. Swarm belief per option is the floored mean
-/// of the counted colonies' trail shares; the remainder goes to the option
-/// with the largest sum (lowest index on ties).
-/// Market hash = sha256(tag, colony u16, n u8, three colony hashes, swarm u16 each).
+/// The weight of each colony in the swarm belief when no record says
+/// otherwise (docs/FORECAST_QUALITY.md §4).
+pub const EQUAL_WEIGHTS: [u16; 3] = [1000; 3];
+
+/// Combine the three forecaster runs (in `KINDS` order) of one market with
+/// equal colony weights: `market_result_weighted` with `EQUAL_WEIGHTS`.
 pub fn market_result(
     colony: u16,
     runs: Vec<SimResult>,
     counted: [bool; 3],
 ) -> Result<MarketResult, Error> {
-    if runs.len() != KINDS.len() || !counted[0] {
+    market_result_weighted(colony, runs, counted, EQUAL_WEIGHTS)
+}
+
+/// Combine the three forecaster runs (in `KINDS` order) of one market.
+/// `counted` comes from `voters`; `weights` are the colonies' weights (each
+/// above 0), frozen from the scorebook. Swarm belief per option is the
+/// floored weighted mean of the counted colonies' trail shares,
+/// floor(Σ w·s / Σ w); the remainder goes to the option with the largest
+/// weighted sum (lowest index on ties). With equal weights this is the plain
+/// floored mean.
+/// Market hash = sha256(tag, colony u16, n u8, three colony hashes, swarm u16
+/// each, then the three weights u16 only when they are not all equal).
+pub fn market_result_weighted(
+    colony: u16,
+    runs: Vec<SimResult>,
+    counted: [bool; 3],
+    weights: [u16; 3],
+) -> Result<MarketResult, Error> {
+    if runs.len() != KINDS.len() || !counted[0] || weights.iter().any(|&w| w == 0) {
         return Err(Error::BadMarketRuns);
     }
     let n = runs[0].perm.len();
@@ -1026,18 +1122,16 @@ pub fn market_result(
         return Err(Error::BadMarketRuns);
     }
     let shares: Vec<Vec<u16>> = runs.iter().map(trail_shares).collect();
-    let k = counted.iter().filter(|&&c| c).count() as u64;
+    let total: u64 = (0..3).filter(|&j| counted[j]).map(|j| weights[j] as u64).sum();
     let sums: Vec<u64> = (0..n)
         .map(|o| {
-            shares
-                .iter()
-                .zip(counted)
-                .filter(|(_, c)| *c)
-                .map(|(s, _)| s[o] as u64)
+            (0..3)
+                .filter(|&j| counted[j])
+                .map(|j| weights[j] as u64 * shares[j][o] as u64)
                 .sum()
         })
         .collect();
-    let mut swarm: Vec<u64> = sums.iter().map(|&x| x / k).collect();
+    let mut swarm: Vec<u64> = sums.iter().map(|&x| x / total).collect();
     let mut top = 0;
     for o in 1..n {
         if sums[o] > sums[top] {
@@ -1055,6 +1149,11 @@ pub fn market_result(
     }
     for x in &swarm {
         buf.extend_from_slice(&x.to_be_bytes());
+    }
+    if weights != [weights[0]; 3] {
+        for w in weights {
+            buf.extend_from_slice(&w.to_be_bytes());
+        }
     }
     Ok(MarketResult {
         colony,
@@ -1084,16 +1183,60 @@ pub fn forecast_market(
     ants: usize,
     ticks: u32,
 ) -> Result<MarketResult, Error> {
+    forecast_market_weighted(
+        round_seed, colony, odds, odds_6h, weights, stake_hash, agent_odds, agent_hash, ants, ticks,
+        EQUAL_WEIGHTS,
+    )
+}
+
+/// `forecast_market` with the colonies' weights in the swarm belief.
+#[allow(clippy::too_many_arguments)]
+pub fn forecast_market_weighted(
+    round_seed: &[u8; 32],
+    colony: u16,
+    odds: &[u16],
+    odds_6h: &[u16],
+    weights: &[u32],
+    stake_hash: [u8; 32],
+    agent_odds: &[u16],
+    agent_hash: [u8; 32],
+    ants: usize,
+    ticks: u32,
+    colony_weights: [u16; 3],
+) -> Result<MarketResult, Error> {
+    forecast_market_full(
+        round_seed, colony, odds, odds_6h, None, weights, stake_hash, agent_odds, agent_hash, ants,
+        ticks, colony_weights,
+    )
+}
+
+/// `forecast_market_weighted` with the odds 1 hour and 24 hours ago.
+#[allow(clippy::too_many_arguments)]
+pub fn forecast_market_full(
+    round_seed: &[u8; 32],
+    colony: u16,
+    odds: &[u16],
+    odds_6h: &[u16],
+    ext: OddsExt,
+    weights: &[u32],
+    stake_hash: [u8; 32],
+    agent_odds: &[u16],
+    agent_hash: [u8; 32],
+    ants: usize,
+    ticks: u32,
+    colony_weights: [u16; 3],
+) -> Result<MarketResult, Error> {
     let runs = KINDS
         .iter()
         .map(|&k| {
             let seed = colony_seed(round_seed, colony, k as u8);
-            forecast_run(
-                &seed, k, odds, odds_6h, weights, stake_hash, agent_odds, agent_hash, ants, ticks,
+            forecast_run_ext(
+                &seed, k, odds, odds_6h, ext, weights, stake_hash, agent_odds, agent_hash, ants,
+                ticks,
             )
         })
         .collect::<Result<Vec<_>, _>>()?;
-    market_result(colony, runs, voters(weights, agent_odds))
+    market_result_weighted(colony, runs, voters(weights, agent_odds), colony_weights)
 }
 
 pub fn seed_from_int(i: u64) -> [u8; 32] {
@@ -1103,6 +1246,23 @@ pub fn seed_from_int(i: u64) -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn momentum_windows() {
+        let (o, p) = ([6200u16, 2800, 1000], [5500u16, 3300, 1200]);
+        // Flat 1-hour and 24-hour windows give the six-hour formula.
+        assert_eq!(momentum_food(&o, &p, Some((&p, &p))), momentum_food(&o, &p, None));
+        // Cut: move (−200 + 1400 + 2200)/2 = 1700, a reversal halves it to 850,
+        // chop 200 scales it to 787. Hold: −1150, reversal −575, chop 200 → −533.
+        // Hike: −550, no reversal (Δ1h is 0), no chop.
+        let ext = ([6400u16, 2600, 1000], [4000u16, 4300, 1700]);
+        assert_eq!(momentum_food(&o, &p, Some((&ext.0, &ext.1))), vec![6987, 2267, 450]);
+        assert_ne!(
+            odds_snapshot_hash_ext(&o, &p, Some((&ext.0, &ext.1))).unwrap(),
+            odds_snapshot_hash(&o, &p).unwrap()
+        );
+        assert!(odds_richness_ext(Kind::Momentum, &o, &p, Some((&ext.0, &ext.1[..2]))).is_err());
+    }
 
     #[test]
     fn matches_python_reference_for_seed_0() {

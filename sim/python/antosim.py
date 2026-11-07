@@ -63,6 +63,7 @@ COMMUNITY_BASE = 2500       # flat food weight per outcome before stakes, milli 
 # stakes alike, so a bigger daily pot needs more stake to win.
 BURN_HANDICAP = (1000, 875, 750, 625, 500)
 ODDS_TAG = b"ANTO-ODDS-v0"
+ODDS_EXT_TAG = b"ANTO-ODDS-v1"   # the odds snapshot with the 1-hour and 24-hour windows
 ZERO32 = bytes(32)
 MOMENTUM, COMMUNITY, AGENTS = range(3)
 KINDS = (MOMENTUM, COMMUNITY, AGENTS)
@@ -145,16 +146,49 @@ def _check_odds(odds, odds_6h):
     assert all(0 <= o <= BPS for o in odds + odds_6h)
 
 
-def odds_richness(kind, odds, odds_6h):
+def _check_ext(odds, odds_ext):
+    if odds_ext is not None:
+        o1, o24 = odds_ext
+        _check_odds(odds, list(o1))
+        _check_odds(odds, list(o24))
+
+
+def momentum_food(odds, odds_6h, odds_ext=None):
+    """Momentum's food weight per outcome (docs/FORECAST_QUALITY.md §5).
+
+    Six hours only: p + 2*d6. With odds_ext = (odds 1h ago, odds 24h ago):
+    move = floor((d1 + 2*d6 + d24) / 2), halved (floor) when d1 and d24 point
+    opposite ways (a reversal), then scaled by 10000 / (10000 + 4*chop)
+    (floor), where chop is how far the path wandered beyond its net 24-hour
+    change: max - min of the four prices, less |d24|. Food = p + move. Both
+    floored at MOMENTUM_FLOOR. With all three past prices equal it is the
+    six-hour formula.
+    """
+    if odds_ext is None:
+        return [max(o + 2 * (o - p), MOMENTUM_FLOOR) for o, p in zip(odds, odds_6h)]
+    out = []
+    for o, p6, p1, p24 in zip(odds, odds_6h, odds_ext[0], odds_ext[1]):
+        d1, d6, d24 = o - p1, o - p6, o - p24
+        move = (d1 + 2 * d6 + d24) // 2
+        if d1 * d24 < 0:
+            move //= 2
+        chop = max(o, p1, p6, p24) - min(o, p1, p6, p24) - abs(d24)
+        out.append(max(o + move * 10000 // (10000 + 4 * chop), MOMENTUM_FLOOR))
+    return out
+
+
+def odds_richness(kind, odds, odds_6h, odds_ext=None):
     """Per-option Q8 richness for the Momentum colony.
 
-    odds, odds_6h: basis points per outcome now and six hours ago.
+    odds, odds_6h: basis points per outcome now and six hours ago. odds_ext:
+    (odds 1 hour ago, odds 24 hours ago), when the keepers posted them.
     """
     odds, odds_6h = list(odds), list(odds_6h)
     _check_odds(odds, odds_6h)
+    _check_ext(odds, odds_ext)
     if kind != MOMENTUM:
         raise ValueError("kind must be MOMENTUM")
-    return _odds_scale([max(o + 2 * (o - p), MOMENTUM_FLOOR) for o, p in zip(odds, odds_6h)])
+    return _odds_scale(momentum_food(odds, odds_6h, odds_ext))
 
 
 def stake_richness(weights):
@@ -190,13 +224,18 @@ def agent_richness(agent_odds):
     return _odds_scale(agent_odds if any(agent_odds) else [1] * len(agent_odds))
 
 
-def odds_snapshot_hash(odds, odds_6h):
-    """Hash of the odds snapshot: the second input commitment in the result hash."""
+def odds_snapshot_hash(odds, odds_6h, odds_ext=None):
+    """Hash of the odds snapshot: the second input commitment in the result hash.
+
+    sha256("ANTO-ODDS-v0", n u8, odds, odds_6h), or with odds_ext
+    sha256("ANTO-ODDS-v1", n u8, odds, odds_6h, odds_1h, odds_24h), all u16.
+    """
     odds, odds_6h = list(odds), list(odds_6h)
     _check_odds(odds, odds_6h)
-    return hashlib.sha256(
-        ODDS_TAG + struct.pack(">B", len(odds)) + struct.pack(">%dH" % (2 * len(odds)), *odds, *odds_6h)
-    ).digest()
+    _check_ext(odds, odds_ext)
+    vals = odds + odds_6h + ([] if odds_ext is None else list(odds_ext[0]) + list(odds_ext[1]))
+    tag = ODDS_TAG if odds_ext is None else ODDS_EXT_TAG
+    return hashlib.sha256(tag + struct.pack(">B", len(odds)) + struct.pack(">%dH" % len(vals), *vals)).digest()
 
 
 def run(seed, n=5, richness=None, ants=N_ANTS, ticks=TICKS, stake_hash=None, odds_hash=None):
@@ -372,16 +411,17 @@ def burn_run(seed, weights, stake_hash, ants=N_ANTS, ticks=TICKS):
 
 
 def forecast_run(seed, kind, odds, odds_6h, weights=None, stake_hash=None, agent_odds=None, agent_hash=None,
-                 ants=N_ANTS, ticks=TICKS):
+                 ants=N_ANTS, ticks=TICKS, odds_ext=None):
     """One forecaster on one market. Community reads `weights` (that market's
     stakes), Agents reads `agent_odds` (the forecaster agents' median odds) and
     Momentum reads the odds snapshot.
 
     Every forecaster commits the stake snapshot hash. The second commitment is
     the odds snapshot hash, except for Agents, which commits `agent_hash` (the
-    agent-odds snapshot) instead.
+    agent-odds snapshot) instead. odds_ext: (odds 1 hour ago, odds 24 hours
+    ago), when the keepers posted them (`momentum_food`).
     """
-    odds_hash = odds_snapshot_hash(odds, odds_6h)
+    odds_hash = odds_snapshot_hash(odds, odds_6h, odds_ext)
     if kind == COMMUNITY:
         assert weights is not None and len(weights) == len(odds)
         rich = stake_richness(weights)
@@ -391,7 +431,7 @@ def forecast_run(seed, kind, odds, odds_6h, weights=None, stake_hash=None, agent
         rich = agent_richness(agent_odds)
         odds_hash = ZERO32 if agent_hash is None else agent_hash
     else:
-        rich = odds_richness(kind, odds, odds_6h)
+        rich = odds_richness(kind, odds, odds_6h, odds_ext)
     return run(seed, len(odds), rich, ants, ticks, stake_hash=stake_hash, odds_hash=odds_hash)
 
 
@@ -432,19 +472,31 @@ def voters(weights, agent_odds):
     return [True, any(weights), any(agent_odds)]
 
 
-def market_result(colony, runs, counted):
+# The weight of each colony in the swarm belief when no record says
+# otherwise (docs/FORECAST_QUALITY.md §4).
+EQUAL_WEIGHTS = (1000, 1000, 1000)
+
+
+def market_result(colony, runs, counted, weights=EQUAL_WEIGHTS):
     """Combine the three forecaster runs (in KINDS order) of one market.
 
-    counted: three bools from `voters`. Swarm belief per option is the floored
-    mean of the counted colonies' trail shares; the remainder goes to the
-    option with the largest sum (lowest index on ties). Market hash =
-    sha256(tag, colony u16, n u8, three colony hashes, swarm u16 each).
+    counted: three bools from `voters`. weights: the colonies' weights (each
+    above 0), frozen from the scorebook. Swarm belief per option is the
+    floored weighted mean of the counted colonies' trail shares,
+    floor(sum w*s / sum w); the remainder goes to the option with the largest
+    weighted sum (lowest index on ties). With equal weights this is the plain
+    floored mean. Market hash = sha256(tag, colony u16, n u8, three colony
+    hashes, swarm u16 each, then the three weights u16 only when they are not
+    all equal).
     """
     assert len(runs) == len(KINDS) and len(counted) == len(KINDS) and counted[0]
+    weights = tuple(weights)
+    assert len(weights) == 3 and all(0 < w <= 0xFFFF for w in weights)
     shares = [trail_shares(r) for r in runs]
     n = len(shares[0])
-    sums = [sum(s[o] for s, c in zip(shares, counted) if c) for o in range(n)]
-    swarm = [x // sum(counted) for x in sums]
+    total = sum(w for w, c in zip(weights, counted) if c)
+    sums = [sum(w * s[o] for s, w, c in zip(shares, weights, counted) if c) for o in range(n)]
+    swarm = [x // total for x in sums]
     top = 0
     for o in range(1, n):
         if sums[o] > sums[top]:
@@ -452,6 +504,8 @@ def market_result(colony, runs, counted):
     swarm[top] += BPS - sum(swarm)
     buf = MARKET_TAG + struct.pack(">HB", colony, n)
     buf += b"".join(bytes.fromhex(r["hash"]) for r in runs) + struct.pack(">%dH" % n, *swarm)
+    if len(set(weights)) > 1:
+        buf += struct.pack(">3H", *weights)
     return {
         "colony": colony,
         "colonies": [dict(r, shares=sh, counted=c) for r, sh, c in zip(runs, shares, counted)],
@@ -461,20 +515,22 @@ def market_result(colony, runs, counted):
 
 
 def forecast_market(round_seed, colony, odds, odds_6h, weights, stake_hash, agent_odds, agent_hash,
-                    ants=FORECAST_ANTS, ticks=FORECAST_TICKS):
+                    ants=FORECAST_ANTS, ticks=FORECAST_TICKS, colony_weights=EQUAL_WEIGHTS, odds_ext=None):
     """The three forecasters on one market, each on its own map.
 
     colony: the market's colony id (`market_colony(m)`). weights: that
     colony's stake weights, one per outcome (zeros when nobody staked).
     agent_odds, agent_hash: the forecaster agents' per-outcome median odds and
-    the agent-odds snapshot hash (zeros when no agent posted).
+    the agent-odds snapshot hash (zeros when no agent posted). colony_weights:
+    the colonies' weights in the swarm belief (`market_result`). odds_ext:
+    (odds 1 hour ago, odds 24 hours ago), when the keepers posted them.
     """
     runs = [
         forecast_run(colony_seed(round_seed, colony, k), k, odds, odds_6h, weights, stake_hash,
-                     agent_odds, agent_hash, ants, ticks)
+                     agent_odds, agent_hash, ants, ticks, odds_ext)
         for k in KINDS
     ]
-    return market_result(colony, runs, voters(weights, agent_odds))
+    return market_result(colony, runs, voters(weights, agent_odds), colony_weights)
 
 
 def seed_from_int(i):

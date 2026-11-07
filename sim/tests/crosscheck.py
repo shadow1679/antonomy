@@ -4,9 +4,12 @@ Usage: python3 -I sim/tests/crosscheck.py [count] [--no-py] [--day]   (default 5
 Each seed runs seven colonies: 5 outcomes, 2 outcomes, 3 outcomes with fixed
 richness, a Burn colony with stakes, and the three forecasters (Momentum,
 Community, Agents) on one market. The last four use 60 ants
-and 300 ticks. Two more keys are whole forecast markets (three forecasters on
+and 300 ticks. Three more keys are whole forecast markets (three forecasters on
 their own maps, trail shares, swarm belief): a 3-outcome market with stakes and
-agent posts, and a binary market with neither. Python needs about 1.5 s per seed, so use
+agent posts, a binary market with neither, and the 3-outcome market again with
+unequal colony weights in the swarm belief (docs/FORECAST_QUALITY.md §4). The
+last two add the odds 1 hour and 24 hours ago (§5): Momentum alone, then a
+whole market with them and the unequal weights. Python needs about 1.5 s per seed, so use
 --no-py to compare only JS against Rust on large counts (the 10,000-seed gate).
 Rust is skipped with a warning if cargo isn't found.
 
@@ -29,7 +32,7 @@ args = [a for a in sys.argv[1:] if not a.startswith("--")]
 use_py = "--no-py" not in sys.argv
 day = "--day" in sys.argv
 count = int(args[0]) if args else (3 if day else 50)
-KEYS = ("hd",) if day else ("h5", "h2", "h3", "hb", "hm", "hk", "ha", "hs", "hy")
+KEYS = ("hd",) if day else ("h5", "h2", "h3", "hb", "hm", "hk", "ha", "hs", "hy", "hw", "hx", "hz")
 mode = ["day"] if day else []
 
 # Fixtures shared with dump.mjs and dump.rs.
@@ -38,6 +41,12 @@ BURN_WEIGHTS = [0, 40000, 9000, 0, 2500]
 ODDS, ODDS_6H = [6200, 2800, 1000], [5500, 3300, 1200]
 MARKET_WEIGHTS = [3000, 0, 12000]
 BINARY_ODDS = [9000, 1000]
+# Colony weights in the swarm belief, not all equal, so the weighted path and
+# its hash suffix are covered too.
+COLONY_WEIGHTS = (400, 1700, 900)
+# Odds 1 hour and 24 hours ago (docs/FORECAST_QUALITY.md §5): Cut rising with a
+# 1-hour dip (a reversal), Hold falling, Hike wandering.
+ODDS_EXT = ([6400, 2600, 1000], [4000, 4300, 1700])
 AGENT_ODDS = [4500, 4000, 1500]
 AGENT_HASH = hashlib.sha256(b"agents").digest()
 
@@ -97,6 +106,15 @@ elif use_py:
             "hy": antosim.forecast_market(
                 seed, antosim.market_colony(1), BINARY_ODDS, BINARY_ODDS, [0, 0], antosim.ZERO32,
                 [0, 0], antosim.ZERO32)["hash"],
+            "hx": antosim.forecast_run(
+                seed, antosim.MOMENTUM, ODDS, ODDS_6H, MARKET_WEIGHTS, STAKE_HASH, AGENT_ODDS, AGENT_HASH, 60, 300,
+                odds_ext=ODDS_EXT)["hash"],
+            "hz": antosim.forecast_market(
+                seed, antosim.market_colony(3), ODDS, ODDS_6H, MARKET_WEIGHTS, STAKE_HASH,
+                AGENT_ODDS, AGENT_HASH, colony_weights=COLONY_WEIGHTS, odds_ext=ODDS_EXT)["hash"],
+            "hw": antosim.forecast_market(
+                seed, antosim.market_colony(2), ODDS, ODDS_6H, MARKET_WEIGHTS, STAKE_HASH,
+                AGENT_ODDS, AGENT_HASH, colony_weights=COLONY_WEIGHTS)["hash"],
         })
     impls["py"] = py_rows
 

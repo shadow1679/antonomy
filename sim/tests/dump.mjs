@@ -7,7 +7,7 @@
 // crosscheck.py compares these with Python.
 import {
   run, seedFromInt, sha256, burnRun, forecastRun,
-  MOMENTUM, COMMUNITY, AGENTS, forecastMarket, marketColony, N_ANTS, BURN_TICKS,
+  MOMENTUM, COMMUNITY, AGENTS, forecastMarket, marketColony, N_ANTS, BURN_TICKS, FORECAST_ANTS, FORECAST_TICKS,
 } from "../js/antosim.mjs";
 
 // Fixtures shared with crosscheck.py and sim/rust/src/bin/dump.rs.
@@ -16,6 +16,8 @@ const BURN_WEIGHTS = [0, 40000, 9000, 0, 2500];
 const ODDS = [6200, 2800, 1000], ODDS_6H = [5500, 3300, 1200];
 const MARKET_WEIGHTS = [3000, 0, 12000];
 const BINARY_ODDS = [9000, 1000];
+const COLONY_WEIGHTS = [400, 1700, 900];
+const ODDS_EXT = [[6400, 2600, 1000], [4000, 4300, 1700]];
 const AGENT_ODDS = [4500, 4000, 1500];
 const AGENT_HASH = sha256(new TextEncoder().encode("agents"));
 const small = (kind) => forecastRun(seed, kind, ODDS, ODDS_6H, MARKET_WEIGHTS, STAKE_HASH, AGENT_ODDS, AGENT_HASH, 60, 300).hash;
@@ -39,5 +41,10 @@ for (let i = first; i < first + count; i++) {
     hm: small(MOMENTUM), hk: small(COMMUNITY), ha: small(AGENTS),
     hs: forecastMarket(seed, marketColony(0), ODDS, ODDS_6H, MARKET_WEIGHTS, STAKE_HASH, AGENT_ODDS, AGENT_HASH).hash,
     hy: forecastMarket(seed, marketColony(1), BINARY_ODDS, BINARY_ODDS, [0, 0], new Uint8Array(32), [0, 0], new Uint8Array(32)).hash,
+    hx: forecastRun(seed, MOMENTUM, ODDS, ODDS_6H, MARKET_WEIGHTS, STAKE_HASH, AGENT_ODDS, AGENT_HASH, 60, 300, ODDS_EXT).hash,
+    hz: forecastMarket(seed, marketColony(3), ODDS, ODDS_6H, MARKET_WEIGHTS, STAKE_HASH, AGENT_ODDS, AGENT_HASH,
+      FORECAST_ANTS, FORECAST_TICKS, COLONY_WEIGHTS, ODDS_EXT).hash,
+    hw: forecastMarket(seed, marketColony(2), ODDS, ODDS_6H, MARKET_WEIGHTS, STAKE_HASH, AGENT_ODDS, AGENT_HASH,
+      FORECAST_ANTS, FORECAST_TICKS, COLONY_WEIGHTS).hash,
   }));
 }

@@ -44,7 +44,7 @@ use crate::{
     Error,
 };
 use antosim::{
-    colony_seed, forecast_run, market_result, sha256, voters, SimResult, FORECAST_ANTS,
+    colony_seed, forecast_run_ext, market_result_weighted, sha256, voters, SimResult, FORECAST_ANTS,
     FORECAST_TICKS, KINDS,
 };
 use std::collections::BTreeMap;
@@ -186,7 +186,7 @@ pub struct ColonyRun {
 }
 
 impl ColonyRun {
-    pub(crate) fn sim(&self) -> SimResult {
+    pub fn sim(&self) -> SimResult {
         SimResult {
             winner_source: self.winner_source as usize,
             winner_option: self.winner_option as usize,
@@ -301,6 +301,16 @@ impl Requests {
 
     pub fn config(&self) -> RequestConfig {
         self.config
+    }
+
+    /// Change how long agents have on a request from now on (requests whose
+    /// window is already open keep theirs). It must stay above zero.
+    pub fn set_forecast_window(&mut self, ms: u64) -> Result<(), Error> {
+        if ms == 0 {
+            return Err(Error::BadRequestConfig);
+        }
+        self.config.forecast_window = ms;
+        Ok(())
     }
 
     pub fn get(&self, id: u32) -> Option<&Request> {
@@ -516,6 +526,30 @@ impl Requests {
         contract: &str,
         treasury: &str,
     ) -> Result<Crank, Error> {
+        let skill = crate::score::Skill::equal();
+        self.crank_with(ledger, agents, staking, now, who, id, entropy, contract, treasury, &skill, None)
+    }
+
+    /// `crank` with the scorebook's weights. The agents' and wallets' weights
+    /// apply when the first call freezes the inputs; the colonies' weights
+    /// when the third combines the runs, so the caller passes the ones it
+    /// froze at the first. `windows`: the market's odds 1 hour and 24 hours
+    /// ago, when the keepers posted them.
+    #[allow(clippy::too_many_arguments)]
+    pub fn crank_with(
+        &mut self,
+        ledger: &mut Ledger,
+        agents: &mut Agents,
+        staking: &Staking,
+        now: u64,
+        who: &str,
+        id: u32,
+        entropy: [u8; 32],
+        contract: &str,
+        treasury: &str,
+        skill: &crate::score::Skill,
+        windows: Option<&crate::market::OddsWindows>,
+    ) -> Result<Crank, Error> {
         let cfg = self.config;
         let r = self.get_mut(id)?;
         let mut drew_seed = false;
@@ -525,12 +559,12 @@ impl Requests {
                     return Err(Error::PostingStillOpen);
                 }
                 let n = r.n_outcomes().ok_or(Error::NotCrankable)?;
-                r.agents = Some(agents.freeze(r.colony, n));
+                r.agents = Some(agents.freeze_weighted(r.colony, n, skill.agent).0);
                 let snap = staking.colony_snapshot(r.colony);
                 r.stakes = Some(RequestStakes {
                     entries: snap.entries,
                     hash: snap.hash,
-                    weights: staking.sim_weights(r.colony, n),
+                    weights: staking.scaled_weights(r.colony, n, skill.wallet),
                 });
                 let mut buf = SEED_TAG.to_vec();
                 buf.extend_from_slice(&entropy);
@@ -549,11 +583,12 @@ impl Requests {
         let seed = r.seed.ok_or(Error::NotCrankable)?;
         let k = r.runs.len();
         let kind = KINDS[k];
-        let sim = forecast_run(
+        let sim = forecast_run_ext(
             &colony_seed(&seed, r.colony, kind as u8),
             kind,
             &m.odds,
             &m.odds_6h,
+            windows.map(crate::market::OddsWindows::ext),
             &st.weights,
             st.hash,
             &ag.odds,
@@ -580,10 +615,11 @@ impl Requests {
         if done {
             // Community counts if anyone staked, Agents if any agent posted.
             let counted = voters(&st.weights, &ag.odds);
-            let out = market_result(
+            let out = market_result_weighted(
                 r.colony,
                 r.runs.iter().map(ColonyRun::sim).collect(),
                 counted,
+                skill.colonies,
             )
             .map_err(|_| Error::BadMarket)?;
             r.swarm = Some(out.swarm);

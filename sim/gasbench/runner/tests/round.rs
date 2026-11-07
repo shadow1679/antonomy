@@ -76,14 +76,14 @@ async fn round_with_stake_agent_and_faucet() -> Res<()> {
         .args_json(json!({
             "treasury": treasury.id(), "guardian": treasury.id(),
             "total_supply": (1_000_000 * ONE).to_string(), "cap_per_wallet": (100 * ONE).to_string(),
-            "close_at_ms": now_ms + 12_000, "publish_at_ms": now_ms + 20_000,
+            "close_at_ms": now_ms + 12_000, "publish_at_ms": now_ms + 45_000,
             "keepers": [keeper.id()], "quorum": 1,
             "request_config": {
                 "fee": (100 * ONE).to_string(), "keeper_bps": 2000, "agent_bps": 3000, "crank_bps": 1000,
                 "odds_window_ms": 600_000u64, "forecast_window_ms": 4_000u64,
                 "agent_deposit": (10 * ONE).to_string(), "crank_bounty": "0"
             },
-            "round_config": {"stake_ms": 8_000u64, "gap_ms": 4_000u64},
+            "round_config": {"stake_ms": 8_000u64, "gap_ms": 30_000u64},
             "faucet_amount": (100 * ONE).to_string()
         }))
         .max_gas()
@@ -120,7 +120,7 @@ async fn round_with_stake_agent_and_faucet() -> Res<()> {
     }
     let ms = ms.ok_or("finalize never succeeded")?;
     println!("  finalize_markets       {:7.2} TGas", call_gas(&ms));
-    let _ = call(&agent, &c, "post_forecast", json!({"colony": 1, "odds": [2000, 3000, 5000]})).await?;
+    common::forecast(&worker, &c, &agent, 1, &[2000, 3000, 5000]).await?;
 
     // The first crank must carry the drand round the round committed to.
     let rs: Value = c.view("round_status").await?.json()?;

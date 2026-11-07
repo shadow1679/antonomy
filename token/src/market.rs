@@ -74,6 +74,57 @@ pub struct Registry {
     markets: Option<Vec<Market>>,
 }
 
+/// The odds 1 hour and 24 hours ago for one market (docs/FORECAST_QUALITY.md
+/// §5), basis points per outcome. Kept apart from `MarketPost` and `Market`
+/// so their stored layout stays the same; a market without them runs on the
+/// six-hour formula.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "borsh",
+    derive(borsh::BorshSerialize, borsh::BorshDeserialize, borsh::BorshSchema)
+)]
+pub struct OddsWindows {
+    pub odds_1h: Vec<u16>,
+    pub odds_24h: Vec<u16>,
+}
+
+impl OddsWindows {
+    /// As the sim takes them.
+    pub fn ext(&self) -> (&[u16], &[u16]) {
+        (&self.odds_1h, &self.odds_24h)
+    }
+
+    /// Both windows fit `odds` (same length, each value at most 10000).
+    pub fn fits(&self, odds: &[u16]) -> bool {
+        let ok = |w: &[u16]| w.len() == odds.len() && w.iter().all(|&o| o <= 10_000);
+        ok(&self.odds_1h) && ok(&self.odds_24h)
+    }
+}
+
+/// The windows of an accepted market: the per-outcome lower median over the
+/// keepers whose list was accepted (`m.raw_hashes`), if every one of them
+/// posted windows that fit; else `None` (the six-hour formula). `posted(k)`
+/// is keeper k's windows for this market.
+pub fn median_windows(m: &Market, posted: &dyn Fn(&str) -> Option<OddsWindows>) -> Option<OddsWindows> {
+    let ws: Vec<OddsWindows> = m
+        .raw_hashes
+        .iter()
+        .map(|(k, _)| posted(k).filter(|w| w.fits(&m.odds)))
+        .collect::<Option<_>>()?;
+    if ws.is_empty() {
+        return None;
+    }
+    let med = |f: fn(&OddsWindows) -> &Vec<u16>| -> Vec<u16> {
+        (0..m.odds.len())
+            .map(|o| median(ws.iter().map(|w| f(w)[o]).collect()))
+            .collect()
+    };
+    Some(OddsWindows {
+        odds_1h: med(|w| &w.odds_1h),
+        odds_24h: med(|w| &w.odds_24h),
+    })
+}
+
 /// What two keepers must agree on: the ordered markets and their outcomes.
 fn list_key(list: &[MarketPost]) -> Vec<(&str, &[String])> {
     list.iter()
@@ -320,6 +371,28 @@ mod tests {
         assert!(r.post_of("k1").is_none());
         assert_eq!(r.post(2, "k1", vec![post("m1", &[1, 9999], &[1, 9999])]).unwrap_err(), Error::NotKeeper);
         assert_eq!(r.finalize(100).unwrap()[0].raw_hashes.len(), 1);
+    }
+
+    #[test]
+    fn windows_need_every_agreeing_keeper() {
+        let mut reg = reg();
+        for k in ["k1", "k2", "k3"] {
+            reg.post(10, k, vec![post("m", &[6000, 4000], &[5000, 5000])]).unwrap();
+        }
+        let m = reg.finalize(100).unwrap()[0].clone();
+        let w = |a: u16, b: u16| OddsWindows { odds_1h: vec![a, 10_000 - a], odds_24h: vec![b, 10_000 - b] };
+        let all = |k: &str| match k {
+            "k1" => Some(w(6100, 4000)),
+            "k2" => Some(w(5900, 4200)),
+            _ => Some(w(7000, 3000)),
+        };
+        // The lower median per outcome, as with the odds.
+        assert_eq!(median_windows(&m, &all), Some(OddsWindows { odds_1h: vec![6100, 3900], odds_24h: vec![4000, 6000] }));
+        // One agreeing keeper without them (or with a misfit): the six-hour formula.
+        let some = |k: &str| if k == "k2" { None } else { all(k) };
+        assert_eq!(median_windows(&m, &some), None);
+        let short = |k: &str| all(k).map(|mut x| { x.odds_1h.pop(); x });
+        assert_eq!(median_windows(&m, &short), None);
     }
 
     #[test]

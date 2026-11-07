@@ -16,13 +16,15 @@
 
 use crate::{
     agents::{AgentSnapshot, Agents},
-    market::Market,
+    market::{Market, OddsWindows},
     request::ColonyRun,
     stake::Staking,
     Error,
 };
+use crate::score::Skill;
 use antosim::{
-    colony_seed, forecast_run, market_result, sha256, voters, FORECAST_ANTS, FORECAST_TICKS, KINDS,
+    colony_seed, forecast_run_ext, market_result_weighted, sha256, voters, EQUAL_WEIGHTS,
+    FORECAST_ANTS, FORECAST_TICKS, KINDS,
 };
 
 pub const SEED_TAG: &[u8] = b"ANTO-ROUND-SEED-v0";
@@ -82,6 +84,22 @@ impl RoundRun {
         staking: &Staking,
         agents: &mut Agents,
     ) -> Result<RoundRun, Error> {
+        Self::start_with(round, now, entropy, contract, markets, staking, agents, &Skill::equal())
+    }
+
+    /// `start` with the scorebook's weights: each agent's in the Agents
+    /// colony's median, each wallet's multiplier in the Community colony.
+    #[allow(clippy::too_many_arguments)]
+    pub fn start_with(
+        round: u64,
+        now: u64,
+        entropy: [u8; 32],
+        contract: &str,
+        markets: &[Market],
+        staking: &Staking,
+        agents: &mut Agents,
+        skill: &Skill,
+    ) -> Result<RoundRun, Error> {
         if markets.is_empty() {
             return Err(Error::NotCrankable);
         }
@@ -98,8 +116,8 @@ impl RoundRun {
                 RoundMarket {
                     colony: m.colony,
                     n_outcomes: n as u8,
-                    weights: staking.sim_weights(m.colony, n),
-                    agents: agents.freeze(m.colony, n),
+                    weights: staking.scaled_weights(m.colony, n, skill.wallet),
+                    agents: agents.freeze_weighted(m.colony, n, skill.agent).0,
                     runs: vec![],
                     swarm: None,
                     market_hash: None,
@@ -117,6 +135,19 @@ impl RoundRun {
 
     /// Run the next colony. `markets` are the same finalized markets `start` got.
     pub fn crank(&mut self, who: &str, markets: &[Market]) -> Result<RoundCrank, Error> {
+        self.crank_with(who, markets, EQUAL_WEIGHTS, &[])
+    }
+
+    /// `crank` with the colonies' weights in the swarm belief, frozen when
+    /// the round started, and each market's odds 1 hour and 24 hours ago
+    /// (`windows[i]` for market i; missing or `None`: the six-hour formula).
+    pub fn crank_with(
+        &mut self,
+        who: &str,
+        markets: &[Market],
+        colony_weights: [u16; 3],
+        windows: &[Option<OddsWindows>],
+    ) -> Result<RoundCrank, Error> {
         if self.done {
             return Err(Error::NotCrankable);
         }
@@ -128,11 +159,13 @@ impl RoundRun {
         let (rm, m) = (&mut self.markets[mi], &markets[mi]);
         let k = rm.runs.len();
         let kind = KINDS[k];
-        let sim = forecast_run(
+        let ext = windows.get(mi).and_then(|w| w.as_ref()).map(OddsWindows::ext);
+        let sim = forecast_run_ext(
             &colony_seed(&self.seed, rm.colony, kind as u8),
             kind,
             &m.odds,
             &m.odds_6h,
+            ext,
             &rm.weights,
             self.stake_hash,
             &rm.agents.odds,
@@ -152,10 +185,11 @@ impl RoundRun {
         });
         if rm.runs.len() == CRANKS_PER_MARKET {
             let counted = voters(&rm.weights, &rm.agents.odds);
-            let out = market_result(
+            let out = market_result_weighted(
                 rm.colony,
                 rm.runs.iter().map(ColonyRun::sim).collect(),
                 counted,
+                colony_weights,
             )
             .map_err(|_| Error::BadMarket)?;
             rm.swarm = Some(out.swarm);
@@ -246,6 +280,50 @@ mod tests {
         assert_eq!(rm.market_hash, Some(native.hash));
         assert_eq!(rm.swarm.as_ref(), Some(&native.swarm));
         assert_eq!(run.crank("cr.test", &[m]), Err(Error::NotCrankable));
+    }
+
+    #[test]
+    fn skill_weights_scale_the_inputs_and_the_swarm_and_still_replay() {
+        let (mut l, mut st, mut ag) = setup();
+        ag.register(&mut l, "b.test", 10 * ONE).unwrap();
+        ag.post("b.test", 1, 3, vec![6000, 3000, 1000]).unwrap();
+        let m = market();
+        let plain = RoundRun::start(0, PUBLISH, [5; 32], "c.test", &[m.clone()], &st, &mut ag.clone()).unwrap();
+        let skill = Skill {
+            agent: &|a| if a == "b.test" { 4000 } else { 1000 },
+            wallet: &|w| if w == "b.test" { 2000 } else { 1000 },
+            colonies: [400, 1700, 900],
+        };
+        let mut run =
+            RoundRun::start_with(0, PUBLISH, [5; 32], "c.test", &[m.clone()], &st, &mut ag, &skill).unwrap();
+        // b.test's record moves the Agents median to its odds and doubles its sugar.
+        assert_eq!(run.markets[0].agents.odds, vec![6000, 3000, 1000]);
+        assert_eq!(plain.markets[0].weights[1], 0);
+        assert_eq!(run.markets[0].weights[0], 2 * plain.markets[0].weights[0]);
+        assert_eq!(run.markets[0].weights[2], plain.markets[0].weights[2]);
+        for _ in 0..CRANKS_PER_MARKET {
+            run.crank_with("cr.test", &[m.clone()], skill.colonies, &[]).unwrap();
+        }
+        let rm = &run.markets[0];
+        let native = antosim::forecast_market_weighted(
+            &run.seed,
+            rm.colony,
+            &m.odds,
+            &m.odds_6h,
+            &rm.weights,
+            run.stake_hash,
+            &rm.agents.odds,
+            rm.agents.hash,
+            FORECAST_ANTS,
+            FORECAST_TICKS,
+            skill.colonies,
+        )
+        .unwrap();
+        assert_eq!(rm.market_hash, Some(native.hash));
+        assert_eq!(rm.swarm.as_ref(), Some(&native.swarm));
+        // Equal multipliers are the plain weights exactly.
+        st.stake(&mut l, 0, "a.test", 1, 0, 1).unwrap();
+        assert_eq!(st.scaled_weights(1, 3, &|_| 1000), st.sim_weights(1, 3));
     }
 
     #[test]

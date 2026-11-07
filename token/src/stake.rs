@@ -398,6 +398,44 @@ impl Staking {
             .collect()
     }
 
+    /// Each wallet's `isqrt(stake)` per option on one colony, in the sim's
+    /// unit (milli sqrt-tokens), sorted by wallet. The scorebook records it.
+    pub fn wallet_weights(&self, colony: u16, n_options: usize) -> Vec<(AccountId, Vec<u32>)> {
+        let mut out: Vec<(AccountId, Vec<u32>)> = vec![];
+        for ((who, c, o), v) in &self.stakes {
+            if *c != colony || (*o as usize) >= n_options {
+                continue;
+            }
+            if out.last().is_none_or(|(w, _)| w != who) {
+                out.push((who.clone(), vec![0; n_options]));
+            }
+            let w = u32::try_from(isqrt(*v) / SIM_WEIGHT_DIV).unwrap_or(u32::MAX);
+            let slot = &mut out.last_mut().unwrap().1[*o as usize];
+            *slot = slot.saturating_add(w);
+        }
+        out
+    }
+
+    /// `sim_weights` with each wallet's `isqrt(stake)` scaled by `mult(wallet)`
+    /// per mille before the sum (docs/FORECAST_QUALITY.md §4). A multiplier
+    /// of 1000 for everyone gives `sim_weights` exactly.
+    pub fn scaled_weights(
+        &self,
+        colony: u16,
+        n_options: usize,
+        mult: &dyn Fn(&str) -> u16,
+    ) -> Vec<u32> {
+        let mut w = vec![0u128; n_options];
+        for ((who, c, o), v) in &self.stakes {
+            if *c == colony && (*o as usize) < n_options {
+                w[*o as usize] += isqrt(*v) * mult(who) as u128 / 1000;
+            }
+        }
+        w.into_iter()
+            .map(|w| u32::try_from(w / SIM_WEIGHT_DIV).unwrap_or(u32::MAX))
+            .collect()
+    }
+
     /// `weights` in the unit the sim reads: milli sqrt-tokens, saturating at
     /// `u32::MAX`. One token (10^24 yocto) has `isqrt` 10^12, so the divisor is 10^9.
     pub fn sim_weights(&self, colony: u16, n_options: usize) -> Vec<u32> {

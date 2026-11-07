@@ -34,6 +34,7 @@ const COMMUNITY_BASE = 2500; // milli sqrt-tokens
 // stakes alike, so a bigger daily pot needs more stake to win.
 export const BURN_HANDICAP = [1000, 875, 750, 625, 500];
 const ODDS_TAG = enc.encode("ANTO-ODDS-v0");
+const ODDS_EXT_TAG = enc.encode("ANTO-ODDS-v1"); // with the 1-hour and 24-hour windows
 const ZERO32 = new Uint8Array(32);
 export const MOMENTUM = 0, COMMUNITY = 1, AGENTS = 2;
 export const KINDS = [MOMENTUM, COMMUNITY, AGENTS];
@@ -137,12 +138,40 @@ function checkOdds(odds, odds6h) {
   for (const o of [...odds, ...odds6h]) if (!Number.isInteger(o) || o < 0 || o > BPS) throw new RangeError("odds out of range");
 }
 
+function checkExt(odds, oddsExt) {
+  if (oddsExt == null) return;
+  if (!Array.isArray(oddsExt) || oddsExt.length !== 2) throw new RangeError("oddsExt: [odds1h, odds24h]");
+  checkOdds(odds, oddsExt[0]);
+  checkOdds(odds, oddsExt[1]);
+}
+
+// Momentum's food weight per outcome (docs/FORECAST_QUALITY.md §5). Six hours
+// only: p + 2*d6. With oddsExt = [odds 1h ago, odds 24h ago]: move =
+// floor((d1 + 2*d6 + d24) / 2), halved (floor) when d1 and d24 point opposite
+// ways (a reversal), then scaled by 10000 / (10000 + 4*chop) (floor), where
+// chop is how far the path wandered beyond its net 24-hour change: max - min
+// of the four prices, less |d24|. Food = p + move. Both floored at
+// MOMENTUM_FLOOR. With all three past prices equal it is the six-hour formula.
+export function momentumFood(odds, odds6h, oddsExt = null) {
+  if (oddsExt == null) return odds.map((o, i) => Math.max(o + 2 * (o - odds6h[i]), MOMENTUM_FLOOR));
+  return odds.map((o, i) => {
+    const p6 = odds6h[i], p1 = oddsExt[0][i], p24 = oddsExt[1][i];
+    const d1 = o - p1, d6 = o - p6, d24 = o - p24;
+    let move = Math.floor((d1 + 2 * d6 + d24) / 2);
+    if (d1 * d24 < 0) move = Math.floor(move / 2);
+    const chop = Math.max(o, p1, p6, p24) - Math.min(o, p1, p6, p24) - Math.abs(d24);
+    return Math.max(o + Math.floor((move * 10000) / (10000 + 4 * chop)), MOMENTUM_FLOOR);
+  });
+}
+
 // Per-option Q8 richness for the Momentum colony. odds and odds6h are basis
-// points per outcome now and six hours ago.
-export function oddsRichness(kind, odds, odds6h) {
+// points per outcome now and six hours ago; oddsExt = [odds 1h ago, odds 24h
+// ago] when the keepers posted them.
+export function oddsRichness(kind, odds, odds6h, oddsExt = null) {
   checkOdds(odds, odds6h);
+  checkExt(odds, oddsExt);
   if (kind !== MOMENTUM) throw new RangeError("kind must be MOMENTUM");
-  return oddsScale(odds.map((o, i) => Math.max(o + 2 * (o - odds6h[i]), MOMENTUM_FLOOR)));
+  return oddsScale(momentumFood(odds, odds6h, oddsExt));
 }
 
 // Per-option Q8 richness from stake weights (the Community colony; the Burn colony uses burnRichness):
@@ -172,11 +201,15 @@ export function agentRichness(agentOdds) {
 }
 
 // Hash of the odds snapshot: the second input commitment in the result hash.
-export function oddsSnapshotHash(odds, odds6h) {
+// sha256("ANTO-ODDS-v0", n u8, odds, odds6h), or with oddsExt
+// sha256("ANTO-ODDS-v1", n u8, odds, odds6h, odds1h, odds24h), all u16.
+export function oddsSnapshotHash(odds, odds6h, oddsExt = null) {
   checkOdds(odds, odds6h);
+  checkExt(odds, oddsExt);
   const body = [odds.length];
-  for (const o of [...odds, ...odds6h]) body.push(o >> 8, o & 255);
-  return sha256(concat([ODDS_TAG, Uint8Array.from(body)]));
+  const vals = oddsExt == null ? [...odds, ...odds6h] : [...odds, ...odds6h, ...oddsExt[0], ...oddsExt[1]];
+  for (const o of vals) body.push(o >> 8, o & 255);
+  return sha256(concat([oddsExt == null ? ODDS_TAG : ODDS_EXT_TAG, Uint8Array.from(body)]));
 }
 
 const i32be = (b, o) => (b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3];
@@ -436,8 +469,8 @@ export function burnRun(seed, weights, stakeHash, ants = N_ANTS, ticks = TICKS) 
 // hash; the second commitment is the odds snapshot hash, except for Agents,
 // which commits `agentHash` (the agent-odds snapshot) instead.
 export function forecastRun(seed, kind, odds, odds6h, weights = null, stakeHash = ZERO32,
-  agentOdds = null, agentHash = ZERO32, ants = N_ANTS, ticks = TICKS) {
-  let rich, oddsHash = oddsSnapshotHash(odds, odds6h);
+  agentOdds = null, agentHash = ZERO32, ants = N_ANTS, ticks = TICKS, oddsExt = null) {
+  let rich, oddsHash = oddsSnapshotHash(odds, odds6h, oddsExt);
   if (kind === COMMUNITY) {
     if (weights === null || weights.length !== odds.length) throw new RangeError("Community needs one stake weight per outcome");
     rich = stakeRichness(weights);
@@ -447,7 +480,7 @@ export function forecastRun(seed, kind, odds, odds6h, weights = null, stakeHash 
     rich = agentRichness(a);
     oddsHash = agentHash;
   } else {
-    rich = oddsRichness(kind, odds, odds6h);
+    rich = oddsRichness(kind, odds, odds6h, oddsExt);
   }
   return run(seed, odds.length, rich, ants, ticks, stakeHash, oddsHash);
 }
@@ -482,30 +515,43 @@ export function trailShares(result) {
 // still committed; an even map is not a belief.
 export const voters = (weights, agentOdds) => [true, weights.some((x) => x > 0), agentOdds.some((o) => o > 0)];
 
-// Combine the three forecaster runs (in KINDS order) of one market. counted:
-// three booleans from voters(). Swarm belief per option is the floored mean of
-// the counted colonies' trail shares; the remainder goes to the option with
-// the largest sum (lowest index on ties).
-// Market hash = sha256(tag, colony u16, n u8, three colony hashes, swarm u16 each).
-export function marketResult(colony, runs, counted) {
+// The weight of each colony in the swarm belief when no record says
+// otherwise (docs/FORECAST_QUALITY.md §4).
+export const EQUAL_WEIGHTS = [1000, 1000, 1000];
+
+// Combine the three forecaster runs (KINDS order) of one market. counted:
+// three booleans from voters(). weights: the colonies' weights (each above
+// 0), frozen from the scorebook. Swarm belief per option is the floored
+// weighted mean of the counted colonies' trail shares, floor(sum w*s / sum w);
+// the remainder goes to the option with the largest weighted sum (lowest
+// index on ties). With equal weights this is the plain floored mean. Market
+// hash = sha256(tag, colony u16, n u8, three colony hashes, swarm u16 each,
+// then the three weights u16 only when they are not all equal).
+export function marketResult(colony, runs, counted, weights = EQUAL_WEIGHTS) {
   if (runs.length !== KINDS.length) throw new RangeError("need one run per kind");
   if (!Array.isArray(counted) || counted.length !== KINDS.length || !counted[0]) {
     throw new RangeError("counted: three booleans from voters()");
   }
+  if (!Array.isArray(weights) || weights.length !== 3 || !weights.every((w) => Number.isInteger(w) && w > 0 && w <= 0xffff)) {
+    throw new RangeError("weights: three integers from 1 to 65535");
+  }
   const shares = runs.map(trailShares);
-  const n = shares[0].length, k = counted.filter(Boolean).length;
-  const sums = Array.from({ length: n }, (_, o) => shares.reduce((a, s, j) => a + (counted[j] ? s[o] : 0), 0));
-  const swarm = sums.map((x) => Math.floor(x / k));
+  const n = shares[0].length;
+  const total = weights.reduce((a, w, j) => a + (counted[j] ? w : 0), 0);
+  const sums = Array.from({ length: n }, (_, o) => shares.reduce((a, s, j) => a + (counted[j] ? weights[j] * s[o] : 0), 0));
+  const swarm = sums.map((x) => Math.floor(x / total));
   let top = 0;
   for (let o = 1; o < n; o++) if (sums[o] > sums[top]) top = o;
   swarm[top] += BPS - swarm.reduce((a, b) => a + b, 0);
   const parts = [MARKET_TAG, Uint8Array.of(colony >> 8, colony & 255, n)];
   for (const r of runs) parts.push(Uint8Array.from(r.hash.match(/../g), (h) => parseInt(h, 16)));
   for (const x of swarm) parts.push(Uint8Array.of(x >> 8, x & 255));
+  if (new Set(weights).size > 1) for (const w of weights) parts.push(Uint8Array.of(w >> 8, w & 255));
   return {
     colony,
     colonies: runs.map((r, j) => ({ ...r, shares: shares[j], counted: !!counted[j] })),
     swarm,
+    weights: [...weights],
     hash: toHex(sha256(concat(parts))),
   };
 }
@@ -514,12 +560,14 @@ export function marketResult(colony, runs, counted) {
 // market's colony id (marketColony(m)). weights: that colony's stake weights,
 // one per outcome (zeros when nobody staked). agentOdds, agentHash: the
 // forecaster agents' per-outcome median odds and the agent-odds snapshot hash
-// (zeros when no agent posted).
+// (zeros when no agent posted). colonyWeights: the colonies' weights in the
+// swarm belief (marketResult). oddsExt: [odds 1h ago, odds 24h ago] when the
+// keepers posted them (momentumFood).
 export function forecastMarket(roundSeed, colony, odds, odds6h, weights, stakeHash, agentOdds, agentHash,
-  ants = FORECAST_ANTS, ticks = FORECAST_TICKS) {
+  ants = FORECAST_ANTS, ticks = FORECAST_TICKS, colonyWeights = EQUAL_WEIGHTS, oddsExt = null) {
   const runs = KINDS.map((k) =>
-    forecastRun(colonySeed(roundSeed, colony, k), k, odds, odds6h, weights, stakeHash, agentOdds, agentHash, ants, ticks));
-  return marketResult(colony, runs, voters(weights, agentOdds ?? odds.map(() => 0)));
+    forecastRun(colonySeed(roundSeed, colony, k), k, odds, odds6h, weights, stakeHash, agentOdds, agentHash, ants, ticks, oddsExt));
+  return marketResult(colony, runs, voters(weights, agentOdds ?? odds.map(() => 0)), colonyWeights);
 }
 
 export function seedFromInt(i) {

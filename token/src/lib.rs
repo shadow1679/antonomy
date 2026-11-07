@@ -8,6 +8,8 @@
 //! and `day` its burn-day schedule and the one-day stake lock.
 //! `request` and `agents` are Recruit the swarm: requested forecasts paid in
 //! $ANTO, and the forecaster agents whose median odds feed the Agents colony.
+//! `resolve` holds the keepers' market resolutions and `score` the scorebook
+//! that scores every source against them (docs/FORECAST_QUALITY.md).
 //!
 //! The drand commit lives in the contract (`contract/src/drand.rs`), which
 //! needs NEAR's BLS12-381 host functions; this crate takes its randomness as
@@ -24,8 +26,10 @@ pub mod ledger;
 pub mod market;
 pub mod random;
 pub mod request;
+pub mod resolve;
 pub mod reward;
 pub mod round;
+pub mod score;
 pub mod stake;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -105,6 +109,18 @@ pub enum Error {
     BurnNotFinished(u64),
     /// No Burn colony run is stored for that day.
     NoBurnRun(u64),
+    /// Resolution post fails validation (id, state, winner label).
+    BadResolution,
+    /// The market's resolution is final and can't change.
+    AlreadyResolved,
+    /// Scoring needs a final resolution (resolved or fifty_fifty).
+    NotResolved,
+    /// Reveal without a commit for that colony.
+    NoCommit,
+    /// The revealed odds and salt don't match the commit.
+    BadReveal,
+    /// Commits are closed (the reveal phase has begun), or reveals not open yet.
+    WrongPhase,
 }
 
 /// Integer square root, floor. Newton's method, no float.

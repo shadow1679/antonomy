@@ -94,7 +94,7 @@ async fn keeper_contract_token() -> Res<()> {
             "keepers": [keeper.id()], "quorum": 1,
             "request_config": {
                 "fee": fee.to_string(), "keeper_bps": 2000, "agent_bps": 3000, "crank_bps": 1000,
-                "odds_window_ms": 600_000u64, "forecast_window_ms": 4_000u64,
+                "odds_window_ms": 600_000u64, "forecast_window_ms": 30_000u64,
                 "agent_deposit": deposit.to_string(), "crank_bounty": "0"
             },
             "round_config": {"stake_ms": 60_000u64, "gap_ms": 10_000u64},
@@ -140,7 +140,7 @@ async fn keeper_contract_token() -> Res<()> {
     mine[1] += 10_000 - mine.iter().sum::<u16>();
     let _ = call(&agent, &c, "register_agent", json!({})).await?;
     assert_eq!(balance(&c, &agent).await?, agent0 - deposit, "deposit locked");
-    let _ = call(&agent, &c, "post_forecast", json!({"colony": colony, "odds": mine})).await?;
+    common::forecast(&worker, &c, &agent, colony, &mine).await?;
 
     // The first crank must carry the drand round the request committed to.
     let sig = common::beacon(r["drand_round"].as_u64().ok_or("no drand round")?);

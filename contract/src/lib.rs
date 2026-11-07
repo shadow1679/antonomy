@@ -72,7 +72,7 @@ use antotoken::{
     burnrun::BurnRun,
     day,
     ledger::{Ledger, DECIMALS, SYMBOL},
-    market::{Market, MarketPost, Registry},
+    market::{Market, MarketPost, OddsWindows, Registry},
     random::RandomRequest,
     request::{Phase, Request, RequestConfig, RequestStakes, Requests},
     reward::Rewards,
@@ -80,8 +80,10 @@ use antotoken::{
     stake::{hash_hex, Snapshot, StakeConfig, Staking},
     Error,
 };
-use antotoken::antosim::{Colony, BURN_COLONY, BURN_TICKS};
+use antotoken::antosim::{voters, Colony, BURN_COLONY, BURN_TICKS};
+use antotoken::{resolve::ResolutionPost, score, score::Skill};
 
+mod book;
 mod drand;
 use std::collections::BTreeSet;
 use near_sdk::json_types::U128;
@@ -227,6 +229,8 @@ pub struct BurnLockView {
 }
 
 /// One market in a keeper's trending list. `raw_hash` is 64 hex chars.
+/// `odds_1h` and `odds_24h` (both or neither) are the odds 1 hour and 24 hours
+/// ago, which Momentum reads when every agreeing keeper posted them.
 #[near(serializers = [json])]
 pub struct MarketPostView {
     pub market_id: String,
@@ -234,6 +238,19 @@ pub struct MarketPostView {
     pub odds: Vec<u16>,
     pub odds_6h: Vec<u16>,
     pub raw_hash: String,
+    #[serde(default)]
+    pub odds_1h: Option<Vec<u16>>,
+    #[serde(default)]
+    pub odds_24h: Option<Vec<u16>>,
+}
+
+impl MarketPostView {
+    fn windows(&self) -> Option<OddsWindows> {
+        match (&self.odds_1h, &self.odds_24h) {
+            (Some(a), Some(b)) => Some(OddsWindows { odds_1h: a.clone(), odds_24h: b.clone() }),
+            _ => None,
+        }
+    }
 }
 
 #[near(serializers = [json])]
@@ -243,9 +260,97 @@ pub struct MarketView {
     pub outcomes: Vec<String>,
     pub odds: Vec<u16>,
     pub odds_6h: Vec<u16>,
+    /// The odds 1 hour and 24 hours ago (per-outcome medians), when every
+    /// agreeing keeper posted them; Momentum then reads all three windows.
+    pub odds_1h: Option<Vec<u16>>,
+    pub odds_24h: Option<Vec<u16>>,
+    /// The odds snapshot hash every colony commits ("ANTO-ODDS-v1" over all
+    /// four windows when `odds_1h` is set).
     pub odds_hash: String,
     /// (keeper, raw response hash) for the keepers whose list was accepted.
     pub raw_hashes: Vec<(AccountId, String)>,
+}
+
+/// One keeper's read of a market's resolution. `state` is one of open,
+/// proposed, disputed, resolved, fifty_fifty; `winner` is the winning
+/// outcome's label when resolved, else empty; `raw_hash` is 64 hex chars.
+#[near(serializers = [json])]
+pub struct ResolutionPostView {
+    pub market_id: String,
+    pub state: String,
+    pub winner: String,
+    pub end_ms: u64,
+    pub raw_hash: String,
+}
+
+const RES_STATES: [&str; 5] = ["open", "proposed", "disputed", "resolved", "fifty_fifty"];
+
+#[near(serializers = [json])]
+pub struct ResolutionView {
+    pub market_id: String,
+    pub state: String,
+    pub winner: String,
+    pub end_ms: u64,
+    /// (keeper, raw response hash) for the keepers that agreed.
+    pub raw_hashes: Vec<(String, String)>,
+}
+
+/// One source in the scorebook: books scored, Σ Brier, the market's Σ Brier
+/// on the same forecasts, and Σ skill (market − own), all in 1/10000 of Brier.
+#[near(serializers = [json])]
+pub struct SourceScoreView {
+    pub source: String,
+    pub count: u32,
+    pub brier_sum: u64,
+    pub market_sum: u64,
+    pub skill_sum: i64,
+}
+
+#[near(serializers = [json])]
+pub struct ScoreTallyView {
+    pub books: u32,
+    pub fifty_fifty: u32,
+    pub void: u32,
+    /// market, momentum, community, agents, swarm.
+    pub sources: Vec<SourceScoreView>,
+    /// Momentum, Community and Agents' weights in the next swarm belief.
+    pub colony_weights: [u16; 3],
+    /// Books scored before the colony weights leave the equal prior.
+    pub min_scored: u32,
+    /// Market ids whose forecasts wait for a resolution.
+    pub open: Vec<String>,
+}
+
+/// A market whose forecasts wait for a resolution: the outcome labels of
+/// each of its unscored books, the accepted resolution so far, and each
+/// keeper's latest post as (keeper, state, end_ms).
+#[near(serializers = [json])]
+pub struct OpenMarketView {
+    pub market_id: String,
+    pub outcomes: Vec<Vec<String>>,
+    pub resolution: Option<ResolutionView>,
+    pub keepers_posted: Vec<(String, String, u64)>,
+}
+
+#[near(serializers = [json])]
+pub struct AgentWindowView {
+    /// "commit" or "reveal".
+    pub phase: String,
+    pub reveal_from_ms: u64,
+    pub by_ms: u64,
+    /// Agents that have committed so far.
+    pub committed: Vec<String>,
+}
+
+/// An agent's or wallet's record. `sum` is Σ skill (agents, 1/10000 of
+/// Brier) or Σ edge (wallets, basis points); `weight` the agent's weight in
+/// the Agents colony's median, or the wallet's multiplier per mille.
+#[near(serializers = [json])]
+pub struct SkillView {
+    pub account_id: String,
+    pub markets: u32,
+    pub sum: i64,
+    pub weight: u16,
 }
 
 fn parse_hash(hex: &str) -> Option<[u8; 32]> {
@@ -281,7 +386,31 @@ impl From<&MarketPost> for MarketPostView {
             odds: p.odds.clone(),
             odds_6h: p.odds_6h.clone(),
             raw_hash: hash_hex(&p.raw_hash),
+            odds_1h: None,
+            odds_24h: None,
         }
+    }
+}
+
+impl MarketView {
+    /// With the market's accepted odds 1 hour and 24 hours ago, if any.
+    fn windowed(m: &Market, w: Option<&OddsWindows>) -> MarketView {
+        let mut v = MarketView::from(m);
+        if let Some(w) = w {
+            if let Ok(h) = antotoken::antosim::odds_snapshot_hash_ext(&m.odds, &m.odds_6h, Some(w.ext())) {
+                v.odds_hash = hash_hex(&h);
+                v.odds_1h = Some(w.odds_1h.clone());
+                v.odds_24h = Some(w.odds_24h.clone());
+            }
+        }
+        v
+    }
+
+    fn list(ms: &[Market], ws: &[Option<OddsWindows>]) -> Vec<MarketView> {
+        ms.iter()
+            .enumerate()
+            .map(|(i, m)| MarketView::windowed(m, ws.get(i).and_then(|w| w.as_ref())))
+            .collect()
     }
 }
 
@@ -293,6 +422,8 @@ impl From<&Market> for MarketView {
             outcomes: m.outcomes.clone(),
             odds: m.odds.clone(),
             odds_6h: m.odds_6h.clone(),
+            odds_1h: None,
+            odds_24h: None,
             odds_hash: hash_hex(&m.odds_hash),
             raw_hashes: m
                 .raw_hashes
@@ -355,11 +486,15 @@ pub struct AgentSnapshotView {
     /// 64 hex chars; all zeros with no posts.
     pub hash: String,
     pub posts: Vec<(AccountId, Vec<u16>)>,
+    /// Each post's weight in the median, in post order, when they were not
+    /// all equal (the weighted median and hash; docs/FORECAST_QUALITY.md §3).
+    pub weights: Option<Vec<u16>>,
 }
 
 impl From<&AgentSnapshot> for AgentSnapshotView {
     fn from(s: &AgentSnapshot) -> Self {
         AgentSnapshotView {
+            weights: book::agent_weights(&s.hash),
             odds: s.odds.clone(),
             hash: hash_hex(&s.hash),
             posts: s
@@ -401,6 +536,9 @@ pub struct RequestView {
     pub colony_hashes: Vec<String>,
     pub crankers: Vec<AccountId>,
     pub swarm: Option<Vec<u16>>,
+    /// Momentum, Community and Agents' weights in the swarm belief, frozen at
+    /// the first crank (1000 each until the scorebook says otherwise).
+    pub colony_weights: [u16; 3],
     pub market_hash: Option<String>,
     pub paid_keepers: Vec<(AccountId, U128)>,
     pub paid_agents: Vec<(AccountId, U128)>,
@@ -462,13 +600,14 @@ impl From<&Request> for RequestView {
             forecast_by_ms: r.forecast_by,
             drand_round: r.forecast_by.map(drand::round_after),
             keepers_posted: r.keeper_posts.keys().map(|k| k.parse().unwrap()).collect(),
-            market: r.market.as_ref().map(MarketView::from),
+            market: r.market.as_ref().map(|m| MarketView::windowed(m, book::request_windows(r.id).as_ref())),
             agents: r.agents.as_ref().map(AgentSnapshotView::from),
             stakes: r.stakes.as_ref().map(RequestStakesView::from),
             seed: r.seed.as_ref().map(hash_hex),
             colony_hashes: r.runs.iter().map(|c| hash_hex(&c.hash)).collect(),
             crankers: r.runs.iter().map(|c| c.cranker.parse().unwrap()).collect(),
             swarm: r.swarm.clone(),
+            colony_weights: book::request_weights(r.id),
             market_hash: r.market_hash.as_ref().map(hash_hex),
             paid_keepers: paid(&r.payouts.keepers),
             paid_agents: paid(&r.payouts.agents),
@@ -537,11 +676,15 @@ pub struct RoundRunView {
     pub stake_hash: String,
     pub markets: Vec<RoundMarketRunView>,
     pub done: bool,
+    /// Momentum, Community and Agents' weights in the swarm belief, frozen at
+    /// the round's first crank (1000 each until the scorebook says otherwise).
+    pub colony_weights: [u16; 3],
 }
 
 impl From<&RoundRun> for RoundRunView {
     fn from(r: &RoundRun) -> Self {
         RoundRunView {
+            colony_weights: book::round_weights(r.round),
             round: r.round,
             seed: hash_hex(&r.seed),
             stake_hash: hash_hex(&r.stake_hash),
@@ -1108,20 +1251,21 @@ impl Contract {
         require!(!self.paused, "paused");
         let who = env::predecessor_account_id();
         let ids: Vec<String> = markets.iter().map(|m| m.market_id.clone()).collect();
+        let windows: Vec<Option<OddsWindows>> = markets.iter().map(MarketPostView::windows).collect();
         let list = markets.into_iter().map(MarketPost::from).collect();
         ok(self
             .markets
             .post(env::block_timestamp_ms(), who.as_str(), list));
+        book::set_keeper_windows(who.as_str(), &windows);
         env::log_str(&format!("EVENT post_trending {who} markets={ids:?}"));
     }
 
     /// Permissionless once posting has closed: accept the quorum list and
     /// store the median odds. Panics with `NoQuorum` if keepers disagree.
     pub fn finalize_markets(&mut self) -> Vec<MarketView> {
-        let ms: Vec<MarketView> = ok(self.markets.finalize(env::block_timestamp_ms()))
-            .iter()
-            .map(MarketView::from)
-            .collect();
+        let accepted = ok(self.markets.finalize(env::block_timestamp_ms())).to_vec();
+        book::accept_round_windows(self.round, &accepted);
+        let ms = MarketView::list(&accepted, &book::round_windows(self.round));
         for m in &ms {
             env::log_str(&format!(
                 "EVENT market colony={} id={} odds={:?} odds_6h={:?} odds_hash={}",
@@ -1133,15 +1277,165 @@ impl Contract {
 
     /// Accepted markets, or null before `finalize_markets`.
     pub fn forecast_markets(&self) -> Option<Vec<MarketView>> {
-        self.markets
-            .markets()
-            .map(|ms| ms.iter().map(MarketView::from).collect())
+        let ws = book::round_windows(self.round);
+        self.markets.markets().map(|ms| MarketView::list(ms, &ws))
     }
 
     pub fn keeper_post(&self, account_id: AccountId) -> Option<Vec<MarketPostView>> {
         self.markets
             .post_of(account_id.as_str())
             .map(|l| l.iter().map(MarketPostView::from).collect())
+    }
+
+    // ---- resolutions and the scorebook (docs/FORECAST_QUALITY.md) ----
+
+    /// Keeper only: post this keeper's read of up to 50 markets' resolutions.
+    /// Each is accepted once `quorum` keepers posted the same state, winner
+    /// and end date. A market whose resolution is already final is skipped.
+    pub fn post_resolutions(&mut self, resolutions: Vec<ResolutionPostView>) {
+        require!(!self.paused, "paused");
+        require!(resolutions.len() <= 50, "at most 50 resolutions per call");
+        let who = env::predecessor_account_id();
+        if !self.markets.keepers().any(|k| k == who.as_str()) {
+            ok::<()>(Err(Error::NotKeeper));
+        }
+        let quorum = self.markets.quorum();
+        for v in resolutions {
+            let state = RES_STATES
+                .iter()
+                .position(|s| *s == v.state)
+                .unwrap_or_else(|| env::panic_str("bad resolution state")) as u8;
+            let raw_hash = parse_hash(&v.raw_hash)
+                .unwrap_or_else(|| env::panic_str("raw_hash must be 64 hex chars"));
+            let id = v.market_id.clone();
+            let post = ResolutionPost {
+                market_id: v.market_id,
+                state,
+                winner: v.winner,
+                end_ms: v.end_ms,
+                raw_hash,
+            };
+            match book::post_resolution(quorum, who.as_str(), post) {
+                Ok(Some(r)) => env::log_str(&format!(
+                    "EVENT resolution id={id} state={} winner={:?} end_ms={}",
+                    RES_STATES[r.state as usize], r.winner, r.end_ms
+                )),
+                Ok(None) | Err(Error::AlreadyResolved) => {}
+                Err(e) => ok::<()>(Err(e)),
+            }
+        }
+    }
+
+    pub fn resolution(&self, market_id: String) -> Option<ResolutionView> {
+        book::resolution(&market_id).map(|r| ResolutionView {
+            market_id,
+            state: RES_STATES[r.state as usize].into(),
+            winner: r.winner,
+            end_ms: r.end_ms,
+            raw_hashes: r
+                .raw_hashes
+                .iter()
+                .map(|(k, h)| (k.clone(), hash_hex(h)))
+                .collect(),
+        })
+    }
+
+    /// Up to `limit` (at most 50) markets waiting for a resolution, from
+    /// position `from_index` in the open list (oldest first).
+    pub fn open_markets(&self, from_index: u32, limit: u32) -> Vec<OpenMarketView> {
+        book::open_books()
+            .into_iter()
+            .skip(from_index as usize)
+            .take(limit.min(50) as usize)
+            .map(|id| {
+                let outcomes = score::Store::book_ids(&book::ChainStore, &id)
+                    .iter()
+                    .filter_map(|b| score::Store::book(&book::ChainStore, b))
+                    .filter(|b| !b.scored)
+                    .map(|b| b.outcomes)
+                    .collect();
+                let keepers_posted = book::resolution_posts(&id)
+                    .into_iter()
+                    .map(|(k, p)| (k, RES_STATES[p.state as usize].to_string(), p.end_ms))
+                    .collect();
+                OpenMarketView {
+                    resolution: self.resolution(id.clone()),
+                    market_id: id,
+                    outcomes,
+                    keepers_posted,
+                }
+            })
+            .collect()
+    }
+
+    /// Up to 50 markets' resolutions at once, null where none is accepted.
+    pub fn resolutions(&self, market_ids: Vec<String>) -> Vec<Option<ResolutionView>> {
+        require!(market_ids.len() <= 50, "at most 50 market ids");
+        market_ids.into_iter().map(|m| self.resolution(m)).collect()
+    }
+
+    /// Permissionless once a market's resolution is final: score its books
+    /// (every source, agent and wallet) and fold them into the tallies.
+    pub fn score_market(&mut self, market_id: String) -> u32 {
+        require!(!self.paused, "paused");
+        let done = ok(book::score_market(&market_id));
+        env::log_str(&format!(
+            "EVENT score_market id={market_id} books={} void={}",
+            done.books, done.void
+        ));
+        done.books
+    }
+
+    /// The scorebook's totals and the colony weights they give.
+    pub fn score_tally(&self) -> ScoreTallyView {
+        let t = score::Store::tally(&book::ChainStore);
+        let names = ["market", "momentum", "community", "agents", "swarm"];
+        ScoreTallyView {
+            books: t.books,
+            fifty_fifty: t.fifty_fifty,
+            void: t.void,
+            sources: t
+                .src
+                .iter()
+                .zip(names)
+                .map(|(s, n)| SourceScoreView {
+                    source: n.into(),
+                    count: s.count,
+                    brier_sum: s.brier_sum,
+                    market_sum: s.market_sum,
+                    skill_sum: s.skill_sum,
+                })
+                .collect(),
+            colony_weights: score::colony_weights(&t),
+            min_scored: score::MIN_SCORED,
+            open: book::open_books(),
+        }
+    }
+
+    /// Every registered agent's record and current weight.
+    pub fn agent_scores(&self) -> Vec<SkillView> {
+        self.agents
+            .registered()
+            .map(|a| {
+                let t = score::Store::agent_tally(&book::ChainStore, a);
+                SkillView {
+                    account_id: a.clone(),
+                    markets: t.as_ref().map_or(0, |t| t.markets),
+                    sum: t.as_ref().map_or(0, |t| t.sum),
+                    weight: score::agent_weight(t.as_ref()),
+                }
+            })
+            .collect()
+    }
+
+    pub fn wallet_score(&self, account_id: AccountId) -> SkillView {
+        let t = score::Store::wallet_tally(&book::ChainStore, account_id.as_str());
+        SkillView {
+            account_id: account_id.to_string(),
+            markets: t.as_ref().map_or(0, |t| t.markets),
+            sum: t.as_ref().map_or(0, |t| t.sum),
+            weight: score::wallet_mult(t.as_ref()),
+        }
     }
 
     /// (keepers, quorum)
@@ -1173,7 +1467,7 @@ impl Contract {
             close_at_ms: cfg.close_at,
             publish_at_ms: cfg.publish_at,
             drand_round: drand::round_after(cfg.publish_at),
-            markets: markets.map(|ms| ms.iter().map(MarketView::from).collect()),
+            markets: markets.map(|ms| MarketView::list(ms, &book::round_windows(self.round))),
             run: self.round_run.as_ref().map(RoundRunView::from),
         }
     }
@@ -1200,7 +1494,13 @@ impl Contract {
             None => {
                 let drand_round = drand::round_after(cfg.publish_at);
                 let entropy = drand::entropy(drand_round, drand_signature.as_deref());
-                let r = ok(RoundRun::start(
+                let colonies = book::colony_weights();
+                let skill = Skill {
+                    agent: &book::agent_weight,
+                    wallet: &book::wallet_mult,
+                    colonies,
+                };
+                let r = ok(RoundRun::start_with(
                     self.round,
                     now,
                     entropy,
@@ -1208,7 +1508,13 @@ impl Contract {
                     &markets,
                     &self.staking,
                     &mut self.agents,
+                    &skill,
                 ));
+                book::save_round_weights(r.round, colonies);
+                for m in &r.markets {
+                    book::save_agent_weights(&m.agents);
+                    book::clear_commits(m.colony);
+                }
                 env::log_str(&format!(
                     "EVENT round_seed round={} seed={} stakes={} drand={drand_round} randomness={}",
                     r.round,
@@ -1219,7 +1525,12 @@ impl Contract {
                 r
             }
         };
-        let c = ok(run.crank(who.as_str(), &markets));
+        let c = ok(run.crank_with(
+            who.as_str(),
+            &markets,
+            book::round_weights(run.round),
+            &book::round_windows(run.round),
+        ));
         env::log_str(&format!(
             "EVENT round_crank round={} market={} kind={} hash={} {who}",
             run.round,
@@ -1236,6 +1547,13 @@ impl Contract {
                 m.swarm.as_ref().unwrap(),
                 hash_hex(&m.market_hash.unwrap())
             ));
+            self.record_forecast(
+                &markets[c.market],
+                &m.runs,
+                &m.weights,
+                m.swarm.as_ref().unwrap(),
+                &m.agents,
+            );
         }
         let view = RoundRunView::from(&run);
         self.round_run = Some(run);
@@ -1247,7 +1565,7 @@ impl Contract {
     /// round has finished and the next one has started.
     pub fn last_round(&self) -> Option<LastRoundView> {
         self.last_round.as_ref().map(|(r, ms)| LastRoundView {
-            markets: ms.iter().map(MarketView::from).collect(),
+            markets: MarketView::list(ms, &book::round_windows(r.round)),
             run: RoundRunView::from(r),
         })
     }
@@ -1283,6 +1601,9 @@ impl Contract {
         }
         self.markets.reopen(next.close_at);
         self.agents.clear_round();
+        for m in old_markets.iter().flatten() {
+            book::clear_commits(m.colony);
+        }
         if let (Some(r), Some(ms)) = (self.round_run.take(), old_markets) {
             if r.done {
                 self.last_round = Some((r, ms));
@@ -1321,6 +1642,7 @@ impl Contract {
     pub fn post_request_odds(&mut self, request_id: u32, market: MarketPostView) {
         require!(!self.paused, "paused");
         let who = env::predecessor_account_id();
+        let windows = market.windows();
         ok(self.requests.post_odds(
             &self.markets,
             env::block_timestamp_ms(),
@@ -1328,6 +1650,7 @@ impl Contract {
             request_id,
             market.into(),
         ));
+        book::set_request_keeper_windows(request_id, who.as_str(), &windows);
         env::log_str(&format!("EVENT post_request_odds id={request_id} {who}"));
     }
 
@@ -1340,6 +1663,9 @@ impl Contract {
             env::block_timestamp_ms(),
             request_id,
         ));
+        if let Some(m) = &r.market {
+            book::accept_request_windows(request_id, m);
+        }
         match &r.market {
             Some(m) => env::log_str(&format!(
                 "EVENT request_odds id={request_id} odds={:?} odds_6h={:?} odds_hash={} forecast_by={}",
@@ -1373,7 +1699,20 @@ impl Contract {
             Some(by) => drand::entropy(drand::round_after(by), drand_signature.as_deref()),
             None => [0; 32],
         };
-        let c = ok(self.requests.crank(
+        // The colonies' weights freeze with the inputs, at the seed-drawing call.
+        let colonies = if draw.is_some() {
+            let w = book::colony_weights();
+            book::save_request_weights(request_id, w);
+            w
+        } else {
+            book::request_weights(request_id)
+        };
+        let skill = Skill {
+            agent: &book::agent_weight,
+            wallet: &book::wallet_mult,
+            colonies,
+        };
+        let c = ok(self.requests.crank_with(
             &mut self.ledger,
             &mut self.agents,
             &self.staking,
@@ -1383,9 +1722,13 @@ impl Contract {
             entropy,
             env::current_account_id().as_str(),
             self.treasury.as_str(),
+            &skill,
+            book::request_windows(request_id).as_ref(),
         ));
         let r = self.requests.get(request_id).unwrap();
         if c.drew_seed {
+            book::save_agent_weights(r.agents.as_ref().unwrap());
+            book::clear_commits(r.colony);
             let ag = r.agents.as_ref().unwrap();
             let st = r.stakes.as_ref().unwrap();
             env::log_str(&format!(
@@ -1412,8 +1755,15 @@ impl Contract {
                 hash_hex(&r.market_hash.unwrap()),
                 r.payouts.treasury
             ));
+            self.record_forecast(
+                r.market.as_ref().unwrap(),
+                &r.runs,
+                &r.stakes.as_ref().unwrap().weights,
+                r.swarm.as_ref().unwrap(),
+                r.agents.as_ref().unwrap(),
+            );
         }
-        RequestView::from(r)
+        RequestView::from(self.requests.get(request_id).unwrap())
     }
 
     pub fn request_config(&self) -> RequestConfigView {
@@ -1460,19 +1810,70 @@ impl Contract {
         U128(refund)
     }
 
-    /// Agent only: post or replace your odds (basis points, one per outcome,
-    /// summing to 10000) for a requested market's colony while its agents'
-    /// window is open, or for a trending market's colony once the round's
-    /// markets are finalized and until the round's publish time.
+    /// Retired: agents now commit, then reveal (`commit_forecast`,
+    /// `reveal_forecast`), so no agent can read another's odds and copy them.
     pub fn post_forecast(&mut self, colony: u16, odds: Vec<u16>) {
+        let _ = (colony, odds);
+        env::panic_str(
+            "post_forecast is retired: commit_forecast while the agents' window is open, \
+             then reveal_forecast in its last third",
+        )
+    }
+
+    /// Agent only: commit to your odds for a colony while its agents' window
+    /// is open and before its last third. `hash` is 64 hex chars:
+    /// sha256("ANTO-COMMIT-v0", colony u16, n u8, odds u16 each, salt 32
+    /// bytes, your account id). A new commit replaces the old one.
+    pub fn commit_forecast(&mut self, colony: u16, hash: String) {
         require!(!self.paused, "paused");
         let who = env::predecessor_account_id();
         let now = env::block_timestamp_ms();
-        let n = ok(self.forecast_window(colony, now));
-        ok(self.agents.post(who.as_str(), colony, n, odds.clone()));
+        let (_, reveal_from, _) = ok(self.agent_window_at(colony, now));
+        if now >= reveal_from {
+            ok::<()>(Err(Error::WrongPhase));
+        }
+        if !self.agents.is_registered(who.as_str()) {
+            ok::<()>(Err(Error::NotAgent));
+        }
+        let h = parse_hash(&hash).unwrap_or_else(|| env::panic_str("hash must be 64 hex chars"));
+        let mut cs = book::commits(colony);
+        cs.insert(who.to_string(), h);
+        book::set_commits(colony, &cs);
+        env::log_str(&format!("EVENT commit_forecast colony={colony} {who}"));
+    }
+
+    /// Agent only: reveal the odds (basis points, one per outcome, summing to
+    /// 10000) and the 64-hex-char salt you committed, during the last third
+    /// of the colony's agents' window. Only revealed posts count.
+    pub fn reveal_forecast(&mut self, colony: u16, odds: Vec<u16>, salt: String) {
+        require!(!self.paused, "paused");
+        let who = env::predecessor_account_id();
+        let now = env::block_timestamp_ms();
+        let (n, reveal_from, _) = ok(self.agent_window_at(colony, now));
+        if now < reveal_from {
+            ok::<()>(Err(Error::WrongPhase));
+        }
+        let salt = parse_hash(&salt).unwrap_or_else(|| env::panic_str("salt must be 64 hex chars"));
+        let committed = book::commits(colony).get(who.as_str()).copied();
+        ok(self
+            .agents
+            .reveal(who.as_str(), colony, n, odds.clone(), &salt, committed));
         env::log_str(&format!(
-            "EVENT post_forecast colony={colony} {who} odds={odds:?}"
+            "EVENT reveal_forecast colony={colony} {who} odds={odds:?}"
         ));
+    }
+
+    /// Where a colony's agents' window stands: "commit" until `reveal_from_ms`,
+    /// then "reveal" until `by_ms`; null when agents can't post on it now.
+    pub fn agent_window(&self, colony: u16) -> Option<AgentWindowView> {
+        let now = env::block_timestamp_ms();
+        let (_, reveal_from, by) = self.agent_window_at(colony, now).ok()?;
+        Some(AgentWindowView {
+            phase: if now < reveal_from { "commit" } else { "reveal" }.into(),
+            reveal_from_ms: reveal_from,
+            by_ms: by,
+            committed: book::commits(colony).into_keys().collect(),
+        })
     }
 
     /// The agent-odds snapshot of a colony: frozen for a cranked request,
@@ -1764,6 +2165,19 @@ impl Contract {
         self.round_cfg
     }
 
+    /// How long agents have on each requested market from now on: commits in
+    /// its first two thirds, reveals in the last. Call it while no request's
+    /// window is open: an open window's thirds are measured with the new
+    /// length. Only the contract account itself may call it.
+    pub fn set_request_forecast_window(&mut self, forecast_window_ms: u64) {
+        require!(
+            env::predecessor_account_id() == env::current_account_id(),
+            "only the contract account may re-time requests"
+        );
+        ok(self.requests.set_forecast_window(forecast_window_ms));
+        env::log_str(&format!("EVENT request_forecast_window ms={forecast_window_ms}"));
+    }
+
     /// Replaces the keeper allow-list and the quorum (a strict majority of
     /// `keepers`). Posts of removed keepers stop counting, for the round and
     /// for requests; the other posts stay. Only the contract account itself
@@ -1802,6 +2216,23 @@ impl Contract {
 }
 
 impl Contract {
+    /// Add a market's finished forecast to the scorebook. A failure is logged,
+    /// never raised, so the scorebook can't block a round or a request.
+    fn record_forecast(
+        &self,
+        m: &Market,
+        runs: &[antotoken::request::ColonyRun],
+        weights: &[u32],
+        swarm: &[u16],
+        agents: &AgentSnapshot,
+    ) {
+        let wallets = self.staking.wallet_weights(m.colony, m.outcomes.len());
+        let counted = voters(weights, &agents.odds);
+        if let Err(e) = book::record_market(m, runs, counted, swarm, agents, &wallets) {
+            env::log_str(&format!("EVENT scorebook_skip id={} error={e:?}", m.market_id));
+        }
+    }
+
     /// Run `day`'s pot: burn the burn part and pay the reward part. `burn_run`
     /// must be that day's finished run and the day must be over.
     fn execute_day(&mut self, day: u64, now: u64) -> u128 {
@@ -1841,16 +2272,25 @@ impl Contract {
         self.markets.markets()?.iter().find(|m| m.colony == colony)
     }
 
-    /// Outcome count of `colony` if agents may post on it at `now`.
-    fn forecast_window(&self, colony: u16, now: u64) -> Result<usize, Error> {
-        if Requests::id_of(colony).is_some() {
-            return self.requests.forecast_window(colony, now);
-        }
-        let m = self.trending_market(colony).ok_or(Error::BadColony)?;
-        if now >= self.staking.config().publish_at {
-            return Err(Error::PostingClosed);
-        }
-        Ok(m.outcomes.len())
+    /// (outcome count, reveal phase start, window end) of `colony`'s agents'
+    /// window if it is open at `now`. A round's window runs from staking's
+    /// close to the publish time, a request's for `forecast_window` before its
+    /// `forecast_by`; reveals take the last third, so they all land before the
+    /// drand round the seed commits to is published.
+    fn agent_window_at(&self, colony: u16, now: u64) -> Result<(usize, u64, u64), Error> {
+        let (n, start, by) = if let Some(id) = Requests::id_of(colony) {
+            let n = self.requests.forecast_window(colony, now)?;
+            let by = self.requests.get(id).and_then(|r| r.forecast_by).ok_or(Error::PostingClosed)?;
+            (n, by.saturating_sub(self.requests.config().forecast_window), by)
+        } else {
+            let m = self.trending_market(colony).ok_or(Error::BadColony)?;
+            let cfg = self.staking.config();
+            if now >= cfg.publish_at {
+                return Err(Error::PostingClosed);
+            }
+            (m.outcomes.len(), cfg.close_at, cfg.publish_at)
+        };
+        Ok((n, by - (by - start) / 3, by))
     }
 }
 
@@ -2330,6 +2770,8 @@ mod tests {
             odds_6h: odds.clone(),
             odds,
             raw_hash: "ab".repeat(32),
+            odds_1h: None,
+            odds_24h: None,
         }
     }
 
@@ -2467,6 +2909,8 @@ mod tests {
             odds_6h: odds.clone(),
             odds,
             raw_hash: "cd".repeat(32),
+            odds_1h: None,
+            odds_24h: None,
         }
     }
 
@@ -2506,9 +2950,19 @@ mod tests {
         ] {
             testing_env!(ctx(a, 605_001).build());
             c.register_agent();
-            c.post_forecast(colony, odds);
+            commit(&mut c, a, colony, &odds, 605_001);
         }
         assert!(c.is_agent(acct("agent-a.test")));
+        // Commits take the window's first two thirds, reveals the last.
+        let w = c.agent_window(colony).unwrap();
+        assert_eq!((w.phase.as_str(), w.reveal_from_ms, w.committed.len()), ("commit", 1_805_000, 2));
+        assert!(c.agent_snapshot(colony).unwrap().posts.is_empty(), "hidden until revealed");
+        for (a, odds) in [
+            ("agent-a.test", vec![5000, 4000, 1000]),
+            ("agent-b.test", vec![4000, 4000, 2000]),
+        ] {
+            reveal(&mut c, a, colony, &odds, 1_805_000);
+        }
         // Holders stake on the request's colony during the agents' window,
         // long after the round's own staking closed.
         testing_env!(ctx("alice.test", 605_002).build());
@@ -2520,7 +2974,7 @@ mod tests {
 
         let close = 605_000 + 1_800_000;
         testing_env!(ctx("agent-a.test", close).build());
-        assert!(panics(|| c.post_forecast(colony, vec![5000, 5000, 0])));
+        assert!(panics(|| c.reveal_forecast(colony, vec![5000, 4000, 1000], hash_hex(&salt_of("agent-a.test")))));
         // Cranking waits for the agents' window to close.
         testing_env!(ctx("cranker.test", close - 1).build());
         assert!(panics(|| {
@@ -2618,8 +3072,7 @@ mod tests {
         }
         testing_env!(ctx("anyone.test", 1_000).build());
         c.finalize_markets();
-        testing_env!(ctx("alice.test", 1_500).build());
-        c.post_forecast(1, vec![5000, 5000]);
+        commit(&mut c, "alice.test", 1, &[5000, 5000], 1_500);
     }
 
     #[test]
@@ -2632,15 +3085,26 @@ mod tests {
         }
         testing_env!(ctx("agent-a.test", 500).build());
         c.register_agent();
-        // Not finalized yet: no market colony to post on.
-        assert!(panics(|| c.post_forecast(1, vec![5000, 5000])));
+        // Not finalized yet: no market colony to commit on.
+        assert!(panics(|| commit(&mut c, "agent-a.test", 1, &[7000, 3000], 500)));
         testing_env!(ctx("anyone.test", 1_000).build());
         c.finalize_markets();
+        // The window runs from staking's close (1000) to publish (2000); the
+        // last third (from 1667) is for reveals only.
+        commit(&mut c, "agent-a.test", 1, &[7000, 3000], 1_100);
+        assert_eq!(c.agent_window(1).unwrap().phase, "commit");
+        assert!(panics(|| reveal(&mut c, "agent-a.test", 1, &[7000, 3000], 1_100)));
+        assert!(panics(|| commit(&mut c, "agent-a.test", 1, &[6000, 4000], 1_667)));
+        assert_eq!(c.agent_window(1).unwrap().phase, "reveal");
+        // Only the committed odds and salt open the commit.
+        assert!(panics(|| reveal(&mut c, "agent-a.test", 1, &[6000, 4000], 1_999)));
         testing_env!(ctx("agent-a.test", 1_999).build());
-        c.post_forecast(1, vec![7000, 3000]);
+        assert!(panics(|| c.reveal_forecast(1, vec![7000, 3000], "00".repeat(32))));
+        assert!(panics(|| c.post_forecast(1, vec![7000, 3000])), "retired");
+        reveal(&mut c, "agent-a.test", 1, &[7000, 3000], 1_999);
         assert_eq!(c.agent_snapshot(1).unwrap().odds, vec![7000, 3000]);
-        testing_env!(ctx("agent-a.test", 2_000).build());
-        assert!(panics(|| c.post_forecast(1, vec![7000, 3000])));
+        assert!(panics(|| reveal(&mut c, "agent-a.test", 1, &[7000, 3000], 2_000)));
+        assert!(c.agent_window(1).is_none());
         assert!(c.agent_snapshot(2).is_none());
     }
 
@@ -2768,7 +3232,8 @@ mod tests {
         assert_eq!(c.round_status().phase, "agents");
         testing_env!(ctx("agent-a.test", 1_100).build());
         c.register_agent();
-        c.post_forecast(1, vec![7000, 3000]);
+        commit(&mut c, "agent-a.test", 1, &[7000, 3000], 1_100);
+        reveal(&mut c, "agent-a.test", 1, &[7000, 3000], 1_700);
 
         // Not before the publish time, and not twice in a row to skip ahead.
         testing_env!(ctx("cranker.test", 1_999).build());
@@ -2841,6 +3306,219 @@ mod tests {
         post_round_market(&mut c, 3_100);
         testing_env!(ctx("anyone.test", 8_000).build());
         assert_eq!(c.finalize_markets().len(), 1);
+    }
+
+    fn salt_of(who: &str) -> [u8; 32] {
+        env::sha256_array(who.as_bytes())
+    }
+
+    /// `who` commits to `odds` for `colony` at `at` (ms).
+    fn commit(c: &mut Contract, who: &str, colony: u16, odds: &[u16], at: u64) {
+        let h = antotoken::agents::commit_hash(colony, odds, &salt_of(who), who);
+        testing_env!(ctx(who, at).build());
+        c.commit_forecast(colony, hash_hex(&h));
+    }
+
+    /// `who` reveals `odds` for `colony` at `at` (ms).
+    fn reveal(c: &mut Contract, who: &str, colony: u16, odds: &[u16], at: u64) {
+        testing_env!(ctx(who, at).build());
+        c.reveal_forecast(colony, odds.to_vec(), hash_hex(&salt_of(who)));
+    }
+
+    fn resolution_post(state: &str, winner: &str) -> ResolutionPostView {
+        ResolutionPostView {
+            market_id: "12345".into(),
+            state: state.into(),
+            winner: winner.into(),
+            end_ms: 9_000,
+            raw_hash: "cd".repeat(32),
+        }
+    }
+
+    #[test]
+    fn a_finished_round_is_scored_once_keepers_agree_on_the_resolution() {
+        let mut c = fresh();
+        give(&mut c, "agent-a.test", 50 * ONE);
+        post_round_market(&mut c, 10);
+        testing_env!(ctx("alice.test", 20).build());
+        c.stake(1, 0, U128(36 * ONE));
+        testing_env!(ctx("anyone.test", 1_000).build());
+        c.finalize_markets();
+        testing_env!(ctx("agent-a.test", 1_100).build());
+        c.register_agent();
+        commit(&mut c, "agent-a.test", 1, &[9000, 1000], 1_100);
+        reveal(&mut c, "agent-a.test", 1, &[9000, 1000], 1_700);
+        for i in 0..CRANKS_PER_MARKET {
+            testing_env!(ctx("cranker.test", 2_000 + i as u64).build());
+            c.crank_round(sig());
+        }
+        let t = c.score_tally();
+        assert_eq!((t.books, t.open.clone()), (0, vec!["12345".to_string()]));
+        let open = c.open_markets(0, 10);
+        assert_eq!(open[0].outcomes, vec![vec!["Yes".to_string(), "No".to_string()]]);
+        assert!(open[0].resolution.is_none() && open[0].keepers_posted.is_empty());
+        assert_eq!(t.colony_weights, [score::EQUAL; 3]);
+
+        // Only keepers post, and one keeper alone doesn't decide.
+        testing_env!(ctx("alice.test", 3_000).build());
+        assert!(panics(|| c.post_resolutions(vec![resolution_post("resolved", "Yes")])));
+        testing_env!(ctx("k1.test", 3_000).build());
+        c.post_resolutions(vec![resolution_post("resolved", "Yes")]);
+        assert!(c.resolution("12345".into()).is_none());
+        assert_eq!(
+            c.open_markets(0, 10)[0].keepers_posted,
+            vec![("k1.test".to_string(), "resolved".to_string(), 9_000)]
+        );
+        testing_env!(ctx("anyone.test", 3_000).build());
+        assert!(panics(|| {
+            c.score_market("12345".into());
+        }));
+        testing_env!(ctx("k2.test", 3_000).build());
+        c.post_resolutions(vec![resolution_post("resolved", "Yes")]);
+        let r = c.resolution("12345".into()).unwrap();
+        assert_eq!((r.state.as_str(), r.winner.as_str(), r.raw_hashes.len()), ("resolved", "Yes", 2));
+        // A final resolution can't be moved; a late keeper is skipped, not refused.
+        testing_env!(ctx("k3.test", 3_000).build());
+        c.post_resolutions(vec![resolution_post("disputed", "")]);
+        assert_eq!(c.resolution("12345".into()).unwrap().state, "resolved");
+
+        testing_env!(ctx("anyone.test", 3_100).build());
+        assert_eq!(c.score_market("12345".into()), 1);
+        assert_eq!(c.score_market("12345".into()), 0, "scored once");
+        let t = c.score_tally();
+        assert_eq!((t.books, t.open.len()), (1, 0));
+        let (mkt, swarm) = (&t.sources[0], &t.sources[4]);
+        assert_eq!((mkt.count, mkt.skill_sum, swarm.count), (1, 0, 1));
+        // The market said 0.6 for what happened: Brier 2·0.16.
+        assert_eq!(mkt.brier_sum, 3200);
+        // agent-a said 0.9: 2·0.01, skill 0.30 over the market.
+        let ag = c.agent_scores();
+        assert_eq!((ag[0].account_id.as_str(), ag[0].markets, ag[0].sum), ("agent-a.test", 1, 3000));
+        assert!(ag[0].weight > score::EQUAL);
+        // alice's sugar on Yes at 0.6, and Yes happened: edge +0.4.
+        let w = c.wallet_score(acct("alice.test"));
+        assert_eq!((w.markets, w.sum), (1, 4000));
+        assert!(w.weight > score::EQUAL);
+    }
+
+    #[test]
+    fn a_scorebook_with_a_record_weights_the_next_round_and_it_still_replays() {
+        let mut c = fresh();
+        for a in ["agent-a.test", "agent-b.test"] {
+            give(&mut c, a, 50 * ONE);
+        }
+        // Stand in for 25 scored books: Momentum trails the market, Agents
+        // leads it, and agent-b has the better record.
+        testing_env!(ctx("anyone.test", 0).build());
+        let mut t = score::Tally { books: 25, ..Default::default() };
+        t.src[score::MOMENTUM] = score::SrcTally { count: 25, skill_sum: -25 * 300, ..Default::default() };
+        t.src[score::AGENTS] = score::SrcTally { count: 25, skill_sum: 25 * 200, ..Default::default() };
+        score::Store::set_tally(&mut book::ChainStore, &t);
+        score::Store::set_agent_tally(&mut book::ChainStore, "agent-b.test", &score::SkillTally { markets: 20, sum: 20 * 600 });
+        // 1000 − 5·7500/45 is under the floor of 250; 1000 + 5·5000/45.
+        assert_eq!(c.score_tally().colony_weights, [250, 1000, 1555]);
+
+        post_round_market(&mut c, 10);
+        testing_env!(ctx("anyone.test", 1_000).build());
+        c.finalize_markets();
+        for (a, odds) in [("agent-a.test", [3000, 7000]), ("agent-b.test", [8000, 2000])] {
+            testing_env!(ctx(a, 1_100).build());
+            c.register_agent();
+            commit(&mut c, a, 1, &odds, 1_100);
+            reveal(&mut c, a, 1, &odds, 1_700);
+        }
+        let mut last = None;
+        for i in 0..CRANKS_PER_MARKET {
+            testing_env!(ctx("cranker.test", 2_000 + i as u64).build());
+            last = Some(c.crank_round(sig()));
+        }
+        let run = last.unwrap();
+        assert_eq!(run.colony_weights, c.score_tally().colony_weights);
+        let m = &run.markets[0];
+        // agent-b's record carries the median; the weights are on chain.
+        assert_eq!(m.agents.odds, vec![8000, 2000]);
+        assert_eq!(m.agents.weights, Some(vec![1000, 1000 + 5 * 12_000 / 40]));
+        let hex = |h: &str| -> [u8; 32] {
+            let mut o = [0u8; 32];
+            for i in 0..32 {
+                o[i] = u8::from_str_radix(&h[2 * i..2 * i + 2], 16).unwrap();
+            }
+            o
+        };
+        let ms = c.forecast_markets().unwrap();
+        let native = antotoken::antosim::forecast_market_weighted(
+            &hex(&run.seed),
+            1,
+            &ms[0].odds,
+            &ms[0].odds_6h,
+            &m.weights,
+            hex(&run.stake_hash),
+            &m.agents.odds,
+            hex(&m.agents.hash),
+            antotoken::antosim::FORECAST_ANTS,
+            antotoken::antosim::FORECAST_TICKS,
+            run.colony_weights,
+        )
+        .unwrap();
+        assert_eq!(m.market_hash.as_deref(), Some(native.hash_hex().as_str()));
+        assert_eq!(m.swarm.as_ref(), Some(&native.swarm));
+    }
+
+    #[test]
+    fn keepers_odds_windows_reach_momentum_and_replay() {
+        let mut c = fresh();
+        let ws = [([6400, 3600], [4000, 6000]), ([6200, 3800], [4400, 5600]), ([7000, 3000], [3000, 7000])];
+        for (k, (a, b)) in ["k1.test", "k2.test", "k3.test"].iter().zip(ws) {
+            testing_env!(ctx(k, 10).build());
+            let mut m = market(vec![6000, 4000]);
+            m.odds_1h = Some(a.to_vec());
+            m.odds_24h = Some(b.to_vec());
+            c.post_trending(vec![m]);
+        }
+        testing_env!(ctx("anyone.test", 1_000).build());
+        let ms = c.finalize_markets();
+        // The lower median of the three keepers, and the v1 odds hash.
+        assert_eq!((ms[0].odds_1h.clone(), ms[0].odds_24h.clone()), (Some(vec![6400, 3600]), Some(vec![4000, 6000])));
+        let ext = (vec![6400u16, 3600], vec![4000u16, 6000]);
+        let v1 = antotoken::antosim::odds_snapshot_hash_ext(&[6000, 4000], &[6000, 4000], Some((&ext.0, &ext.1))).unwrap();
+        assert_eq!(ms[0].odds_hash, hash_hex(&v1));
+        let mut last = None;
+        for i in 0..CRANKS_PER_MARKET {
+            testing_env!(ctx("cranker.test", 2_000 + i as u64).build());
+            last = Some(c.crank_round(sig()));
+        }
+        let run = last.unwrap();
+        let m = &run.markets[0];
+        let hex = |h: &str| -> [u8; 32] {
+            let mut o = [0u8; 32];
+            for i in 0..32 {
+                o[i] = u8::from_str_radix(&h[2 * i..2 * i + 2], 16).unwrap();
+            }
+            o
+        };
+        let native = antotoken::antosim::forecast_market_full(
+            &hex(&run.seed),
+            1,
+            &[6000, 4000],
+            &[6000, 4000],
+            Some((&ext.0, &ext.1)),
+            &m.weights,
+            hex(&run.stake_hash),
+            &m.agents.odds,
+            hex(&m.agents.hash),
+            antotoken::antosim::FORECAST_ANTS,
+            antotoken::antosim::FORECAST_TICKS,
+            run.colony_weights,
+        )
+        .unwrap();
+        assert_eq!(m.market_hash.as_deref(), Some(native.hash_hex().as_str()));
+        // The same round without the windows would have hashed differently.
+        let plain = antotoken::antosim::forecast_market(
+            &hex(&run.seed), 1, &[6000, 4000], &[6000, 4000], &m.weights, hex(&run.stake_hash),
+            &m.agents.odds, hex(&m.agents.hash), antotoken::antosim::FORECAST_ANTS, antotoken::antosim::FORECAST_TICKS,
+        )
+        .unwrap();
+        assert_ne!(plain.hash, native.hash);
     }
 
     #[test]

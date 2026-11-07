@@ -81,7 +81,7 @@ async fn requested_forecast() -> Res<()> {
             "keepers": [keeper.id()], "quorum": 1,
             "request_config": {
                 "fee": (100 * ONE).to_string(), "keeper_bps": 2000, "agent_bps": 3000, "crank_bps": 1000,
-                "odds_window_ms": 600_000u64, "forecast_window_ms": 4_000u64,
+                "odds_window_ms": 600_000u64, "forecast_window_ms": 30_000u64,
                 "agent_deposit": (10 * ONE).to_string(), "crank_bounty": "0"
             },
             "round_config": {"stake_ms": 60_000u64, "gap_ms": 10_000u64},
@@ -113,7 +113,7 @@ async fn requested_forecast() -> Res<()> {
         .json()?;
     let colony = r["colony"].as_u64().unwrap();
     let _ = call(&agent, &c, "register_agent", json!({})).await?;
-    let _ = call(&agent, &c, "post_forecast", json!({"colony": colony, "odds": [4500, 4000, 1500]})).await?;
+    common::forecast(&worker, &c, &agent, colony, &[4500, 4000, 1500]).await?;
     // A holder stakes on the request's colony during the agents' window.
     let _ = call(&cranker, &c, "stake", json!({"colony": colony, "option": 2, "amount": (25 * ONE).to_string()})).await?;
 
