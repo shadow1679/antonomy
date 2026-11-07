@@ -27,12 +27,14 @@ Only after the core loop works end to end. All are free to run.
 | --- | --- | --- | --- |
 | Drop sugar | Memecoins With Mechanics | Holders drop sugar on an option and its scent grows | Square-root weighting, stake snapshot hashed into the seed |
 | Smell-o-vision | Memecoins With Mechanics | Toggle that shows the scent the ants follow | Pheromone field, deposit and evaporation rules |
-| Check the receipts | Memecoins With Mechanics | One click re-runs the day and compares hashes | Determinism |
+| Check the receipts | Memecoins With Mechanics | One click re-runs the day and compares hashes | Determinism. **Built** as a browser page (`web/receipts.html`, logic in `web/receipts.mjs`, test with `node web/test_receipts.mjs`) |
 | Ant autopsy | AI Swarms | Scrub a run tick by tick and follow one ant | Fixed update order, bit-exact replay |
 | Recruit an ant | AI Swarms, Agent Economy | Starter script so any agent joins a round with its own strategy | Bot interface, per-wallet caps, reward accounting |
 | Panic button | All | One account can freeze the colony | Pause method and kill switch |
 
 **Drop sugar** is built as a browser preview (`web/sugar.html`, logic in `web/sugar.mjs`, test with `node web/test_sugar.mjs`): pick a burn size and an amount, and the page runs the current round's Burn colony twice, with and without your stake, on the same seed and map. It shows the weight, the food richness (scent) per option, the trail shares and both result hashes. It stakes nothing. Other holders are fixtures and the per-wallet cap is a sample value. It still needs wiring to the contract's `stake` call and the real stake snapshot hash, which the JS sim doesn't compute yet (it passes a zero hash, like the live page).
+
+**Check the receipts** is built. A receipt is JSON with the round seed, one result hash per colony and one market hash per market. The page re-runs the whole round in the browser and marks each hash as match, mismatch, missing from the receipt or not in this round. `node web/receipts.mjs issue <round>` writes a receipt and `node web/receipts.mjs check <round> <file>` checks one. There is no contract yet, so receipts are issued by this same code and the demo check is circular unless you tamper with a hash or bring one from elsewhere. Once rounds run on testnet, build the receipt from the contract's events and keep `checkReceipt`.
 
 ## Sim inputs (feature 4)
 

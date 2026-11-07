@@ -242,6 +242,7 @@ export function topbar(page, end = "") {
       ${link("sandbox.html", "sandbox", "Sandbox")}
       ${link("sugar.html", "sugar", "Drop sugar")}
       ${link("replay.html", "replay", "Replay &amp; verify")}
+      ${link("receipts.html", "receipts", "Receipts")}
     </nav>
     <div class="topbar__end" id="topbar-end">${end}</div>
   </div></header>`;

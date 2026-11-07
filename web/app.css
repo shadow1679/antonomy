@@ -31,3 +31,8 @@
 .forecaster p { margin: 0; }
 
 .page-foot { padding-block: var(--space-6); border-top: 1px solid var(--border); }
+
+/* Check the receipts: per-hash status chips. */
+.chip[data-state="match"] { color: var(--success); border-color: rgb(147 207 110 / 0.35); background: var(--success-tint); }
+.chip[data-state="mismatch"], .chip[data-state="extra"] { color: var(--danger); border-color: rgb(255 122 102 / 0.35); background: var(--danger-tint); }
+.chip[data-state="missing"] { color: var(--warning); border-color: rgb(233 205 91 / 0.35); }
