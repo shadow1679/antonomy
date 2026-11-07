@@ -15,6 +15,8 @@ use std::collections::BTreeMap;
 /// Account that holds locked stake.
 pub const VAULT: &str = "stake-vault.antonomy";
 pub const SNAPSHOT_TAG: &[u8] = b"ANTO-STAKE-v0";
+/// sqrt-yocto per milli sqrt-token: isqrt(10^24) / 1000.
+const SIM_WEIGHT_DIV: u128 = 1_000_000_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(
@@ -162,7 +164,7 @@ impl Staking {
     }
 
     /// Square-root weight per option for one colony: sum over wallets of
-    /// `isqrt(stake)`. The sim has no stake input yet; this is what it will read.
+    /// `isqrt(stake)`, in sqrt-yocto units. `sim_weights` converts it for the sim.
     pub fn weights(&self, colony: u16, n_options: usize) -> Vec<u128> {
         let mut w = vec![0u128; n_options];
         for ((_, c, o), v) in &self.stakes {
@@ -171,6 +173,15 @@ impl Staking {
             }
         }
         w
+    }
+
+    /// `weights` in the unit the sim reads: milli sqrt-tokens, saturating at
+    /// `u32::MAX`. One token (10^24 yocto) has `isqrt` 10^12, so the divisor is 10^9.
+    pub fn sim_weights(&self, colony: u16, n_options: usize) -> Vec<u32> {
+        self.weights(colony, n_options)
+            .into_iter()
+            .map(|w| u32::try_from(w / SIM_WEIGHT_DIV).unwrap_or(u32::MAX))
+            .collect()
     }
 }
 
@@ -242,6 +253,15 @@ mod tests {
         assert_eq!(isqrt(16 * ONE), 2 * isqrt(4 * ONE));
         assert_eq!(w[0], 0);
         assert_eq!(s.weights(1, 3), vec![0, 0, 0]);
+    }
+
+    #[test]
+    fn sim_weights_are_milli_sqrt_tokens() {
+        let (mut l, mut s) = setup();
+        s.stake(&mut l, 1, "alice", 0, 1, 4 * ONE).unwrap();
+        s.stake(&mut l, 1, "bob", 0, 1, 16 * ONE).unwrap();
+        // sqrt(4) + sqrt(16) = 6 tokens-worth of weight = 6000 milli.
+        assert_eq!(s.sim_weights(0, 3), vec![0, 6000, 0]);
     }
 
     #[test]

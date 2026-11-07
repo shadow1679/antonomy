@@ -141,14 +141,14 @@
       <div class="chamber verify-panel">
         <div class="chamber__header" style="margin: 0">
           <h3 class="chamber__title">Verify round 1042</h3>
-          <span class="chip">ANTO-SIM-v0</span>
+          <span class="chip">ANTO-SIM-v1</span>
         </div>
         <dl class="kv">
           <dt>Colony</dt><dd>Burn · 5 options · 150 ants · 800 ticks</dd>
           <dt>Seed</dt>
           <dd><span class="hash"><span class="hash__value" id="v-seed"></span><button class="hash__copy" type="button" aria-label="Copy seed" id="v-seed-copy"></button></span></dd>
           <dt>Expected</dt>
-          <dd><span class="hash"><span class="hash__value" title="72f66fa9f753d4bf301a2baf7419b38209f554db46572a9ac02dd695a1716254">72f66fa9…a1716254</span><button class="hash__copy" type="button" aria-label="Copy expected hash" data-copy="72f66fa9f753d4bf301a2baf7419b38209f554db46572a9ac02dd695a1716254"></button></span></dd>
+          <dd><span class="hash"><span class="hash__value" title="f1726c83cc21afaf1aa5e29a328897508297adac7915995e397de752de24cb93">f1726c83…de24cb93</span><button class="hash__copy" type="button" aria-label="Copy expected hash" data-copy="f1726c83cc21afaf1aa5e29a328897508297adac7915995e397de752de24cb93"></button></span></dd>
           <dt>Replayed</dt>
           <dd><span class="hash"><span class="hash__value" id="replayed-hash">not run yet</span><button class="hash__copy" type="button" aria-label="Copy replayed hash" id="replayed-copy" hidden></button></span></dd>
         </dl>
@@ -185,12 +185,12 @@
           <div class="cluster">
             <span class="chip chip--live">live</span>
             <span class="chip">tick <strong>412</strong>/800</span>
-            <span class="chip">ANTO-SIM-v0</span>
+            <span class="chip">ANTO-SIM-v1</span>
             <span class="tag-forecast">Forecast · not advice</span>
           </div>
         </div>
         <div class="notice notice--danger">
-          <div><span class="notice__title">Replay does not match the chain</span><p>The replayed hash differs from the one stored on-chain. Check that the sim version is ANTO-SIM-v0 and that the stake snapshot matches.</p></div>
+          <div><span class="notice__title">Replay does not match the chain</span><p>The replayed hash differs from the one stored on-chain. Check that the sim version is ANTO-SIM-v1 and that the stake snapshot matches.</p></div>
         </div>
       </div>
     </div>
@@ -358,7 +358,7 @@
     <h3 class="demo-label">Swarm versus market</h3>
     <div class="table-wrap">
       <table class="table">
-        <caption><span class="tag-forecast">Forecast · not advice</span>&nbsp; Sample data. Swarm belief is the average of the four colonies' trail shares and is not yet calibrated as a probability.</caption>
+        <caption><span class="tag-forecast">Forecast · not advice</span>&nbsp; Fixture market, round seed-1042, run in your browser by <code>forecastMarket</code> (60 ants, 300 ticks per forecaster, each on its own map). Swarm belief is the average of the four colonies' trail shares and is not yet calibrated as a probability.</caption>
         <thead>
           <tr>
             <th scope="col">Outcome</th>
@@ -371,21 +371,12 @@
             <th scope="col" class="num">Δ vs market</th>
           </tr>
         </thead>
-        <tbody>
-          <tr>
-            <th scope="row"><span class="opt" data-opt="0">Yes</span></th>
-            <td class="num">62.0</td><td class="num">64.0</td><td class="num">41.0</td><td class="num">70.0</td><td class="num">55.0</td>
-            <td class="num col-swarm">57.5</td><td class="num"><span class="delta delta--down">4.5</span></td>
-          </tr>
-          <tr>
-            <th scope="row"><span class="opt" data-opt="1">No</span></th>
-            <td class="num">38.0</td><td class="num">36.0</td><td class="num">59.0</td><td class="num">30.0</td><td class="num">45.0</td>
-            <td class="num col-swarm">42.5</td><td class="num"><span class="delta delta--up">4.5</span></td>
-          </tr>
+        <tbody id="swarm-rows">
+          <tr><td colspan="8" class="text-faint">Running four colonies…</td></tr>
         </tbody>
       </table>
     </div>
-    <p class="text-xs text-faint" style="margin-top: var(--space-2)">Odds are the median of the keeper snapshots stored on-chain. No links to trading venues.</p>
+    <p class="text-xs text-faint" style="margin-top: var(--space-2)">Odds are the median of the keeper snapshots stored on-chain. No links to trading venues. Market hash <span class="hash"><span class="hash__value" id="swarm-hash">…</span><button class="hash__copy" type="button" aria-label="Copy market hash" id="swarm-hash-copy" hidden></button></span></p>
   </div>
 </section>
 
@@ -395,7 +386,7 @@
 
 <script type="module">
 /* Showcase behaviour. The sim panels run the real sim from sim/js/antosim.mjs. */
-import { Colony, run, seedFromInt, toHex, W, H, TICKS } from "../../sim/js/antosim.mjs";
+import { Colony, run, seedFromInt, toHex, W, H, TICKS, forecastMarket, marketColony } from "../../sim/js/antosim.mjs";
 import { ColonyView, leadingSource } from "./colony-view.mjs";
 
 // Swatches: read token values from CSS so this page cannot drift from tokens.css.
@@ -426,7 +417,7 @@ document.addEventListener("click", async (e) => {
 
 // ---- Verify: replay seed-1042 in this tab and compare with the Python reference ----
 const VERIFY_SEED = seedFromInt(1042);
-const EXPECTED = "72f66fa9f753d4bf301a2baf7419b38209f554db46572a9ac02dd695a1716254";
+const EXPECTED = "f1726c83cc21afaf1aa5e29a328897508297adac7915995e397de752de24cb93";
 const badge = $("verify-badge"), replayed = $("replayed-hash"), replayedCopy = $("replayed-copy");
 const tamper = $("verify-tamper");
 const verifySeed = () => {
@@ -652,6 +643,30 @@ $("seed-random").addEventListener("click", () => {
 loadSeed(1042);
 // Badges are canvas text, so redraw once the web font arrives.
 document.fonts.ready.then(() => { if (!raf) view.draw(1); });
+
+// Swarm versus market: the four forecasters on a fixture market (the same one
+// sim/tests/crosscheck.py uses), computed here with the real sim.
+{
+  const outcomes = ["Cut", "Hold", "Hike"];
+  const odds = [6200, 2800, 1000], odds6h = [5500, 3300, 1200], stakes = [3000, 0, 12000];
+  const pct = (b) => (b / 100).toFixed(1);
+  const show = () => {
+    const m = forecastMarket(seedFromInt(1042), marketColony(0), odds, odds6h, stakes, new Uint8Array(32));
+    $("swarm-rows").innerHTML = outcomes.map((label, o) => {
+      const d = m.swarm[o] - odds[o];
+      const cls = d > 0 ? "delta--up" : d < 0 ? "delta--down" : "delta--flat";
+      const cols = m.colonies.map((c) => `<td class="num">${pct(c.shares[o])}</td>`).join("");
+      return `<tr><th scope="row"><span class="opt" data-opt="${o}">${label}</span></th><td class="num">${pct(odds[o])}</td>${cols}` +
+        `<td class="num col-swarm">${pct(m.swarm[o])}</td><td class="num"><span class="delta ${cls}">${pct(Math.abs(d))}</span></td></tr>`;
+    }).join("");
+    setHash($("swarm-hash"), m.hash);
+    const copy = $("swarm-hash-copy");
+    copy.dataset.copy = m.hash;
+    copy.hidden = false;
+  };
+  // About 72k ant-steps; let the page paint first.
+  setTimeout(show, 0);
+}
 </script>
 </body>
 </html>

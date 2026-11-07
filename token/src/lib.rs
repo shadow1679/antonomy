@@ -2,11 +2,14 @@
 //! and wrapped by the NEAR contract later. Integer-only and deterministic:
 //! all maps are `BTreeMap`, so iteration order is fixed.
 //!
-//! Not covered yet: how stake weights feed the sim (the sim has no stake
-//! input; see `Staking::weights`), rewards, and the drand commit.
+//! `market` holds the forecast market registry: keepers post the trending list
+//! and odds, and the contract keeps the per-outcome median.
+//!
+//! Not covered yet: rewards and the drand commit.
 
 pub mod burn;
 pub mod ledger;
+pub mod market;
 pub mod stake;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,6 +44,18 @@ pub enum Error {
     Locked,
     /// Settle before the drand round is published.
     NotPublished,
+    /// Keeper list must be non-empty and distinct, with a strict-majority quorum.
+    BadKeeperConfig,
+    /// Only allow-listed keepers may post markets.
+    NotKeeper,
+    /// Market list or market fails validation (ids, outcomes, odds).
+    BadMarket,
+    /// Market posting is closed (post) or still open (finalize).
+    PostingClosed,
+    PostingStillOpen,
+    /// No market list was posted by at least `quorum` keepers.
+    NoQuorum,
+    AlreadyFinalized,
 }
 
 /// Integer square root, floor. Newton's method, no float.

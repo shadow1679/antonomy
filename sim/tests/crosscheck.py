@@ -1,11 +1,16 @@
 """Check that the Python reference, the JS port and the Rust port produce identical hashes.
 
 Usage: python3 -I sim/tests/crosscheck.py [count] [--no-py]   (default 50 seeds)
-Each seed runs three colonies: 5 outcomes, 2 outcomes, and 3 outcomes with
-fixed (forecast-style) richness. Python needs about 1.5 s per seed, so use
+Each seed runs eight colonies: 5 outcomes, 2 outcomes, 3 outcomes with fixed
+richness, a Burn colony with stakes, and the four forecasters (Follower,
+Contrarian, Momentum, Community) on one market. The last five use 60 ants and
+300 ticks. Two more keys are whole forecast markets (four forecasters on their
+own maps, trail shares, swarm belief): a 3-outcome market with stakes and a
+binary market without. Python needs about 1.5 s per seed, so use
 --no-py to compare only JS against Rust on large counts (the 10,000-seed gate).
 Rust is skipped with a warning if cargo isn't found.
 """
+import hashlib
 import json
 import os
 import shutil
@@ -19,7 +24,14 @@ import antosim  # noqa: E402
 args = [a for a in sys.argv[1:] if not a.startswith("--")]
 use_py = "--no-py" not in sys.argv
 count = int(args[0]) if args else 50
-KEYS = ("h5", "h2", "h3")
+KEYS = ("h5", "h2", "h3", "hb", "hf", "hc", "hm", "hk", "hs", "hy")
+
+# Fixtures shared with dump.mjs and dump.rs.
+STAKE_HASH = hashlib.sha256(b"stakes").digest()
+BURN_WEIGHTS = [0, 40000, 9000, 0, 2500]
+ODDS, ODDS_6H = [6200, 2800, 1000], [5500, 3300, 1200]
+MARKET_WEIGHTS = [3000, 0, 12000]
+BINARY_ODDS = [9000, 1000]
 
 
 def lines(cmd):
@@ -55,7 +67,21 @@ if use_py:
             "i": row["i"],
             "h5": antosim.run(seed, 5)["hash"],
             "h2": antosim.run(seed, 2)["hash"],
-            "h3": antosim.run(seed, 3, [3000, 1200, 500])["hash"],
+            "h3": antosim.run(seed, 3, [300, 250, 200])["hash"],
+            "hb": antosim.burn_run(seed, BURN_WEIGHTS, STAKE_HASH, 60, 300)["hash"],
+            **{
+                key: antosim.forecast_run(
+                    seed, kind, ODDS, ODDS_6H, MARKET_WEIGHTS, STAKE_HASH, 60, 300
+                )["hash"]
+                for key, kind in (
+                    ("hf", antosim.FOLLOWER), ("hc", antosim.CONTRARIAN),
+                    ("hm", antosim.MOMENTUM), ("hk", antosim.COMMUNITY),
+                )
+            },
+            "hs": antosim.forecast_market(
+                seed, antosim.market_colony(0), ODDS, ODDS_6H, MARKET_WEIGHTS, STAKE_HASH)["hash"],
+            "hy": antosim.forecast_market(
+                seed, antosim.market_colony(1), BINARY_ODDS, BINARY_ODDS, [0, 0], antosim.ZERO32)["hash"],
         })
     impls["py"] = py_rows
 
@@ -74,6 +100,6 @@ for other in names[1:]:
                 bad += 1
                 print("MISMATCH seed", a["i"], k, base, a[k], other, b[k])
 
-print("%d seeds x 3 colonies, %s: %s" % (
-    count, " = ".join(names), "ALL MATCH" if bad == 0 else "%d mismatches" % bad))
+print("%d seeds x %d colonies, %s: %s" % (
+    count, len(KEYS), " = ".join(names), "ALL MATCH" if bad == 0 else "%d mismatches" % bad))
 sys.exit(1 if bad else 0)

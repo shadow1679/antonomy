@@ -2,7 +2,7 @@
 name = "antosim"
 version = "0.0.0"
 edition = "2021"
-description = "Antonomy integer ant-colony simulation, spec ANTO-SIM-v0. Must match sim/python/antosim.py bit for bit."
+description = "Antonomy integer ant-colony simulation, spec ANTO-SIM-v1. Must match sim/python/antosim.py bit for bit."
 publish = false
 
 [dependencies]

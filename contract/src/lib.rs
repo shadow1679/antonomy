@@ -2,6 +2,12 @@
 //! burn and staking rules live there and are tested there. This layer adds
 //! account checks, time, pause and JSON views.
 //!
+//! Forecast markets: allow-listed keepers post the trending list with
+//! `post_trending` before staking closes; after that anyone calls
+//! `finalize_markets`, which needs a quorum of matching lists and stores the
+//! per-outcome median odds. The forecasters themselves don't run on-chain yet:
+//! that waits for the drand round lifecycle, like the Burn colony.
+//!
 //! Known gaps: no `ft_transfer_call` or storage-management (wallets cannot
 //! register accounts yet), the whole state is read on every call (fine for a
 //! demo, not for many stakers), and `execute_burn` trusts one `colony` account
@@ -10,7 +16,8 @@
 use antotoken::{
     burn::BurnExecutor,
     ledger::{Ledger, DECIMALS, SYMBOL},
-    stake::{StakeConfig, Staking},
+    market::{Market, MarketPost, Registry},
+    stake::{hash_hex, StakeConfig, Staking},
     Error,
 };
 use near_sdk::json_types::U128;
@@ -22,6 +29,8 @@ pub struct Contract {
     ledger: Ledger,
     burn: BurnExecutor,
     staking: Staking,
+    /// Forecast markets of the round, posted by keepers.
+    markets: Registry,
     /// Holds the genesis supply and is the account that gets burned from.
     treasury: AccountId,
     /// Only account allowed to call `execute_burn` (later: the colony run itself).
@@ -38,6 +47,83 @@ pub struct SnapshotView {
     pub entries: Vec<(AccountId, u16, u8, U128)>,
 }
 
+/// One market in a keeper's trending list. `raw_hash` is 64 hex chars.
+#[near(serializers = [json])]
+pub struct MarketPostView {
+    pub market_id: String,
+    pub outcomes: Vec<String>,
+    pub odds: Vec<u16>,
+    pub odds_6h: Vec<u16>,
+    pub raw_hash: String,
+}
+
+#[near(serializers = [json])]
+pub struct MarketView {
+    pub colony: u16,
+    pub market_id: String,
+    pub outcomes: Vec<String>,
+    pub odds: Vec<u16>,
+    pub odds_6h: Vec<u16>,
+    pub odds_hash: String,
+    /// (keeper, raw response hash) for the keepers whose list was accepted.
+    pub raw_hashes: Vec<(AccountId, String)>,
+}
+
+fn parse_hash(hex: &str) -> Option<[u8; 32]> {
+    if hex.len() != 64 || !hex.is_ascii() {
+        return None;
+    }
+    let mut out = [0u8; 32];
+    for (i, b) in out.iter_mut().enumerate() {
+        *b = u8::from_str_radix(&hex[2 * i..2 * i + 2], 16).ok()?;
+    }
+    Some(out)
+}
+
+impl From<MarketPostView> for MarketPost {
+    fn from(v: MarketPostView) -> Self {
+        let raw_hash = parse_hash(&v.raw_hash)
+            .unwrap_or_else(|| env::panic_str("raw_hash must be 64 hex chars"));
+        MarketPost {
+            market_id: v.market_id,
+            outcomes: v.outcomes,
+            odds: v.odds,
+            odds_6h: v.odds_6h,
+            raw_hash,
+        }
+    }
+}
+
+impl From<&MarketPost> for MarketPostView {
+    fn from(p: &MarketPost) -> Self {
+        MarketPostView {
+            market_id: p.market_id.clone(),
+            outcomes: p.outcomes.clone(),
+            odds: p.odds.clone(),
+            odds_6h: p.odds_6h.clone(),
+            raw_hash: hash_hex(&p.raw_hash),
+        }
+    }
+}
+
+impl From<&Market> for MarketView {
+    fn from(m: &Market) -> Self {
+        MarketView {
+            colony: m.colony,
+            market_id: m.market_id.clone(),
+            outcomes: m.outcomes.clone(),
+            odds: m.odds.clone(),
+            odds_6h: m.odds_6h.clone(),
+            odds_hash: hash_hex(&m.odds_hash),
+            raw_hashes: m
+                .raw_hashes
+                .iter()
+                .map(|(k, h)| (k.parse().unwrap(), hash_hex(h)))
+                .collect(),
+        }
+    }
+}
+
 #[near(serializers = [json])]
 pub struct Metadata {
     pub spec: String,
@@ -52,7 +138,9 @@ fn ok<T>(r: Result<T, Error>) -> T {
 
 #[near]
 impl Contract {
-    /// Times are block timestamps in milliseconds.
+    /// Times are block timestamps in milliseconds. Keepers post markets until
+    /// `close_at_ms`, the same close as staking. `quorum` must be a strict
+    /// majority of `keepers`.
     #[init]
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -63,16 +151,24 @@ impl Contract {
         cap_per_wallet: U128,
         close_at_ms: u64,
         publish_at_ms: u64,
+        keepers: Vec<AccountId>,
+        quorum: u8,
     ) -> Self {
         let staking = ok(Staking::new(StakeConfig {
             cap_per_wallet: cap_per_wallet.0,
             close_at: close_at_ms,
             publish_at: publish_at_ms,
         }));
+        let markets = ok(Registry::new(
+            keepers.into_iter().map(String::from).collect(),
+            quorum,
+            close_at_ms,
+        ));
         Self {
             ledger: Ledger::new(treasury.as_str(), total_supply.0),
             burn: BurnExecutor::default(),
             staking,
+            markets,
             treasury,
             colony,
             guardian,
@@ -178,6 +274,57 @@ impl Contract {
             .collect()
     }
 
+    // ---- forecast markets ----
+
+    /// Keeper only: post or replace this keeper's trending list for the round.
+    pub fn post_trending(&mut self, markets: Vec<MarketPostView>) {
+        require!(!self.paused, "paused");
+        let who = env::predecessor_account_id();
+        let ids: Vec<String> = markets.iter().map(|m| m.market_id.clone()).collect();
+        let list = markets.into_iter().map(MarketPost::from).collect();
+        ok(self
+            .markets
+            .post(env::block_timestamp_ms(), who.as_str(), list));
+        env::log_str(&format!("EVENT post_trending {who} markets={ids:?}"));
+    }
+
+    /// Permissionless once posting has closed: accept the quorum list and
+    /// store the median odds. Panics with `NoQuorum` if keepers disagree.
+    pub fn finalize_markets(&mut self) -> Vec<MarketView> {
+        let ms: Vec<MarketView> = ok(self.markets.finalize(env::block_timestamp_ms()))
+            .iter()
+            .map(MarketView::from)
+            .collect();
+        for m in &ms {
+            env::log_str(&format!(
+                "EVENT market colony={} id={} odds={:?} odds_6h={:?} odds_hash={}",
+                m.colony, m.market_id, m.odds, m.odds_6h, m.odds_hash
+            ));
+        }
+        ms
+    }
+
+    /// Accepted markets, or null before `finalize_markets`.
+    pub fn forecast_markets(&self) -> Option<Vec<MarketView>> {
+        self.markets
+            .markets()
+            .map(|ms| ms.iter().map(MarketView::from).collect())
+    }
+
+    pub fn keeper_post(&self, account_id: AccountId) -> Option<Vec<MarketPostView>> {
+        self.markets
+            .post_of(account_id.as_str())
+            .map(|l| l.iter().map(MarketPostView::from).collect())
+    }
+
+    /// (keepers, quorum)
+    pub fn keepers(&self) -> (Vec<AccountId>, u8) {
+        (
+            self.markets.keepers().map(|k| k.parse().unwrap()).collect(),
+            self.markets.quorum(),
+        )
+    }
+
     // ---- burn ----
 
     /// The colony picks `index` in the burn menu; the amount comes from the menu.
@@ -244,6 +391,8 @@ mod tests {
             U128(100 * ONE),
             1_000,
             2_000,
+            vec![acct("k1.test"), acct("k2.test"), acct("k3.test")],
+            2,
         );
         testing_env!(ctx("treasury.test", 0)
             .attached_deposit(near_sdk::NearToken::from_yoctonear(1))
@@ -357,5 +506,76 @@ mod tests {
         testing_env!(ctx("alice.test", 2_001).build());
         c.unstake(0, 0, U128(10 * ONE));
         assert_eq!(c.ft_balance_of(acct("alice.test")).0, 500 * ONE);
+    }
+
+    fn market(odds: Vec<u16>) -> MarketPostView {
+        MarketPostView {
+            market_id: "12345".into(),
+            outcomes: vec!["Yes".into(), "No".into()],
+            odds_6h: odds.clone(),
+            odds,
+            raw_hash: "ab".repeat(32),
+        }
+    }
+
+    #[test]
+    fn keepers_post_and_median_is_stored() {
+        let mut c = fresh();
+        for (k, odds) in [
+            ("k1.test", vec![6000, 4000]),
+            ("k2.test", vec![6400, 3600]),
+            ("k3.test", vec![6200, 3700]),
+        ] {
+            testing_env!(ctx(k, 10).build());
+            c.post_trending(vec![market(odds)]);
+        }
+        assert_eq!(
+            c.keeper_post(acct("k2.test")).unwrap()[0].odds,
+            vec![6400, 3600]
+        );
+        assert!(c.forecast_markets().is_none());
+
+        testing_env!(ctx("anyone.test", 1_000).build());
+        let ms = c.finalize_markets();
+        assert_eq!(ms[0].odds, vec![6200, 3700]);
+        assert_eq!(ms[0].colony, 1);
+        assert_eq!(ms[0].odds_hash.len(), 64);
+        assert_eq!(c.forecast_markets().unwrap()[0].raw_hashes.len(), 3);
+    }
+
+    #[test]
+    #[should_panic(expected = "NotKeeper")]
+    fn only_keepers_post() {
+        let mut c = fresh();
+        testing_env!(ctx("alice.test", 10).build());
+        c.post_trending(vec![market(vec![6000, 4000])]);
+    }
+
+    #[test]
+    #[should_panic(expected = "NoQuorum")]
+    fn one_keeper_is_not_a_quorum() {
+        let mut c = fresh();
+        testing_env!(ctx("k1.test", 10).build());
+        c.post_trending(vec![market(vec![6000, 4000])]);
+        testing_env!(ctx("anyone.test", 1_000).build());
+        c.finalize_markets();
+    }
+
+    #[test]
+    #[should_panic(expected = "raw_hash must be 64 hex chars")]
+    fn raw_hash_must_be_hex() {
+        let mut c = fresh();
+        testing_env!(ctx("k1.test", 10).build());
+        let mut m = market(vec![6000, 4000]);
+        m.raw_hash = "zz".repeat(32);
+        c.post_trending(vec![m]);
+    }
+
+    #[test]
+    #[should_panic(expected = "PostingClosed")]
+    fn posting_closes_with_staking() {
+        let mut c = fresh();
+        testing_env!(ctx("k1.test", 1_000).build());
+        c.post_trending(vec![market(vec![6000, 4000])]);
     }
 }

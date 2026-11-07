@@ -72,4 +72,4 @@ Options under colour-blindness simulation (Machado 2009 at full severity, then p
 
 - No light mode (by decision).
 - Fonts load from Google Fonts. Self-host them if the replay page must work offline.
-- The showcase runs the real sim (`Colony` from `sim/js/antosim.mjs`). Verify compares the browser's hash for seed-1042 with the Python reference, because there is no contract yet. Staker ants and wallet tints aren't in sim v0, so the canvas doesn't show them yet.
+- The showcase runs the real sim (`Colony` from `sim/js/antosim.mjs`). Verify compares the browser's hash for seed-1042 with the Python reference, because there is no contract yet. Staker ants and wallet tints aren't drawn by sim v1, so the canvas doesn't show them yet.
