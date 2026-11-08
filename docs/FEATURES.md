@@ -61,6 +61,8 @@ Keepers post each market's resolution under the 2-of-3 quorum. Every finished fo
 
 ## 5. $ANTO token
 
+The memecoin. The burn and the staking are its mechanics; the meme is the ants themselves: a swarm on a NEAR contract taking on the market, round after round, with the scorebook keeping the score in public. Every forecast is a map of ants you can watch and re-run, every stake hatches ants in the staker's colour, any ant's life can be followed in History, and the whole project is drawn as one ant nest. [Why $ANTO is a memecoin](../README.md#why-anto-is-a-memecoin) has the full case.
+
 A NEP-141 token with `ft_transfer_call`, and NEP-145 storage management where storage is free. Genesis supply 1,000,000 $ANTO; everything burned since is visible as `1,000,000 − ft_total_supply` in the top bar's $ANTO chip. A once-per-account faucet gives 150 play $ANTO on first use. Testnet only, no mainnet deployment.
 
 | What $ANTO does | Where |
@@ -86,7 +88,7 @@ Nothing pays a market stake for being right.
 
 ## 7. The daily pot (Burn colony)
 
-The memecoin mechanic: once a UTC day, an ant colony decides how much of the treasury leaves circulation.
+The memecoin's burn: once a UTC day, an ant colony decides how much of the treasury leaves circulation.
 
 | Pot size (of treasury) | Burned | Shared with stakers on that size | Sim handicap |
 | ---: | ---: | ---: | ---: |

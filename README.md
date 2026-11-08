@@ -18,7 +18,7 @@
 | --- | --- |
 | **Problem** | On-chain randomness is a number nobody can check by eye, token "governance" is a vote whales win, and a prediction-market price is one number from one source with no audit trail. |
 | **What we built** | A NEAR contract that runs a deterministic ant-colony simulation **itself**, seeded by a drand beacon it verifies **itself**. For each trending Polymarket market, three colonies read the market through different lenses (price momentum, $ANTO stakes, AI agents' odds); their trail shares become a "swarm belief" with a hash anyone can recompute. The same engine runs the token's daily burn and a randomness service. |
-| **The memecoin mechanic** | Holders "drop sugar" ($ANTO stakes, square-root weighted) to make an option's food richer. Once a day the **Burn colony** picks a pot size from a capped menu (0.10% to 2.00% of the treasury): most of it burns, a small part goes to the stakers on the picked size. Bigger pots are handicapped in the sim, so the community tilts the burn without dictating it. |
+| **The memecoin** | The meme is the product: **ants vs. the market**. Up to 2,160 on-chain ants forecast Polymarket's trending markets every 25 minutes, the scorebook keeps the running score in public, and every forecast is a map of ants you can watch, share and re-run. $ANTO is the sugar: holders "drop sugar" (square-root weighted stakes) to make an option's food richer, and their stakes hatch ants in their own colour on the map. Once a day the **Burn colony** picks a pot size from a capped menu (0.10% to 2.00% of the treasury): most of it burns, a small part goes to the stakers on the picked size. [Why it's a memecoin](#why-anto-is-a-memecoin). |
 | **How NEAR fits** | `near-sdk` 5 contract; NEP-141 with `ft_transfer_call` and NEP-145; BLS12-381 host functions verify drand on chain; permissionless cranking sized to the 300 TGas limit; sub-accounts for keepers, treasury and agents; AI agents join through an MCP server. |
 | **Proof it works** | Python, JavaScript and Rust agree on 10,000 seeds. A whole round's 36 colonies re-run from a terminal in seconds and match the chain. 90 resolved markets are scored on chain. |
 
@@ -88,6 +88,34 @@ Add `?contract=<account>` to any page to point it at another deployment.
 | **Everything is replayable** | History reads past rounds from the contract's own state at past blocks; follow any ant through its whole life ("ant autopsy"); check a whole round's receipt. | `/web/replay.html` |
 
 The full list, with where each feature lives and how to check it: [`docs/FEATURES.md`](docs/FEATURES.md).
+
+## Why $ANTO is a memecoin
+
+Most memecoins are a ticker and a picture. $ANTO's picture moves: the meme is a colony of ants taking on the market, and every part of it is something you can watch, join and check. The burn and the staking are the mechanics; the forecasts and the ants are the meme they hang on.
+
+**The bit: ants vs. the market.** A swarm of ants on a NEAR contract reads the same trending Polymarket markets that traders do and forms its own belief about them. It is an absurd premise run with a straight face: drand seeds checked on chain, three implementations agreeing on one hash, a scorebook that grades every source after the market resolves. The scorebook also keeps the joke honest. Right now the market is ahead, so the contract has turned every colony down to its weight floor ([the track record](#the-track-record)); the ants are the underdog, and every resolved market is the next game in a public, running series.
+
+**The ants are the content.** Every forecast is a map you can watch, not a number in a table:
+
+- **Every round is a show.** Up to 12 markets × 3 colonies × 60 ants, up to 2,160 ants every 25 minutes, each colony replayed in the browser from its seed, trail by trail, until one food pile wins. The landing page plays the latest one as you scroll.
+- **Your stake is your ants.** Sugar you drop hatches ants tinted in your wallet's colour (3 per √token) on the Community and Burn maps; hover your wallet and they light up. The tint is cosmetic (the sim reads only the summed weight), but on screen they are your ants carrying your sugar.
+- **Every ant has a story.** The ant autopsy in History lists every trip any single ant made in a run: which food pile it reached and when it brought the food home.
+- **The project is a nest.** The app's home is the whole system drawn as one cutaway ant base: the queen's chamber is the contract, the granary holds the stakes, the burn pit takes the pot, the well draws drand seeds, the workers' hall houses the keepers, agents and crankers. Ants carry each stake, burn and seed through the tunnels as it happens on chain.
+- **One vocabulary.** Holders drop sugar, crankers are workers, agents are recruited into the swarm, the daily burn is the pot. The lore and the mechanics are the same words.
+
+**A meme you can check.** "Don't trust the ants. Check them." Every map comes with a hash; anyone can re-run any colony, round or pot in a browser or a terminal and get the same one. A screenshot of a colony is a claim anyone can verify, which makes it something worth sharing.
+
+**The mechanics under the meme.** The token is wired into every part of the colony:
+
+| $ANTO | What happens | Supply effect |
+| --- | --- | --- |
+| Drop sugar on a market | Makes an outcome's food richer in the Community colony, √-weighted; refunded next round | None; nothing pays for being right |
+| Drop sugar on a pot size | The Burn colony picks the day's pot, 0.10% to 2.00% of the treasury, bigger pots handicapped | Most of the pot **burns**; stakers on the picked size share 0.08% to 0.16% of the treasury |
+| Recruit the swarm | 100 $ANTO buys a forecast on any open market | Paid to keepers, agents and crankers for the work |
+| Ask for randomness | 1 $ANTO per drand-backed value | **Burned** |
+| Join as an agent | 10 $ANTO deposit, refundable | Locked while registered |
+
+1,000,000 $ANTO were minted at genesis and none since; the top bar's chip shows what has burned (20,787 by 8 November 2026). One wallet budget (100 $ANTO) covers all of a wallet's stakes, so a crowd outweighs a whale. Every amount is a play token on NEAR testnet, every output is a forecast and not advice, and nothing links to a betting venue.
 
 ## How it works
 
