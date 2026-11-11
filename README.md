@@ -20,15 +20,15 @@
 | **What we built** | A NEAR contract that runs a deterministic ant-colony simulation **itself**, seeded by a drand beacon it verifies **itself**. For each trending Polymarket market, three colonies read the market through different lenses (price momentum, $ANTO stakes, AI agents' odds); their trail shares become a "swarm belief" with a hash anyone can recompute. The same engine runs the token's daily burn and a randomness service. |
 | **The memecoin** | The meme is the product: **ants vs. the market**. Up to 2,160 on-chain ants forecast Polymarket's trending markets every 25 minutes, the scorebook keeps the running score in public, and every forecast is a map of ants you can watch, share and re-run. $ANTO is the sugar: holders "drop sugar" (square-root weighted stakes) to make an option's food richer, and their stakes hatch ants in their own colour on the map. Once a day the **Burn colony** picks a pot size from a capped menu (0.10% to 2.00% of the treasury): most of it burns, a small part goes to the stakers on the picked size. [Why it's a memecoin](#why-anto-is-a-memecoin). |
 | **How NEAR fits** | `near-sdk` 5 contract; NEP-141 with `ft_transfer_call` and NEP-145; BLS12-381 host functions verify drand on chain; permissionless cranking sized to the 300 TGas limit; sub-accounts for keepers, treasury and agents; AI agents join through an MCP server. |
-| **Proof it works** | Python, JavaScript and Rust agree on 10,000 seeds. A whole round's 36 colonies re-run from a terminal in seconds and match the chain. 90 resolved markets are scored on chain. |
+| **Proof it works** | Python, JavaScript and Rust agree on 10,000 seeds. A whole round's 36 colonies re-run from a terminal in seconds and match the chain. 152 resolved markets are scored on chain. |
 
-## Live on testnet (8 November 2026)
+## Live on testnet (12 November 2026)
 
 | | |
 | --- | --- |
-| Forecast rounds | **178** so far, one every ~25 minutes, up to 12 markets × 3 colonies each |
-| Markets scored after they resolved | **90**, every source scored on chain ([the honest result](#the-track-record)) |
-| $ANTO burned by the daily pot | **20,787** of 1,000,000 (2.1% of supply) |
+| Forecast rounds | **300** so far, one every ~25 minutes, up to 12 markets × 3 colonies each |
+| Markets scored after they resolved | **152**, every source scored on chain ([the honest result](#the-track-record)) |
+| $ANTO burned by the daily pot | **21,565** of 1,000,000 (2.2% of supply) |
 | Keepers / quorum | 3 independent keepers, 2 must agree |
 | Registered forecaster agents | 3 |
 
@@ -115,7 +115,7 @@ Most memecoins are a ticker and a picture. $ANTO's picture moves: the meme is a 
 | Ask for randomness | 1 $ANTO per drand-backed value | **Burned** |
 | Join as an agent | 10 $ANTO deposit, refundable | Locked while registered |
 
-1,000,000 $ANTO were minted at genesis and none since; the top bar's chip shows what has burned (20,787 by 8 November 2026). One wallet budget (100 $ANTO) covers all of a wallet's stakes, so a crowd outweighs a whale. Every amount is a play token on NEAR testnet, every output is a forecast and not advice, and nothing links to a betting venue.
+1,000,000 $ANTO were minted at genesis and none since; the top bar's chip shows what has burned (21,565 by 12 November 2026). One wallet budget (100 $ANTO) covers all of a wallet's stakes, so a crowd outweighs a whale. Every amount is a play token on NEAR testnet, every output is a forecast and not advice, and nothing links to a betting venue.
 
 ## How it works
 
@@ -185,15 +185,15 @@ The odds had jumped from 8.5% to 18.5% in six hours, so Momentum fed the Yes sou
 
 ### The track record
 
-The contract scores every source by **skill**: the market's Brier score minus the source's, on the same forecasts. Copying the market scores 0, so only information the market lacked scores above it. From `score_tally` on 8 November 2026:
+The contract scores every source by **skill**: the market's Brier score minus the source's, on the same forecasts. Copying the market scores 0, so only information the market lacked scores above it. From `score_tally` on 12 November 2026:
 
 | Source | Markets | Mean Brier (lower is better) | Skill vs. market |
 | --- | ---: | ---: | ---: |
-| Market odds | 90 | 0.352 | 0 |
-| Swarm belief | 90 | 0.396 | −0.045 |
-| Momentum colony | 90 | 0.416 | −0.064 |
-| Agents colony | 73 | 0.390 | −0.054 |
-| Community colony | 58 | 0.547 | −0.195 |
+| Market odds | 152 | 0.325 | 0 |
+| Swarm belief | 152 | 0.349 | −0.023 |
+| Momentum colony | 152 | 0.343 | −0.017 |
+| Agents colony | 132 | 0.350 | −0.037 |
+| Community colony | 110 | 0.551 | −0.223 |
 
 **The market's own odds are ahead, and the contract acts on it:** every colony's weight has dropped to the floor (250 of 1000), so none gains influence it hasn't earned. Most stakes and agent posts on testnet come from the team's scripted demo crew, so these rows mostly score that crew. What we are showing is the mechanism: a public, replayable, on-chain record that any new signal, a sharper AI agent or a better-informed holder, has to beat before it gains weight. Details: [`docs/FORECAST_QUALITY.md`](docs/FORECAST_QUALITY.md).
 

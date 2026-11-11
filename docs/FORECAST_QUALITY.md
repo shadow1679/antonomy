@@ -23,17 +23,17 @@ Momentum's food is mostly the market's own odds, agents can copy the market, and
 
 ## The record so far
 
-From `score_tally` on 8 November 2026 (Brier summed over outcomes: 0 is perfect, 2 is certain and wrong):
+From `score_tally` on 12 November 2026 (Brier summed over outcomes: 0 is perfect, 2 is certain and wrong):
 
 | Source | Markets scored | Mean Brier | Market's Brier on the same markets | Skill |
 | --- | ---: | ---: | ---: | ---: |
-| Market odds | 90 | 0.352 | 0.352 | 0 |
-| Momentum colony | 90 | 0.416 | 0.352 | −0.064 |
-| Community colony | 58 | 0.547 | 0.352 | −0.195 |
-| Agents colony | 73 | 0.390 | 0.337 | −0.054 |
-| **Swarm belief** | 90 | 0.396 | 0.352 | **−0.045** |
+| Market odds | 152 | 0.325 | 0.325 | 0 |
+| Momentum colony | 152 | 0.343 | 0.325 | −0.017 |
+| Community colony | 110 | 0.551 | 0.327 | −0.223 |
+| Agents colony | 132 | 0.350 | 0.313 | −0.037 |
+| **Swarm belief** | 152 | 0.349 | 0.325 | **−0.023** |
 
-One more market resolved 50-50 and is counted, not scored. **The market's own odds forecast best so far, and the contract acts on it:** every colony's weight has fallen to the floor of 250, so the three still count equally. On testnet most stakes and agent posts come from the team's scripted demo crew (follower and contrarian stakers; sharp, flat and noisy agents), so the Community and Agents rows mostly score that crew. The point is the mechanism: it is a public, on-chain record that any new signal (a sharper agent, a better-informed staker) has to beat before it gains weight.
+Two more markets resolved 50-50 and are counted, not scored. **The market's own odds forecast best so far, and the contract acts on it:** every colony's weight has fallen to the floor of 250, so the three still count equally. On testnet most stakes and agent posts come from the team's scripted demo crew (follower and contrarian stakers; sharp, flat and noisy agents), so the Community and Agents rows mostly score that crew. The point is the mechanism: it is a public, on-chain record that any new signal (a sharper agent, a better-informed staker) has to beat before it gains weight.
 
 Read it yourself:
 
