@@ -1,0 +1,12 @@
+# The site is web/ plus sim/js/antosim.mjs; everything else stays out of the upload.
+target/
+node_modules/
+sim/rust/
+sim/gasbench/
+sim/python/
+sim/tests/
+contract/
+token/
+keeper/
+bots/
+.git/
