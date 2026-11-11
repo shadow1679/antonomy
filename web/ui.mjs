@@ -558,15 +558,16 @@ export const MARK = `<svg width="17" height="24" viewBox="12 4 40 56" aria-hidde
 const PAGES = [
   ["live.html", "live", "Live"],
   ["pot.html", "pot", "Pot"],
+  ["nest.html", "nest", "Nest"],
   null,
   ["replay.html", "history", "History"],
   null,
   ["docs.html", "docs", "Docs"],
 ];
 
-// Shared header. `page` is "home" (app.html, the nest, the app's home, which
-// the brand links to and the nav leaves out), "landing" (index.html, the front
-// page: same bar, but its brand links back to itself), "live", "pot", "recruit", "history" (the
+// Shared header. `page` is "landing" (index.html, the front page, which the
+// brand links to on every page), "nest" (nest.html, the whole project as one
+// ant base), "live", "pot", "recruit", "history" (the
 // History page, replay.html, which Replay and Receipts became) or "docs". `demo` is kept as the name of the option that shows
 // the status strip (testnet, play token, which contract); pages that never
 // touch the chain pass `demo: false`. The wallet button sits at the end of the
@@ -585,7 +586,7 @@ export function topbar(page, end = "", { demo = true } = {}) {
   queueMicrotask(mountTokenChip);
   queueMicrotask(centerCurrentTab);
   return `<header class="topbar"><div class="container topbar__row">
-    <a class="brand" href="${page === "landing" ? "index.html" : "app.html"}">${MARK}<b><span>Anto</span>nomy</b></a>
+    <a class="brand" href="index.html">${MARK}<b><span>Anto</span>nomy</b></a>
     <nav class="nav" aria-label="Pages">${nav}</nav>
     <div class="topbar__end" id="topbar-end">${end}${chip}${cta}<button class="btn btn--sm" id="wallet-btn" type="button">Connect wallet</button></div>
   </div></header>` + (demo ? `<div class="demo-strip"><div class="container"><p style="margin: 0">
@@ -671,9 +672,8 @@ export function footer() {
   return `<footer class="page-foot"><div class="container">
     <div class="page-foot__grid">
       <div class="page-foot__brand">
-        <a class="brand" href="app.html">${MARK}<b><span>Anto</span>nomy</b></a>
+        <a class="brand" href="index.html">${MARK}<b><span>Anto</span>nomy</b></a>
         <p>Forecasts by ant colonies, run on-chain from one public seed and re-run in your browser.</p>
-        <p><a href="app.html">The nest: the whole project as one ant base →</a></p>
         <p>Forecasts are not advice. Nobody is paid for being right, and nothing here links to a trading venue.</p>
       </div>
       <nav class="page-foot__nav" aria-label="Footer">

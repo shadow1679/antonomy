@@ -15,7 +15,7 @@ Every file here is written by `node web/brand/make_brand.mjs`. Change the drawin
 | `avatar-400.png` | Ink ant on full-bleed amber | X, Telegram and Discord avatars (they crop to a circle) |
 | `lockup.svg`, `lockup.png` | Ant plus wordmark, amber and bone | The name on dark ground |
 | `lockup-light.svg`, `lockup-light.png` | Ant plus wordmark, deep amber and ink | The name on light ground |
-| `social-card.png` | 1200×630 link preview: lockup, tagline, seed 42's colony trail with its hash | `og:image` on `web/index.html` and `web/app.html` |
+| `social-card.png` | 1200×630 link preview: lockup, tagline, seed 42's colony trail with its hash | `og:image` on `web/index.html` and `web/nest.html` |
 | `x-header.png` | 1500×500 banner, copy kept clear of the avatar | X profile header |
 
 The lockup SVGs set the wordmark as live text and import Plex Sans from Google Fonts. Opened in a browser they render right. Inside an `<img>` tag, or in a design tool without the font installed, they fall back to a system sans, so use the PNGs there.

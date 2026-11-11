@@ -129,7 +129,7 @@
     <div class="container">
       <div class="section-head">
         <h2 id="nest-title">The whole project, as one nest</h2>
-        <a class="what spacer" href="app.html">Open the nest</a>
+        <a class="what spacer" href="nest.html">Open the nest</a>
       </div>
       <p class="section-sub">Every part of the oracle is a chamber: the guard that filters markets, the queen's chamber that is the contract, the granary of stakes, the burn pit, the gallery of forecasts, the well of drand seeds. Ants carry stakes, requests, seeds and results through the tunnels.</p>
       <div class="nest-stage">
@@ -818,7 +818,7 @@ function layout() {
   $("nest-hits").innerHTML = CHAMBERS.map((c) => {
     const h = L.chambers[c.id], pad = c.id === "entrance" ? 0 : 0.6;
     const st = `left:${((h.x - h.rx - pad) / L.w) * 100}%;top:${((h.y - h.ry - pad) / L.h) * 100}%;width:${((2 * h.rx + 2 * pad) / L.w) * 100}%;height:${((2 * h.ry + 2 * pad) / L.h) * 100}%`;
-    return `<a class="nest-hit" href="app.html${q}#${c.id}"${c.id === "queen" ? ' data-tag="below"' : ""} style="${st}" data-id="${c.id}">` +
+    return `<a class="nest-hit" href="nest.html${q}#${c.id}"${c.id === "queen" ? ' data-tag="below"' : ""} style="${st}" data-id="${c.id}">` +
       `<span class="nest-tag"><b>${esc(c.name)}</b><span class="nest-tag__v num" data-r="${c.id}">${esc(model?.[c.id]?.headline ?? "")}</span></span></a>`;
   }).join("");
   $("nest-hits").hidden = false;

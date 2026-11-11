@@ -148,7 +148,7 @@ Static HTML and ES modules, no framework, no build step. Each page reads the liv
 | Page | What it shows |
 | --- | --- |
 | `/web/` (`index.html`) | The landing page: one real market's colony replayed beside the pitch, scrolled tick by tick, with Verify this colony |
-| `/web/app.html` | The nest: the whole system as one cutaway ant base, each chamber (contract, granary, burn pit, well, gallery…) with live numbers and ants carrying each flow |
+| `/web/nest.html` | The nest: the whole system as one cutaway ant base, each chamber (contract, granary, burn pit, well, gallery…) with live numbers and ants carrying each flow |
 | `/web/live.html` | Forecasts: the round timeline, a card per market with three mini colonies and the gap to the market odds, the track record, Add a market |
 | `/web/market.html?m=m0` | One market: stake, post odds, the three colonies on one stage, the verified table. `?r=<id>` shows a requested forecast |
 | `/web/pot.html` | The daily pot: day clock, live colony, menu, your stakes, past pots |

@@ -70,7 +70,7 @@ Steps 1 to 3 need no wallet and no build. Step 1 needs no network.
 
 7. **Do:** connect a NEAR testnet wallet in the top bar and stake on an outcome while staking is open. **See:** 150 play $ANTO from the faucet on first use, and your stake hatching ants in your own colour on that market's Community map.
 
-8. **Do:** open <http://localhost:8000/web/app.html>. **See:** the nest, the whole system as one cutaway ant base. Each chamber (the contract, the granary, the burn pit, the drand well, the workers' hall…) shows its live numbers, and ants carry stakes, burns and seeds through the tunnels.
+8. **Do:** open <http://localhost:8000/web/nest.html>. **See:** the nest, the whole system as one cutaway ant base. Each chamber (the contract, the granary, the burn pit, the drand well, the workers' hall…) shows its live numbers, and ants carry stakes, burns and seeds through the tunnels.
 
 Add `?contract=<account>` to any page to point it at another deployment.
 

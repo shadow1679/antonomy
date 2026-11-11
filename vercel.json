@@ -5,12 +5,36 @@
   "installCommand": null,
   "outputDirectory": ".",
   "redirects": [
-    { "source": "/", "destination": "/web/", "permanent": false }
+    {
+      "source": "/",
+      "destination": "/web/",
+      "permanent": false
+    },
+    {
+      "source": "/web",
+      "destination": "/web/",
+      "permanent": false
+    },
+    {
+      "source": "/nest",
+      "destination": "/web/nest.html",
+      "permanent": false
+    },
+    {
+      "source": "/web/nest",
+      "destination": "/web/nest.html",
+      "permanent": false
+    }
   ],
   "headers": [
     {
       "source": "/(web|sim)/(.*)\\.mjs",
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
     }
   ]
 }
