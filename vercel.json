@@ -6,6 +6,11 @@
   "outputDirectory": ".",
   "redirects": [
     {
+      "source": "/web/",
+      "destination": "/",
+      "permanent": false
+    },
+    {
       "source": "/web",
       "destination": "/",
       "permanent": false
