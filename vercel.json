@@ -6,29 +6,30 @@
   "outputDirectory": ".",
   "redirects": [
     {
-      "source": "/",
-      "destination": "/web/",
+      "source": "/web",
+      "destination": "/",
       "permanent": false
     },
     {
-      "source": "/web",
-      "destination": "/web/",
+      "source": "/web/:path*",
+      "destination": "/:path*",
       "permanent": false
     },
     {
       "source": "/nest",
-      "destination": "/web/nest.html",
+      "destination": "/nest.html",
       "permanent": false
-    },
+    }
+  ],
+  "rewrites": [
     {
-      "source": "/web/nest",
-      "destination": "/web/nest.html",
-      "permanent": false
+      "source": "/((?!sim/|web/).*)",
+      "destination": "/web/$1"
     }
   ],
   "headers": [
     {
-      "source": "/(web|sim)/(.*)\\.mjs",
+      "source": "/(.*)\\.mjs",
       "headers": [
         {
           "key": "Cache-Control",
