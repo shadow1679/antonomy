@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Antonomy ($ANTO)**; "Ant Colony Oracle" is the mechanism's technical name. Ant colonies forecast trending Polymarket markets on-chain from a public random seed, $ANTO holders drop sugar (stake) on outcomes, and anyone can replay any run in a browser and check the hash. It targets the NEAR HACKATHON (build window 19 October to 14 November 2026 UTC, on NEAR testnet; the submission form opens 1 November). The main track is Memecoins With Mechanics.
 
-`README.md` is the public overview, written for the hackathon's AI judges; keep it in step with what is built and with its known limits. `docs/FEATURES.md` is the feature list. The README and `docs/FORECAST_QUALITY.md` quote live testnet numbers (rounds, markets scored, $ANTO burned, the track record) dated 12 November 2026: refresh them from the contract's views before submitting. `docs/DESIGN_SYSTEM.md` has the UI rules.
+`README.md` is the public overview, written for the hackathon's AI judges; keep it in step with what is built and with its known limits. `docs/FEATURES.md` is the feature list. The README and `docs/FORECAST_QUALITY.md` quote live testnet numbers (rounds, markets scored, $ANTO burned, the track record) dated 13 November 2026: refresh them from the contract's views before submitting. `docs/DESIGN_SYSTEM.md` has the UI rules.
 
 Still open before submission: making the repo public (before 14 Nov 2026 23:59 UTC), the team's demo post on X, a mainnet NEAR account for prizes, and a ticker check against the hackathon's other submissions. Re-read https://nearhackathon.com/HACKATHON.md before submitting.
 

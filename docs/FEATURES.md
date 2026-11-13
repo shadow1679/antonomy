@@ -55,7 +55,7 @@ An outcome's **trail share** is its score over the total, in basis points summin
 
 ## 4. Scorebook and adaptive weights
 
-Keepers post each market's resolution under the 2-of-3 quorum. Every finished forecast is recorded per market, and when the market resolves `score_market` scores every source (the market's odds, each colony, the swarm, each agent, each wallet) by **skill**: the market's Brier score minus the source's, on the same forecasts. Skill sets each colony's weight in the swarm belief, each agent's weight in the Agents median and each wallet's multiplier in Community, by fixed integer formulas, frozen per round and committed in the hashes. 152 markets are scored so far; the market's own odds lead, and the contract has pushed every colony to the weight floor. Full spec and numbers: [FORECAST_QUALITY.md](FORECAST_QUALITY.md).
+Keepers post each market's resolution under the 2-of-3 quorum. Every finished forecast is recorded per market, and when the market resolves `score_market` scores every source (the market's odds, each colony, the swarm, each agent, each wallet) by **skill**: the market's Brier score minus the source's, on the same forecasts. Skill sets each colony's weight in the swarm belief, each agent's weight in the Agents median and each wallet's multiplier in Community, by fixed integer formulas, frozen per round and committed in the hashes. 166 markets are scored so far; the market's own odds lead, and the contract has pushed every colony to the weight floor. Full spec and numbers: [FORECAST_QUALITY.md](FORECAST_QUALITY.md).
 
 **Check:** the track record on `/web/live.html`, or the `score_tally` view.
 
