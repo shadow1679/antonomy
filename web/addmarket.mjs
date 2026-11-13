@@ -9,7 +9,7 @@ import { tokens, feeSplitHTML, findRequest, failureOf, recentRequests } from "./
 import { chain, wallet, ensureTokens } from "./chain.mjs";
 import { esc } from "./ui.mjs";
 
-const MAX_HITS = 5;
+const MAX_HITS = 12;   // as many as search() fetches
 const PHASE = { odds: "keepers posting", forecasting: "agents posting", running: "cranking", done: "done" };
 
 // A pasted polymarket.com/event/<slug> link, or a bare slug; null for search text.
