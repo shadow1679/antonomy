@@ -128,6 +128,7 @@ class Retry(unittest.TestCase):
         calls = []
 
         class Resp(io.BytesIO):
+            headers = {}
             def __enter__(self): return self
             def __exit__(self, *a): return False
 
@@ -142,6 +143,28 @@ class Retry(unittest.TestCase):
         with mock.patch.object(t.urllib.request, "urlopen", opener), mock.patch.object(t.time, "sleep"):
             self.assertEqual(t.Fetcher().get("http://x"), {"ok": 1})
         self.assertEqual(len(calls), 3)
+
+    def test_asks_for_gzip_and_records_the_decompressed_body(self):
+        import gzip
+        import io
+        import unittest.mock as mock
+        raw = b'{"ok": 1}'
+        seen = []
+
+        class Resp(io.BytesIO):
+            headers = {"Content-Encoding": "gzip"}
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+
+        def opener(req, timeout=0):
+            seen.append(req.get_header("Accept-encoding"))
+            return Resp(gzip.compress(raw))
+
+        f = t.Fetcher()
+        with mock.patch.object(t.urllib.request, "urlopen", opener):
+            self.assertEqual(f.get("http://x"), {"ok": 1})
+        self.assertEqual(seen, ["gzip"])
+        self.assertEqual(f.raw, [("http://x", raw)])
 
     def test_gives_up_after_the_last_attempt(self):
         import unittest.mock as mock

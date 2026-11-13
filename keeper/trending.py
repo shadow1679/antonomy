@@ -48,6 +48,7 @@ Not checked yet: Polymarket's terms for display and redistribution. Read-only,
 no authentication, no links to the market are published.
 """
 import argparse
+import gzip
 import http.client
 import time
 import datetime as dt
@@ -281,13 +282,20 @@ class Fetcher:
         self.series = {}
 
     def get(self, url):
-        req = urllib.request.Request(url, headers={"User-Agent": "antonomy-keeper/0", "Accept": "application/json"})
+        # Polymarket answers a large page (limit above 50) only to clients that
+        # accept gzip (HTTP 406 gzip_required otherwise). The raw record, and so
+        # `raw_hash`, is the decompressed body: the same bytes whatever the
+        # transport did.
+        req = urllib.request.Request(url, headers={"User-Agent": "antonomy-keeper/0", "Accept": "application/json",
+                                                   "Accept-Encoding": "gzip"})
         # A dropped connection mid-read is routine; a keeper that crashes on
         # one misses the round, so retry a few times before giving up.
         for attempt in range(RETRIES):
             try:
                 with urllib.request.urlopen(req, timeout=20) as r:
                     body = r.read()
+                    if r.headers.get("Content-Encoding", "").lower() == "gzip":
+                        body = gzip.decompress(body)
                 break
             except (OSError, http.client.HTTPException):
                 if attempt == RETRIES - 1:
